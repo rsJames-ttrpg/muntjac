@@ -11,4 +11,4 @@ pub use tag::{
     AbiTag, LinuxArch, MacArch, PlatformTag, PythonTag, Tag, TagParseError, WheelTag,
     parse_filename,
 };
-pub use compat::CompatibleTags;
+pub use compat::{CompatibleTags, build_compatible_tags};
