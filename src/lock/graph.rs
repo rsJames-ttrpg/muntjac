@@ -92,6 +92,104 @@ pub fn build(lock: &Lockfile) -> Result<DepGraph, LockfileError> {
     })
 }
 
+pub fn detect_cycles(graph: &DepGraph) -> Result<(), LockfileError> {
+    let sccs = tarjan_scc(graph);
+    let cycles: Vec<String> = sccs
+        .iter()
+        .filter(|scc| scc.len() > 1 || has_self_loop(graph, scc[0]))
+        .map(|scc| format_cycle(graph, scc))
+        .collect();
+    if cycles.is_empty() {
+        return Ok(());
+    }
+    Err(LockfileError::Cycle(cycles))
+}
+
+fn has_self_loop(graph: &DepGraph, id: NodeId) -> bool {
+    graph.nodes[id as usize].edges_out.contains(&id)
+}
+
+fn format_cycle(graph: &DepGraph, scc: &[NodeId]) -> String {
+    let mut sorted = scc.to_vec();
+    sorted.sort();
+    sorted
+        .iter()
+        .map(|&id| {
+            let n = &graph.nodes[id as usize];
+            format!("{}@{}", n.pkg.name, n.pkg.version)
+        })
+        .collect::<Vec<_>>()
+        .join(" -> ")
+}
+
+fn tarjan_scc(graph: &DepGraph) -> Vec<Vec<NodeId>> {
+    let n = graph.nodes.len();
+    let mut index = vec![-1i32; n];
+    let mut lowlink = vec![0i32; n];
+    let mut on_stack = vec![false; n];
+    let mut stack: Vec<NodeId> = Vec::new();
+    let mut next_index = 0i32;
+    let mut sccs: Vec<Vec<NodeId>> = Vec::new();
+
+    for v in 0..n {
+        if index[v] == -1 {
+            strongconnect(
+                v,
+                graph,
+                &mut index,
+                &mut lowlink,
+                &mut on_stack,
+                &mut stack,
+                &mut next_index,
+                &mut sccs,
+            );
+        }
+    }
+    sccs
+}
+
+#[allow(clippy::too_many_arguments)]
+fn strongconnect(
+    v: usize,
+    graph: &DepGraph,
+    index: &mut [i32],
+    lowlink: &mut [i32],
+    on_stack: &mut [bool],
+    stack: &mut Vec<NodeId>,
+    next_index: &mut i32,
+    sccs: &mut Vec<Vec<NodeId>>,
+) {
+    index[v] = *next_index;
+    lowlink[v] = *next_index;
+    *next_index += 1;
+    stack.push(v as NodeId);
+    on_stack[v] = true;
+
+    let successors = graph.nodes[v].edges_out.clone();
+    for w in successors {
+        let w = w as usize;
+        if index[w] == -1 {
+            strongconnect(w, graph, index, lowlink, on_stack, stack, next_index, sccs);
+            lowlink[v] = lowlink[v].min(lowlink[w]);
+        } else if on_stack[w] {
+            lowlink[v] = lowlink[v].min(index[w]);
+        }
+    }
+
+    if lowlink[v] == index[v] {
+        let mut scc = Vec::new();
+        loop {
+            let w = stack.pop().unwrap();
+            on_stack[w as usize] = false;
+            scc.push(w);
+            if w as usize == v {
+                break;
+            }
+        }
+        sccs.push(scc);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,5 +280,59 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn detects_self_loop() {
+        let lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![pkg("a", "1.0", first_party(), vec!["a"])],
+        };
+        let g = build(&lock).expect("build");
+        let err = detect_cycles(&g).expect_err("should fail");
+        match err {
+            LockfileError::Cycle(cycles) => {
+                assert_eq!(cycles.len(), 1);
+                assert!(cycles[0].contains("a@1.0"));
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn detects_three_cycle() {
+        let lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                pkg("a", "1.0", first_party(), vec!["b"]),
+                pkg("b", "1.0", registry(), vec!["c"]),
+                pkg("c", "1.0", registry(), vec!["a"]),
+            ],
+        };
+        let g = build(&lock).expect("build");
+        let err = detect_cycles(&g).expect_err("should fail");
+        let s = format!("{err}");
+        assert!(s.contains("a@1.0") && s.contains("b@1.0") && s.contains("c@1.0"));
+    }
+
+    #[test]
+    fn passes_acyclic_diamond() {
+        let lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                pkg("a", "1.0", first_party(), vec!["b", "c"]),
+                pkg("b", "1.0", registry(), vec!["d"]),
+                pkg("c", "1.0", registry(), vec!["d"]),
+                pkg("d", "1.0", registry(), vec![]),
+            ],
+        };
+        let g = build(&lock).expect("build");
+        detect_cycles(&g).expect("acyclic");
     }
 }
