@@ -41,15 +41,16 @@ pub struct FixupsConfig {
     pub allow_local_overrides: bool,
 }
 
+/// Raw registry URL as read from muntjac.toml. Parsed/dispatched into
+/// `"none"` / `"file://…"` / `"github.com/<owner>/<repo>"` forms by
+/// `Config::validate` (Task 4) and by S7's registry fetcher.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum FixupRegistry {
-    String(String),
-}
+#[serde(transparent)]
+pub struct FixupRegistry(pub String);
 
 impl Default for FixupRegistry {
     fn default() -> Self {
-        FixupRegistry::String("none".into())
+        FixupRegistry("none".into())
     }
 }
 
@@ -126,12 +127,16 @@ struct RawTree {
     python_versions: Vec<PythonVersion>,
 }
 
-impl Config {
-    pub fn from_str(s: &str) -> Result<Self, crate::error::ConfigError> {
+impl FromStr for Config {
+    type Err = crate::error::ConfigError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let raw: RawConfig = toml::from_str(s).map_err(crate::error::ConfigError::Parse)?;
         Self::from_raw(raw)
     }
+}
 
+impl Config {
     fn from_raw(raw: RawConfig) -> Result<Self, crate::error::ConfigError> {
         let has_top_level = raw.manifest_path.is_some()
             || raw.third_party_dir.is_some()
