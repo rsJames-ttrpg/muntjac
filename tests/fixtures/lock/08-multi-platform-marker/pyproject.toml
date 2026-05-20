@@ -1,0 +1,5 @@
+[project]
+name = "macos-only-app"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ['pyobjc-core; sys_platform == "darwin"']

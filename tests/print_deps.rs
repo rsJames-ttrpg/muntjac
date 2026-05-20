@@ -42,3 +42,28 @@ fn assert_golden(fixture: &str) {
 fn fixture_01_pure_python() {
     assert_golden("01-pure-python");
 }
+
+#[test]
+fn fixture_02_env_markers() {
+    assert_golden("02-env-markers");
+}
+
+#[test]
+fn fixture_03_workspace() {
+    assert_golden("03-workspace");
+}
+
+#[test]
+fn fixture_04_extras() {
+    assert_golden("04-extras");
+}
+
+#[test]
+fn fixture_05_dev_deps() {
+    assert_golden("05-dev-deps");
+}
+
+#[test]
+fn fixture_08_multi_platform_marker() {
+    assert_golden("08-multi-platform-marker");
+}

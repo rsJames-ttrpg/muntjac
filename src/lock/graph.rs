@@ -99,26 +99,71 @@ pub fn reachable_from(
     env: &MarkerEnvironment,
     include_groups: &[String],
 ) -> BTreeSet<NodeId> {
-    let extras: Vec<ExtraName> = include_groups
+    reachable_with_extras(graph, roots, env, include_groups)
+        .into_keys()
+        .collect()
+}
+
+/// Like `reachable_from` but also returns the set of activated extras for each
+/// visited node. PEP 508 request-side extras (e.g. `httpx[http2]`) activate
+/// extras only on the target node; PEP 735 include_groups are active on every
+/// node.
+pub fn reachable_with_extras(
+    graph: &DepGraph,
+    roots: &[NodeId],
+    env: &MarkerEnvironment,
+    include_groups: &[String],
+) -> BTreeMap<NodeId, BTreeSet<ExtraName>> {
+    let group_extras: BTreeSet<ExtraName> = include_groups
         .iter()
         .filter_map(|s| ExtraName::from_str(s).ok())
         .collect();
-    let mut reached = BTreeSet::new();
-    let mut stack: Vec<NodeId> = roots.to_vec();
-    while let Some(node) = stack.pop() {
-        if !reached.insert(node) {
+
+    let mut activated: BTreeMap<NodeId, BTreeSet<ExtraName>> = BTreeMap::new();
+    let mut stack: Vec<NodeId> = Vec::new();
+    for &root in roots {
+        if activated.contains_key(&root) {
             continue;
         }
+        activated.insert(root, group_extras.clone());
+        stack.push(root);
+    }
+
+    while let Some(node) = stack.pop() {
+        let node_extras: Vec<ExtraName> = activated
+            .get(&node)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default();
         let n = &graph.nodes[node as usize];
         for (i, &target) in n.edges_out.iter().enumerate() {
             let marker = n.edge_markers[i].as_ref();
-            if !edge_applies(marker, env, &extras) {
+            if !edge_applies(marker, env, &node_extras) {
                 continue;
             }
-            stack.push(target);
+            let edge_extras = &n.edge_extras[i];
+            let newly_visited = !activated.contains_key(&target);
+            let target_entry = activated.entry(target).or_default();
+            let mut activated_new_extra = false;
+            for e in &group_extras {
+                if target_entry.insert(e.clone()) {
+                    activated_new_extra = true;
+                }
+            }
+            for s in edge_extras {
+                if let Ok(name) = ExtraName::from_str(s)
+                    && target_entry.insert(name)
+                {
+                    activated_new_extra = true;
+                }
+            }
+            // Re-enqueue when newly visited or when newly activated extras
+            // could unlock additional outgoing edges.
+            if newly_visited || activated_new_extra {
+                stack.push(target);
+            }
         }
     }
-    reached
+    activated
 }
 
 /// Returns true if an edge with the given marker should be followed under

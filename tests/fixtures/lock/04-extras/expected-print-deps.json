@@ -1,0 +1,105 @@
+{
+  "configs": [
+    {
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "packages": [
+        {
+          "name": "extras-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": [
+            "httpx@0.28.1"
+          ]
+        },
+        {
+          "name": "anyio",
+          "version": "4.13.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": [
+            "idna@3.15",
+            "typing-extensions@4.15.0"
+          ]
+        },
+        {
+          "name": "certifi",
+          "version": "2026.5.20",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "h2",
+          "version": "4.3.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": [
+            "hpack@4.1.0",
+            "hyperframe@6.1.0"
+          ]
+        },
+        {
+          "name": "hpack",
+          "version": "4.1.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": [
+            "certifi@2026.5.20",
+            "h11@0.16.0"
+          ]
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": [
+            "anyio@4.13.0",
+            "certifi@2026.5.20",
+            "h2@4.3.0",
+            "httpcore@1.0.9",
+            "idna@3.15"
+          ]
+        },
+        {
+          "name": "hyperframe",
+          "version": "6.1.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "idna",
+          "version": "3.15",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.15.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        }
+      ]
+    }
+  ]
+}

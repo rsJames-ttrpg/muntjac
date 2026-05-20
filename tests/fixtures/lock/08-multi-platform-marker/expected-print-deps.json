@@ -1,0 +1,41 @@
+{
+  "configs": [
+    {
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "packages": [
+        {
+          "name": "macos-only-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": []
+        }
+      ]
+    },
+    {
+      "platform": "macos-arm64",
+      "python_version": "3.12",
+      "packages": [
+        {
+          "name": "macos-only-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": [
+            "pyobjc-core@12.1"
+          ]
+        },
+        {
+          "name": "pyobjc-core",
+          "version": "12.1",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        }
+      ]
+    }
+  ]
+}

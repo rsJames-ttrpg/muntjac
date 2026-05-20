@@ -1,12 +1,12 @@
 //! Per-(platform, python_version) projection of the dep graph.
 
-use std::str::FromStr;
+use std::collections::{BTreeMap, BTreeSet};
 
 use pep508_rs::{ExtraName, MarkerEnvironment};
 use serde::Serialize;
 
 use crate::config::{Config, Tree};
-use crate::lock::graph::{DepGraph, NodeId, edge_applies, reachable_from};
+use crate::lock::graph::{DepGraph, NodeId, edge_applies, reachable_with_extras};
 use crate::lock::types::Source;
 use crate::platform::marker_env;
 
@@ -65,8 +65,9 @@ pub fn project(graph: &DepGraph, cfg: &Config, tree: &Tree) -> ResolvedView {
     for (platform_name, platform) in &cfg.platforms {
         for python in &tree.python_versions {
             let env = marker_env(platform, python.clone());
-            let reachable = reachable_from(graph, &graph.roots, &env, &cfg.lockfile.include_groups);
-            let packages = build_packages(graph, &reachable, &env, &cfg.lockfile.include_groups);
+            let activation =
+                reachable_with_extras(graph, &graph.roots, &env, &cfg.lockfile.include_groups);
+            let packages = build_packages(graph, &activation, &env);
             configs.push(ResolvedConfig {
                 platform: platform_name.clone(),
                 python_version: format!("{}.{}", python.0, python.1),
@@ -83,17 +84,15 @@ pub fn project(graph: &DepGraph, cfg: &Config, tree: &Tree) -> ResolvedView {
 
 fn build_packages(
     graph: &DepGraph,
-    reachable: &std::collections::BTreeSet<NodeId>,
+    activation: &BTreeMap<NodeId, BTreeSet<ExtraName>>,
     env: &MarkerEnvironment,
-    include_groups: &[String],
 ) -> Vec<ResolvedPackage> {
-    let extras: Vec<ExtraName> = include_groups
+    let mut packages: Vec<ResolvedPackage> = activation
         .iter()
-        .filter_map(|s| ExtraName::from_str(s).ok())
-        .collect();
-    let mut packages: Vec<ResolvedPackage> = reachable
-        .iter()
-        .map(|&id| build_one(graph, id, env, &extras))
+        .map(|(&id, extras)| {
+            let extras_vec: Vec<ExtraName> = extras.iter().cloned().collect();
+            build_one(graph, id, env, &extras_vec)
+        })
         .collect();
     packages.sort_by(|a, b| {
         kind_rank(a.kind)

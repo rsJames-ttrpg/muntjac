@@ -1,5 +1,6 @@
 //! Parse `uv.lock` into `Lockfile`.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use pep440_rs::Version;
@@ -34,6 +35,10 @@ struct RawPackage {
     source: RawSource,
     #[serde(default)]
     dependencies: Vec<RawDep>,
+    #[serde(default, rename = "optional-dependencies")]
+    optional_dependencies: BTreeMap<String, Vec<RawDep>>,
+    #[serde(default, rename = "dev-dependencies")]
+    dev_dependencies: BTreeMap<String, Vec<RawDep>>,
     #[serde(default)]
     sdist: Option<RawArtifact>,
     #[serde(default)]
@@ -119,11 +124,35 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
     })?;
     let source = source_from_raw(&rp.name, rp.source)?;
 
-    let dependencies = rp
+    let mut dependencies: Vec<DepEdge> = rp
         .dependencies
         .into_iter()
         .map(|rd| dep_from_raw(&rp.name, rd))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Synthesize edges for [package.optional-dependencies] and [package.dev-dependencies].
+    // Each group/extra entry becomes an edge gated by `extra == 'GROUP_NAME'`. This unifies
+    // PEP 735 dependency-groups and PEP 508 extras under the same marker-based mechanism
+    // already used elsewhere in the graph.
+    for (group, deps) in rp
+        .optional_dependencies
+        .into_iter()
+        .chain(rp.dev_dependencies)
+    {
+        let marker_str = format!("extra == '{group}'");
+        let synth_marker =
+            MarkerTree::from_str(&marker_str).map_err(|e| LockfileError::BadMarker {
+                package: rp.name.clone(),
+                dep: format!("<{group}>"),
+                marker: marker_str.clone(),
+                reason: e.to_string(),
+            })?;
+        for rd in deps {
+            let mut edge = dep_from_raw(&rp.name, rd)?;
+            edge.marker = Some(combine_markers(edge.marker, synth_marker.clone()));
+            dependencies.push(edge);
+        }
+    }
 
     let sdist = rp
         .sdist
@@ -184,6 +213,18 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
         wheels,
         metadata,
     })
+}
+
+/// Combine two markers with AND. Used to gate synthesized optional/dev-dep edges
+/// by their group/extra activation marker while preserving any existing per-dep marker.
+fn combine_markers(existing: Option<MarkerTree>, extra: MarkerTree) -> MarkerTree {
+    match existing {
+        None => extra,
+        Some(mut m) => {
+            m.and(extra);
+            m
+        }
+    }
 }
 
 fn dep_from_raw(pkg_name: &str, rd: RawDep) -> Result<DepEdge, LockfileError> {

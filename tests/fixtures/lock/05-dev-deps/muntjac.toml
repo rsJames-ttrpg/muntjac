@@ -1,0 +1,10 @@
+manifest_path   = "pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[lockfile]
+include_groups = ["test"]

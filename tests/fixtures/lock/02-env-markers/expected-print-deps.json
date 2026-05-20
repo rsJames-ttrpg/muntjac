@@ -1,0 +1,41 @@
+{
+  "configs": [
+    {
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "packages": [
+        {
+          "name": "env-marker-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": [
+            "typing-extensions@4.15.0"
+          ]
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.15.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        }
+      ]
+    },
+    {
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.13",
+      "packages": [
+        {
+          "name": "env-marker-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": []
+        }
+      ]
+    }
+  ]
+}
