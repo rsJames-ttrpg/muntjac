@@ -93,14 +93,24 @@ pub fn parse_filename(filename: &str) -> Result<WheelTag, TagParseError> {
 
 fn parse_python_tag(s: &str) -> Result<PythonTag, TagParseError> {
     if let Some(rest) = s.strip_prefix("cp") {
-        return parse_version_digits(rest)
-            .map(|(maj, min)| PythonTag::CPython(maj, min.unwrap_or(0)))
-            .ok_or_else(|| TagParseError::UnknownTagShape(s.into()));
+        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let trailing = &rest[digits.len()..];
+        if trailing.is_empty() {
+            if let Some((maj, min)) = parse_version_digits(&digits) {
+                return Ok(PythonTag::CPython(maj, min.unwrap_or(0)));
+            }
+        }
+        return Ok(PythonTag::Other(s.to_string()));
     }
     if let Some(rest) = s.strip_prefix("py") {
-        return parse_version_digits(rest)
-            .map(|(maj, min)| PythonTag::Py(maj, min))
-            .ok_or_else(|| TagParseError::UnknownTagShape(s.into()));
+        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let trailing = &rest[digits.len()..];
+        if trailing.is_empty() {
+            if let Some((maj, min)) = parse_version_digits(&digits) {
+                return Ok(PythonTag::Py(maj, min));
+            }
+        }
+        return Ok(PythonTag::Other(s.to_string()));
     }
     Ok(PythonTag::Other(s.to_string()))
 }
@@ -112,9 +122,14 @@ fn parse_abi_tag(s: &str) -> Result<AbiTag, TagParseError> {
         _ => {
             if let Some(rest) = s.strip_prefix("cp") {
                 let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-                if let Some((maj, min)) = parse_version_digits(&digits) {
-                    return Ok(AbiTag::CPython(maj, min.unwrap_or(0)));
+                let trailing = &rest[digits.len()..];
+                if trailing.is_empty() {
+                    if let Some((maj, min)) = parse_version_digits(&digits) {
+                        return Ok(AbiTag::CPython(maj, min.unwrap_or(0)));
+                    }
                 }
+                // Any trailing non-digit suffix (e.g. 'd', 'm', 't') means
+                // we don't recognize the exact ABI — keep opaque.
             }
             Ok(AbiTag::Other(s.to_string()))
         }
@@ -135,19 +150,20 @@ fn parse_platform_tag(s: &str) -> Result<PlatformTag, TagParseError> {
         return Ok(PlatformTag::ManyLinux { major: 2, minor: 17, arch: parse_linux_arch(arch)? });
     }
     if let Some(rest) = s.strip_prefix("manylinux_") {
-        let (maj, min, arch) = split_versioned_linux(rest)
-            .ok_or_else(|| TagParseError::UnknownTagShape(s.into()))?;
-        return Ok(PlatformTag::ManyLinux { major: maj, minor: min, arch });
+        if let Some((maj, min, arch)) = split_versioned_linux(rest) {
+            return Ok(PlatformTag::ManyLinux { major: maj, minor: min, arch });
+        }
+        // fall through to Other for unknown arches (s390x, ppc64le, armv7l, etc.)
     }
     if let Some(rest) = s.strip_prefix("musllinux_") {
-        let (maj, min, arch) = split_versioned_linux(rest)
-            .ok_or_else(|| TagParseError::UnknownTagShape(s.into()))?;
-        return Ok(PlatformTag::MuslLinux { major: maj, minor: min, arch });
+        if let Some((maj, min, arch)) = split_versioned_linux(rest) {
+            return Ok(PlatformTag::MuslLinux { major: maj, minor: min, arch });
+        }
     }
     if let Some(rest) = s.strip_prefix("macosx_") {
-        let (maj, min, arch) = split_versioned_mac(rest)
-            .ok_or_else(|| TagParseError::UnknownTagShape(s.into()))?;
-        return Ok(PlatformTag::MacOs { major: maj, minor: min, arch });
+        if let Some((maj, min, arch)) = split_versioned_mac(rest) {
+            return Ok(PlatformTag::MacOs { major: maj, minor: min, arch });
+        }
     }
     Ok(PlatformTag::Other(s.to_string()))
 }
@@ -322,5 +338,25 @@ mod tests {
     fn rejects_too_few_segments() {
         assert!(matches!(parse_filename("foo-1.0.whl"),
             Err(TagParseError::MalformedFilename(_))));
+    }
+
+    #[test]
+    fn s390x_manylinux_falls_to_other() {
+        let w = parse("cryptography-43.0.0-cp312-cp312-manylinux_2_28_s390x.whl");
+        assert!(matches!(w.tags[0].plat, PlatformTag::Other(ref s)
+            if s == "manylinux_2_28_s390x"));
+    }
+
+    #[test]
+    fn armv7l_manylinux_falls_to_other() {
+        let w = parse("foo-1.0-cp312-cp312-manylinux_2_28_armv7l.whl");
+        assert!(matches!(w.tags[0].plat, PlatformTag::Other(_)));
+    }
+
+    #[test]
+    fn cp313t_free_threaded_routes_to_other() {
+        let w = parse("foo-1.0-cp313t-cp313t-manylinux_2_28_x86_64.whl");
+        assert!(matches!(w.tags[0].python, PythonTag::Other(ref s) if s == "cp313t"));
+        assert!(matches!(w.tags[0].abi, AbiTag::Other(ref s) if s == "cp313t"));
     }
 }
