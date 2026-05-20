@@ -253,3 +253,5 @@ For each stage:
 7. **Commit, tag stage as ✅**, and move on.
 
 The roadmap document is updated at the end of each stage with what shipped, what slipped, and any follow-up specs filed.
+
+**Tech debt accumulated during stage reviews is logged in [`../TECH_DEBT.md`](../TECH_DEBT.md).** Each stage's brainstorm should skim it for items targeted at the upcoming stage; the planner should fold them in as explicit task items.
