@@ -28,20 +28,21 @@ pub fn run(args: InitArgs, _globals: &Globals) -> Result<()> {
         Some(p) => p,
         None => std::env::current_dir().context("getting current dir")?,
     };
-    fs::create_dir_all(&target).with_context(|| {
-        format!("creating target directory {}", target.display())
-    })?;
+    fs::create_dir_all(&target)
+        .with_context(|| format!("creating target directory {}", target.display()))?;
 
     let cfg_path = target.join("muntjac.toml");
     if cfg_path.exists() && !args.force {
-        anyhow::bail!("muntjac.toml already exists at {}; pass --force to overwrite", cfg_path.display());
+        anyhow::bail!(
+            "muntjac.toml already exists at {}; pass --force to overwrite",
+            cfg_path.display()
+        );
     }
 
     let detection = find_pyproject(&target);
     let cfg_contents = render_starter_config(&target, detection.as_ref());
-    fs::write(&cfg_path, cfg_contents).with_context(|| {
-        format!("writing {}", cfg_path.display())
-    })?;
+    fs::write(&cfg_path, cfg_contents)
+        .with_context(|| format!("writing {}", cfg_path.display()))?;
 
     write_third_party_skeleton(&target)?;
     println!("muntjac.toml written to {}", cfg_path.display());
@@ -116,8 +117,11 @@ fn write_third_party_skeleton(target: &Path) -> Result<()> {
     }
     let gitignore = tp.join(".gitignore");
     if !gitignore.exists() {
-        fs::write(&gitignore, "# muntjac-managed; vendor/ holds downloaded wheels.\nvendor/\n")
-            .with_context(|| format!("writing {}", gitignore.display()))?;
+        fs::write(
+            &gitignore,
+            "# muntjac-managed; vendor/ holds downloaded wheels.\nvendor/\n",
+        )
+        .with_context(|| format!("writing {}", gitignore.display()))?;
     }
     let gitkeep = tp.join("fixups/.gitkeep");
     if !gitkeep.exists() {
@@ -134,7 +138,10 @@ pub fn find_pyproject(start: &Path) -> Option<Detection> {
             if let Ok(bytes) = fs::read_to_string(&candidate) {
                 if has_project_or_uv(&bytes) {
                     let python_versions = extract_python_versions(&bytes);
-                    return Some(Detection { path: candidate, python_versions });
+                    return Some(Detection {
+                        path: candidate,
+                        python_versions,
+                    });
                 }
             }
         }
@@ -213,8 +220,17 @@ pub fn expand_requires_python(spec: &str) -> Result<Vec<PythonVersion>> {
 
 fn parse_two(s: &str) -> Result<(u8, u8)> {
     let parts: Vec<&str> = s.split('.').collect();
-    let major: u8 = parts.first().context("missing major")?.parse().context("major not u8")?;
-    let minor: u8 = parts.get(1).copied().unwrap_or("0").parse().context("minor not u8")?;
+    let major: u8 = parts
+        .first()
+        .context("missing major")?
+        .parse()
+        .context("major not u8")?;
+    let minor: u8 = parts
+        .get(1)
+        .copied()
+        .unwrap_or("0")
+        .parse()
+        .context("minor not u8")?;
     Ok((major, minor))
 }
 
@@ -227,16 +243,31 @@ mod tests {
     #[test]
     fn detects_pyproject_in_cwd() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("pyproject.toml"), "[project]\nname = \"x\"\nrequires-python = \">=3.11\"\n").unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[project]\nname = \"x\"\nrequires-python = \">=3.11\"\n",
+        )
+        .unwrap();
         let found = find_pyproject(dir.path()).expect("detected");
         assert_eq!(found.path, dir.path().join("pyproject.toml"));
-        assert_eq!(found.python_versions, vec![PythonVersion(3, 11), PythonVersion(3, 12), PythonVersion(3, 13)]);
+        assert_eq!(
+            found.python_versions,
+            vec![
+                PythonVersion(3, 11),
+                PythonVersion(3, 12),
+                PythonVersion(3, 13)
+            ]
+        );
     }
 
     #[test]
     fn detects_pyproject_in_parent() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("pyproject.toml"), "[project]\nname = \"x\"\n").unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[project]\nname = \"x\"\n",
+        )
+        .unwrap();
         let subdir = dir.path().join("sub");
         fs::create_dir(&subdir).unwrap();
         let found = find_pyproject(&subdir).expect("detected");
@@ -253,7 +284,11 @@ mod tests {
     #[test]
     fn skips_pyproject_without_project_or_tool_uv() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("pyproject.toml"), "[build-system]\nrequires = []\n").unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[build-system]\nrequires = []\n",
+        )
+        .unwrap();
         assert!(find_pyproject(dir.path()).is_none());
     }
 
@@ -266,11 +301,21 @@ mod tests {
 
     #[test]
     fn expands_requires_python_ranges() {
-        assert_eq!(expand_requires_python(">=3.10").unwrap(),
-                   vec![PythonVersion(3, 11), PythonVersion(3, 12), PythonVersion(3, 13)]);
-        assert_eq!(expand_requires_python(">=3.11,<3.13").unwrap(),
-                   vec![PythonVersion(3, 11), PythonVersion(3, 12)]);
-        assert_eq!(expand_requires_python("==3.12.*").unwrap(),
-                   vec![PythonVersion(3, 12)]);
+        assert_eq!(
+            expand_requires_python(">=3.10").unwrap(),
+            vec![
+                PythonVersion(3, 11),
+                PythonVersion(3, 12),
+                PythonVersion(3, 13)
+            ]
+        );
+        assert_eq!(
+            expand_requires_python(">=3.11,<3.13").unwrap(),
+            vec![PythonVersion(3, 11), PythonVersion(3, 12)]
+        );
+        assert_eq!(
+            expand_requires_python("==3.12.*").unwrap(),
+            vec![PythonVersion(3, 12)]
+        );
     }
 }

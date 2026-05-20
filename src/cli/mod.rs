@@ -91,7 +91,9 @@ pub fn run(cli: Cli) -> Result<()> {
     }
     match cli.command {
         Command::Init(args) => init::run(args, &cli.globals),
-        Command::Config { op: ConfigOp::Check(args) } => config_check::run(args, &cli.globals),
+        Command::Config {
+            op: ConfigOp::Check(args),
+        } => config_check::run(args, &cli.globals),
         Command::Debug { subcommand, args } => debug::run(subcommand, args, &cli.globals),
         Command::Vendor => stub::run("vendor", "S5/S9"),
         Command::Buckify => stub::run("buckify", "S3+"),

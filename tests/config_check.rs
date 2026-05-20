@@ -30,7 +30,11 @@ fn config_check_passes_on_good_config() {
     let dir = tempdir().unwrap();
     let cfg = dir.path().join("muntjac.toml");
     let manifest = dir.path().join("pyproject.toml");
-    fs::write(&cfg, GOOD_CONFIG.replace("../pyproject.toml", manifest.to_str().unwrap())).unwrap();
+    fs::write(
+        &cfg,
+        GOOD_CONFIG.replace("../pyproject.toml", manifest.to_str().unwrap()),
+    )
+    .unwrap();
     fs::write(&manifest, "[project]\nname = \"x\"\n").unwrap();
 
     muntjac()
@@ -47,7 +51,11 @@ fn config_check_rejects_bad_triple() {
     let dir = tempdir().unwrap();
     let cfg = dir.path().join("muntjac.toml");
     let manifest = dir.path().join("pyproject.toml");
-    fs::write(&cfg, BAD_TRIPLE.replace("../pyproject.toml", manifest.to_str().unwrap())).unwrap();
+    fs::write(
+        &cfg,
+        BAD_TRIPLE.replace("../pyproject.toml", manifest.to_str().unwrap()),
+    )
+    .unwrap();
     fs::write(&manifest, "[project]\nname = \"x\"\n").unwrap();
 
     muntjac()

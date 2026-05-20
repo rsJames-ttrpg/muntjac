@@ -10,7 +10,8 @@ use tempfile::tempdir;
 fn init_creates_starter_in_empty_dir() {
     let dir = tempdir().unwrap();
     muntjac()
-        .arg("-C").arg(dir.path())
+        .arg("-C")
+        .arg(dir.path())
         .arg("init")
         .assert()
         .success();
@@ -23,17 +24,25 @@ fn init_creates_starter_in_empty_dir() {
 
     assert!(dir.path().join("third-party/python/BUCK").exists());
     assert!(dir.path().join("third-party/python/.gitignore").exists());
-    assert!(dir.path().join("third-party/python/fixups/.gitkeep").exists());
+    assert!(
+        dir.path()
+            .join("third-party/python/fixups/.gitkeep")
+            .exists()
+    );
 }
 
 #[test]
 fn init_detects_existing_pyproject() {
     let dir = tempdir().unwrap();
-    fs::write(dir.path().join("pyproject.toml"),
-              "[project]\nname = \"app\"\nrequires-python = \">=3.11,<3.13\"\n").unwrap();
+    fs::write(
+        dir.path().join("pyproject.toml"),
+        "[project]\nname = \"app\"\nrequires-python = \">=3.11,<3.13\"\n",
+    )
+    .unwrap();
 
     muntjac()
-        .arg("-C").arg(dir.path())
+        .arg("-C")
+        .arg(dir.path())
         .arg("init")
         .assert()
         .success();
@@ -49,7 +58,8 @@ fn init_refuses_to_overwrite() {
     fs::write(dir.path().join("muntjac.toml"), "# existing\n").unwrap();
 
     muntjac()
-        .arg("-C").arg(dir.path())
+        .arg("-C")
+        .arg(dir.path())
         .arg("init")
         .assert()
         .failure()
@@ -62,7 +72,8 @@ fn init_with_force_overwrites() {
     fs::write(dir.path().join("muntjac.toml"), "# old\n").unwrap();
 
     muntjac()
-        .arg("-C").arg(dir.path())
+        .arg("-C")
+        .arg(dir.path())
         .arg("init")
         .arg("--force")
         .assert()

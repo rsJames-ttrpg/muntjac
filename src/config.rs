@@ -54,8 +54,12 @@ impl Default for FixupRegistry {
     }
 }
 
-fn default_registry() -> FixupRegistry { FixupRegistry::default() }
-fn default_true() -> bool { true }
+fn default_registry() -> FixupRegistry {
+    FixupRegistry::default()
+}
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuckConfig {
@@ -67,11 +71,16 @@ pub struct BuckConfig {
 
 impl Default for BuckConfig {
     fn default() -> Self {
-        Self { file_name: default_buck_file_name(), vendor: false }
+        Self {
+            file_name: default_buck_file_name(),
+            vendor: false,
+        }
     }
 }
 
-fn default_buck_file_name() -> String { "BUCK".into() }
+fn default_buck_file_name() -> String {
+    "BUCK".into()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PythonVersion(pub u8, pub u8);
@@ -97,8 +106,12 @@ impl FromStr for PythonVersion {
         if parts.len() != 2 {
             return Err(format!("python version must be MAJOR.MINOR, got `{s}`"));
         }
-        let major: u8 = parts[0].parse().map_err(|_| format!("bad major in `{s}`"))?;
-        let minor: u8 = parts[1].parse().map_err(|_| format!("bad minor in `{s}`"))?;
+        let major: u8 = parts[0]
+            .parse()
+            .map_err(|_| format!("bad major in `{s}`"))?;
+        let minor: u8 = parts[1]
+            .parse()
+            .map_err(|_| format!("bad minor in `{s}`"))?;
         if major != 3 {
             return Err(format!("only Python 3.x supported, got `{s}`"));
         }
@@ -148,20 +161,39 @@ impl Config {
         }
 
         let trees = if has_trees {
-            raw.tree.into_iter().map(|(name, t)| Tree {
-                name,
-                manifest_path: t.manifest_path,
-                third_party_dir: t.third_party_dir,
-                python_versions: t.python_versions,
-            }).collect()
+            raw.tree
+                .into_iter()
+                .map(|(name, t)| Tree {
+                    name,
+                    manifest_path: t.manifest_path,
+                    third_party_dir: t.third_party_dir,
+                    python_versions: t.python_versions,
+                })
+                .collect()
         } else {
-            let manifest_path = raw.manifest_path.ok_or(crate::error::ConfigError::MissingField("manifest_path"))?;
-            let third_party_dir = raw.third_party_dir.ok_or(crate::error::ConfigError::MissingField("third_party_dir"))?;
-            let python_versions = raw.python_versions.ok_or(crate::error::ConfigError::MissingField("python_versions"))?;
-            vec![Tree { name: "default".into(), manifest_path, third_party_dir, python_versions }]
+            let manifest_path = raw
+                .manifest_path
+                .ok_or(crate::error::ConfigError::MissingField("manifest_path"))?;
+            let third_party_dir = raw
+                .third_party_dir
+                .ok_or(crate::error::ConfigError::MissingField("third_party_dir"))?;
+            let python_versions = raw
+                .python_versions
+                .ok_or(crate::error::ConfigError::MissingField("python_versions"))?;
+            vec![Tree {
+                name: "default".into(),
+                manifest_path,
+                third_party_dir,
+                python_versions,
+            }]
         };
 
-        Ok(Config { trees, platforms: raw.platforms, fixups: raw.fixups, buck: raw.buck })
+        Ok(Config {
+            trees,
+            platforms: raw.platforms,
+            fixups: raw.fixups,
+            buck: raw.buck,
+        })
     }
 }
 
@@ -236,7 +268,10 @@ macos_min = "11.0"
         let tree = &config.trees[0];
         assert_eq!(tree.name, "default");
         assert_eq!(tree.manifest_path.to_str(), Some("../pyproject.toml"));
-        assert_eq!(tree.python_versions, vec![PythonVersion(3, 11), PythonVersion(3, 12)]);
+        assert_eq!(
+            tree.python_versions,
+            vec![PythonVersion(3, 11), PythonVersion(3, 12)]
+        );
         assert_eq!(config.platforms.len(), 2);
     }
 
@@ -295,7 +330,10 @@ python_versions = ["3.12"]
 target = "x86_64-unknown-linux-gnu"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::MissingField("manifest_path")));
+        assert!(matches!(
+            err,
+            crate::error::ConfigError::MissingField("manifest_path")
+        ));
     }
 
     #[test]
@@ -378,8 +416,13 @@ registry = "https://example.com/whatever"
 
     #[test]
     fn accepts_registry_forms() {
-        for r in ["none", "file:///tmp/fixups", "github.com/jackmpcollins/muntjac-fixups"] {
-            let toml_str = format!(r#"
+        for r in [
+            "none",
+            "file:///tmp/fixups",
+            "github.com/jackmpcollins/muntjac-fixups",
+        ] {
+            let toml_str = format!(
+                r#"
 manifest_path   = "../pyproject.toml"
 third_party_dir = "."
 python_versions = ["3.12"]
@@ -389,9 +432,12 @@ target = "x86_64-unknown-linux-gnu"
 
 [fixups]
 registry = "{r}"
-"#);
+"#
+            );
             let config = Config::from_str(&toml_str).expect("parse");
-            config.validate().unwrap_or_else(|_| panic!("validate `{r}`"));
+            config
+                .validate()
+                .unwrap_or_else(|_| panic!("validate `{r}`"));
         }
     }
 }

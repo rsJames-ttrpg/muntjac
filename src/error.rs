@@ -8,7 +8,9 @@ pub enum ConfigError {
     #[error("missing required field `{0}`")]
     MissingField(&'static str),
 
-    #[error("config cannot mix top-level manifest_path/third_party_dir/python_versions with [tree.*] sections")]
+    #[error(
+        "config cannot mix top-level manifest_path/third_party_dir/python_versions with [tree.*] sections"
+    )]
     IncompatibleShape,
 
     #[error("invalid platform `{name}`: {reason}")]
@@ -17,6 +19,8 @@ pub enum ConfigError {
     #[error("invalid python version `{0}`")]
     BadPythonVersion(String),
 
-    #[error("invalid registry `{0}`: expected \"none\", \"file://<path>\", or \"github.com/<owner>/<repo>\"")]
+    #[error(
+        "invalid registry `{0}`: expected \"none\", \"file://<path>\", or \"github.com/<owner>/<repo>\""
+    )]
     BadRegistry(String),
 }

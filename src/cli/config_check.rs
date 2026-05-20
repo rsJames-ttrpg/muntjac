@@ -23,15 +23,13 @@ pub fn run(args: ConfigCheckArgs, _globals: &Globals) -> Result<()> {
     let cwd = std::env::current_dir().context("getting current dir")?;
     let cfg_path = cwd.join("muntjac.toml");
 
-    let bytes = fs::read_to_string(&cfg_path).with_context(|| {
-        format!("reading muntjac.toml at {}", cfg_path.display())
-    })?;
-    let config = Config::from_str(&bytes).with_context(|| {
-        format!("parsing muntjac.toml at {}", cfg_path.display())
-    })?;
-    config.validate().with_context(|| {
-        format!("validating muntjac.toml at {}", cfg_path.display())
-    })?;
+    let bytes = fs::read_to_string(&cfg_path)
+        .with_context(|| format!("reading muntjac.toml at {}", cfg_path.display()))?;
+    let config = Config::from_str(&bytes)
+        .with_context(|| format!("parsing muntjac.toml at {}", cfg_path.display()))?;
+    config
+        .validate()
+        .with_context(|| format!("validating muntjac.toml at {}", cfg_path.display()))?;
 
     check_paths(&cfg_path, &config)?;
 
@@ -68,7 +66,11 @@ fn check_paths(cfg_path: &Path, config: &Config) -> Result<()> {
         let tpd = resolve(base, &tree.third_party_dir);
         if !tpd.exists() {
             fs::create_dir_all(&tpd).with_context(|| {
-                format!("creating third_party_dir for tree `{}`: {}", tree.name, tpd.display())
+                format!(
+                    "creating third_party_dir for tree `{}`: {}",
+                    tree.name,
+                    tpd.display()
+                )
             })?;
         }
     }
@@ -76,5 +78,9 @@ fn check_paths(cfg_path: &Path, config: &Config) -> Result<()> {
 }
 
 fn resolve(base: &Path, p: &Path) -> PathBuf {
-    if p.is_absolute() { p.to_path_buf() } else { base.join(p) }
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        base.join(p)
+    }
 }
