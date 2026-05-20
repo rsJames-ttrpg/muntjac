@@ -32,6 +32,32 @@ pub struct Platform {
     pub macos_min: Option<String>,
 }
 
+impl Platform {
+    /// Returns the parsed manylinux baseline `(major, minor)` if set.
+    /// Assumes `Config::validate` has run; panics if the string is malformed.
+    pub fn manylinux_baseline(&self) -> Option<(u32, u32)> {
+        self.manylinux.as_deref().map(|s| parse_underscore_pair(s)
+            .expect("validated manylinux string"))
+    }
+
+    /// Returns the parsed musllinux baseline `(major, minor)` if set.
+    /// Assumes `Config::validate` has run; panics if the string is malformed.
+    pub fn musllinux_baseline(&self) -> Option<(u32, u32)> {
+        self.musllinux.as_deref().map(|s| parse_underscore_pair(s)
+            .expect("validated musllinux string"))
+    }
+
+    /// Returns the parsed `macos_min` deployment target `(major, minor)` if set.
+    /// `macos_min` is the deployment target — the minimum macOS version that
+    /// resulting binaries must support. The wheel selector accepts wheels
+    /// whose required deployment target is <= this value.
+    /// Assumes `Config::validate` has run; panics if the string is malformed.
+    pub fn macos_min_parsed(&self) -> Option<(u32, u32)> {
+        self.macos_min.as_deref().map(|s| parse_dot_pair(s)
+            .expect("validated macos_min string"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct FixupsConfig {
     #[serde(default = "default_registry")]
@@ -650,5 +676,26 @@ musllinux = "1_2"
         let err = Config::from_str(toml_str).expect_err("should fail");
         assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
             if reason.contains("musllinux") && reason.contains("linux-gnu")));
+    }
+
+    #[test]
+    fn platform_baseline_accessors() {
+        let p_linux = Platform {
+            target: "x86_64-unknown-linux-gnu".into(),
+            manylinux: Some("2_28".into()),
+            musllinux: None,
+            macos_min: None,
+        };
+        assert_eq!(p_linux.manylinux_baseline(), Some((2, 28)));
+        assert_eq!(p_linux.musllinux_baseline(), None);
+        assert_eq!(p_linux.macos_min_parsed(), None);
+
+        let p_mac = Platform {
+            target: "aarch64-apple-darwin".into(),
+            manylinux: None,
+            musllinux: None,
+            macos_min: Some("11.0".into()),
+        };
+        assert_eq!(p_mac.macos_min_parsed(), Some((11, 0)));
     }
 }
