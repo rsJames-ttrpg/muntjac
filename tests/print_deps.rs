@@ -96,3 +96,13 @@ fn fixture_06_cycle_error() {
 fn fixture_07_unresolved_dep_error() {
     assert_error("07-unresolved-dep-error");
 }
+
+#[test]
+fn fixture_09_runs_twice_identically() {
+    let (first, _) = run_print_deps("01-pure-python");
+    let (second, _) = run_print_deps("01-pure-python");
+    assert_eq!(
+        first, second,
+        "print-deps is not deterministic across invocations"
+    );
+}
