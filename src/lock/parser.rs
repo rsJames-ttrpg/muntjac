@@ -32,11 +32,30 @@ struct RawPackage {
     name: String,
     version: String,
     source: RawSource,
-    // Tasks 5-6 fill in:
-    // #[serde(default)] dependencies: Vec<RawDep>,
-    // #[serde(default)] sdist: Option<RawArtifact>,
-    // #[serde(default)] wheels: Vec<RawArtifact>,
-    // #[serde(default)] metadata: Option<RawMetadata>,
+    #[serde(default)]
+    dependencies: Vec<RawDep>,
+    #[serde(default)]
+    sdist: Option<RawArtifact>,
+    #[serde(default)]
+    wheels: Vec<RawArtifact>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawDep {
+    name: String,
+    #[serde(default)]
+    extra: Vec<String>,
+    #[serde(default)]
+    #[allow(dead_code)] // Task 6 parses this into MarkerTree
+    marker: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawArtifact {
+    url: String,
+    hash: String,
+    #[serde(default)]
+    size: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,14 +109,67 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
         reason: e.to_string(),
     })?;
     let source = source_from_raw(&rp.name, rp.source)?;
+
+    let dependencies = rp
+        .dependencies
+        .into_iter()
+        .map(|rd| dep_from_raw(&rp.name, rd))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let sdist = rp
+        .sdist
+        .map(|rs| -> Result<Sdist, LockfileError> {
+            let url = Url::parse(&rs.url).map_err(|e| LockfileError::BadVersion {
+                package: rp.name.clone(),
+                value: rs.url.clone(),
+                reason: format!("sdist URL: {e}"),
+            })?;
+            Ok(Sdist {
+                url,
+                hash: rs.hash,
+                size: rs.size,
+            })
+        })
+        .transpose()?;
+
+    let wheels = rp
+        .wheels
+        .into_iter()
+        .map(|rw| -> Result<Wheel, LockfileError> {
+            let url = Url::parse(&rw.url).map_err(|e| LockfileError::BadVersion {
+                package: rp.name.clone(),
+                value: rw.url.clone(),
+                reason: format!("wheel URL: {e}"),
+            })?;
+            let filename = rw.url.rsplit('/').next().unwrap_or("").to_string();
+            Ok(Wheel {
+                url,
+                hash: rw.hash,
+                size: rw.size,
+                filename,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     Ok(Package {
         name,
         version,
         source,
-        dependencies: vec![], // Task 5
-        sdist: None,          // Task 5
-        wheels: vec![],       // Task 5
-        metadata: None,       // Task 6
+        dependencies,
+        sdist,
+        wheels,
+        metadata: None, // Task 6 fills this
+    })
+}
+
+fn dep_from_raw(pkg_name: &str, rd: RawDep) -> Result<DepEdge, LockfileError> {
+    let _ = pkg_name; // Task 6 uses this for marker error reporting
+    let name = PackageName::from_str(&rd.name)
+        .map_err(|e| LockfileError::BadPackageName(rd.name.clone(), e.to_string()))?;
+    Ok(DepEdge {
+        name,
+        extra: rd.extra,
+        marker: None, // Task 6 fills this
     })
 }
 
@@ -263,5 +335,54 @@ source = { registry = "https://pypi.org/simple", git = "https://github.com/foo/b
 "#;
         let err = parse(toml_str).expect_err("should fail");
         assert!(matches!(err, LockfileError::AmbiguousSource { .. }));
+    }
+
+    const WITH_DEPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "requests"
+version = "2.34.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "urllib3", extra = ["socks"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/x/requests.tar.gz", hash = "sha256:abc", size = 142856 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/y/requests-2.34.2-py3-none-any.whl", hash = "sha256:def", size = 73075 },
+]
+
+[[package]]
+name = "certifi"
+version = "2026.5.20"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "urllib3"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn parses_dependencies_sdist_and_wheels() {
+        let lock = parse(WITH_DEPS).expect("parse");
+        let requests = lock
+            .packages
+            .iter()
+            .find(|p| p.name.as_ref() == "requests")
+            .unwrap();
+        assert_eq!(requests.dependencies.len(), 2);
+        assert_eq!(requests.dependencies[0].name.as_ref(), "certifi");
+        assert_eq!(requests.dependencies[1].name.as_ref(), "urllib3");
+        assert_eq!(requests.dependencies[1].extra, vec!["socks".to_string()]);
+        assert!(requests.sdist.is_some());
+        assert_eq!(requests.wheels.len(), 1);
+        let wheel = &requests.wheels[0];
+        assert_eq!(wheel.hash, "sha256:def");
+        assert_eq!(wheel.size, Some(73075));
+        assert!(wheel.filename.ends_with(".whl"));
     }
 }
