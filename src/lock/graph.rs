@@ -3,9 +3,10 @@
 //! Adjacency-map representation. Cycle detection (Task 9) and reachability
 //! (Task 10) are added by later tasks in this stage.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::str::FromStr;
 
-use pep508_rs::{MarkerTree, PackageName};
+use pep508_rs::{ExtraName, MarkerEnvironment, MarkerTree, PackageName};
 
 use crate::error::LockfileError;
 use crate::lock::types::*;
@@ -90,6 +91,47 @@ pub fn build(lock: &Lockfile) -> Result<DepGraph, LockfileError> {
         by_name,
         roots,
     })
+}
+
+pub fn reachable_from(
+    graph: &DepGraph,
+    roots: &[NodeId],
+    env: &MarkerEnvironment,
+    include_groups: &[String],
+) -> BTreeSet<NodeId> {
+    let extras: Vec<ExtraName> = include_groups
+        .iter()
+        .filter_map(|s| ExtraName::from_str(s).ok())
+        .collect();
+    let mut reached = BTreeSet::new();
+    let mut stack: Vec<NodeId> = roots.to_vec();
+    while let Some(node) = stack.pop() {
+        if !reached.insert(node) {
+            continue;
+        }
+        let n = &graph.nodes[node as usize];
+        for (i, &target) in n.edges_out.iter().enumerate() {
+            let marker = n.edge_markers[i].as_ref();
+            if !edge_applies(marker, env, &extras) {
+                continue;
+            }
+            stack.push(target);
+        }
+    }
+    reached
+}
+
+/// Returns true if an edge with the given marker should be followed under
+/// the given environment + extras (dependency-group activations).
+pub fn edge_applies(
+    marker: Option<&MarkerTree>,
+    env: &MarkerEnvironment,
+    extras: &[ExtraName],
+) -> bool {
+    let Some(m) = marker else {
+        return true;
+    };
+    m.evaluate(env, extras)
 }
 
 pub fn detect_cycles(graph: &DepGraph) -> Result<(), LockfileError> {
@@ -334,5 +376,76 @@ mod tests {
         };
         let g = build(&lock).expect("build");
         detect_cycles(&g).expect("acyclic");
+    }
+
+    use crate::config::{Platform, PythonVersion};
+    use crate::platform::marker_env;
+
+    fn linux_x86_platform() -> Platform {
+        Platform {
+            target: "x86_64-unknown-linux-gnu".into(),
+            manylinux: Some("2_17".into()),
+            musllinux: None,
+            macos_min: None,
+        }
+    }
+
+    #[test]
+    fn reachable_drops_marker_false_edges() {
+        let mut lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.10".into(),
+            packages: vec![
+                pkg("app", "0.1", first_party(), vec![]),
+                pkg("typing-extensions", "4.0", registry(), vec![]),
+            ],
+        };
+        // Marker-gated edge: app -> typing-extensions when python < 3.11
+        lock.packages[0].dependencies.push(DepEdge {
+            name: PackageName::from_str("typing-extensions").unwrap(),
+            extra: vec![],
+            marker: Some(MarkerTree::from_str("python_version < '3.11'").unwrap()),
+        });
+        let g = build(&lock).expect("build");
+
+        // Under py3.10: typing-extensions IS reachable
+        let env_310 = marker_env(&linux_x86_platform(), PythonVersion(3, 10));
+        let r = reachable_from(&g, &g.roots, &env_310, &[]);
+        assert_eq!(r.len(), 2);
+
+        // Under py3.12: NOT reachable
+        let env_312 = marker_env(&linux_x86_platform(), PythonVersion(3, 12));
+        let r = reachable_from(&g, &g.roots, &env_312, &[]);
+        assert_eq!(r.len(), 1);
+    }
+
+    #[test]
+    fn reachable_respects_group_gating() {
+        let mut lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                pkg("app", "0.1", first_party(), vec![]),
+                pkg("pytest", "8.0", registry(), vec![]),
+            ],
+        };
+        // Test-group-gated edge: app -> pytest when extra == 'test'
+        lock.packages[0].dependencies.push(DepEdge {
+            name: PackageName::from_str("pytest").unwrap(),
+            extra: vec![],
+            marker: Some(MarkerTree::from_str("extra == 'test'").unwrap()),
+        });
+        let g = build(&lock).expect("build");
+        let env = marker_env(&linux_x86_platform(), PythonVersion(3, 12));
+
+        // Without include_groups, pytest NOT reachable
+        let r = reachable_from(&g, &g.roots, &env, &[]);
+        assert_eq!(r.len(), 1);
+
+        // With include_groups = ["test"], pytest IS reachable
+        let r = reachable_from(&g, &g.roots, &env, &["test".to_string()]);
+        assert_eq!(r.len(), 2);
     }
 }
