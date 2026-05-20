@@ -224,9 +224,14 @@ Depends on `Platform.target` and the parsed baselines from `manylinux`/`musllinu
 - **`aarch64-unknown-linux-musl`:** mirrors musl-x86_64 with arch `Aarch64`.
 
 - **`aarch64-apple-darwin` with `macos_min = "11.0"`:**
-  For each major in `[MACOS_MAX_MAJOR .. macos_min.major]` descending, emit `macosx_<major>_<minor>_arm64` and `macosx_<major>_<minor>_universal2`. Then `any`. `MACOS_MAX_MAJOR` is a constant (15 as of writing), bumped manually when new macOS major versions ship; living-list approach matches what pip does.
+  `macos_min` is the deployment target — the minimum macOS version we want resulting binaries to support. A wheel tagged `macosx_X_Y_<arch>` requires deployment target ≥ `X.Y`, so we accept it iff `X.Y ≤ macos_min`. Construction walks down from `macos_min`:
+  - If `macos_min.major ≥ 11`, emit `macosx_<m>_0_arm64` and `macosx_<m>_0_universal2` for each `m` in `(macos_min.major .. 10]` descending, where the entry for `m = macos_min.major` uses `macos_min.minor` rather than `0`.
+  - Then emit the 10.x range: `macosx_10_<n>_arm64` and `macosx_10_<n>_universal2` for `n` from `16` down to `4` (or, if `macos_min.major == 10`, from `macos_min.minor` down to `4`).
+  - Then `any`.
 
-- **`x86_64-apple-darwin`:** mirrors arm64 with `x86_64` and `universal2`. Wheels tagged `arm64` are *not* in this list (and vice versa). `universal2` is in both.
+  Concretely for `macos_min = "11.0"`: `macosx_11_0_arm64`, `macosx_11_0_universal2`, then `macosx_10_16_*` through `macosx_10_4_*` (with universal2 variants), then `any`. Wheels tagged `macosx_12_0_*` and higher are *not* in the list — they require macOS 12+. This matches `pip`'s `mac_platforms(version=(11, 0))` behavior.
+
+- **`x86_64-apple-darwin`:** mirrors arm64 with `x86_64` as the primary arch and `universal2` as the fat variant. Wheels tagged `arm64` are *not* in this list (and vice versa). `universal2` is in both.
 
 ### Combining the axes
 
@@ -415,7 +420,7 @@ Each item below becomes a discrete task in the implementation plan. Closing comm
 - Snapshot the ordered `CompatibleTags` for each `(platform, py_version)` in a 5-platform × 3-python matrix (15 `insta` snapshots). Stable byte-for-byte across runs.
 - Manylinux alias matching: a wheel tagged `manylinux2014_x86_64` is accepted when `manylinux_2_17_x86_64` is in the list, at the same rank.
 - musllinux ordering: with `musllinux = "1_2"`, a 1.1 wheel is accepted at lower preference; a 1.1 baseline rejects a 1.2 wheel (`rank_of` returns `None`).
-- macOS deployment-target ordering: with `macos_min = "11.0"`, both `macosx_11_0_arm64` and `macosx_14_0_arm64` are accepted, with 14_0 ranked higher.
+- macOS deployment-target ordering: with `macos_min = "14.0"`, all of `macosx_14_0_arm64`, `macosx_11_0_arm64`, and `macosx_10_15_arm64` are accepted, ranked in that descending preference order. With `macos_min = "11.0"`, `macosx_12_0_arm64` is rejected (`rank_of` returns `None`) because it requires macOS 12+.
 - x86_64 macOS rejects `arm64` and vice versa; both accept `universal2`.
 
 ### Unit tests — `src/wheel/select.rs`
@@ -477,7 +482,7 @@ On the `01-numpy-matrix` fixture, `muntjac debug pick-wheels` shows every numpy 
 
 ## 13. Risks & mitigations
 
-- **macOS `MACOS_MAX_MAJOR` constant drifts behind the ecosystem.** A wheel tagged `macosx_16_0_arm64` would be silently rejected if we forget to bump. Mitigation: document the constant prominently with a comment pointing at PyPI's most-tagged macOS version, and add a soft test that the constant is `>= 15` (current ceiling) — failing CI on regression makes the bump intentional.
+- **macOS `macos_min` semantics surprise.** `macos_min` is the *deployment target* — the minimum macOS version the user's resulting binaries must support — not the maximum version they want wheels for. A user with macos_min=11.0 cannot use a wheel tagged macosx_14_0 even if their build machine runs 14.0, because the resulting binary wouldn't run on the 11.0 systems they want to ship to. Mitigation: the `muntjac init` template documents this with a one-line comment ("# macos_min is your deployment target — the minimum macOS your binaries must support"), and the docstring on `Platform::macos_min()` repeats it.
 
 - **Tag canonicalization collisions surprise users.** A user looking at `manylinux2014_x86_64` in their wheel list and seeing it match a `manylinux_2_17` compatible-list entry might be confused. Mitigation: the debug command's `matched_tag` field renders the canonical form, and we document the alias table in `tag.rs`'s module doc.
 
