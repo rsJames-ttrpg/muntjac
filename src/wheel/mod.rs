@@ -4,9 +4,11 @@
 //! for the design.
 
 pub mod tag;
-// `compat` and `select` modules added in later tasks.
+pub mod compat;
+// `select` module added in a later task.
 
 pub use tag::{
     AbiTag, LinuxArch, MacArch, PlatformTag, PythonTag, Tag, TagParseError, WheelTag,
     parse_filename,
 };
+pub use compat::CompatibleTags;
