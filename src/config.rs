@@ -10,6 +10,7 @@ pub struct Config {
     pub platforms: BTreeMap<String, Platform>,
     pub fixups: FixupsConfig,
     pub buck: BuckConfig,
+    pub lockfile: LockfileConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +83,12 @@ fn default_buck_file_name() -> String {
     "BUCK".into()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub struct LockfileConfig {
+    #[serde(default)]
+    pub include_groups: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PythonVersion(pub u8, pub u8);
 
@@ -129,6 +136,8 @@ struct RawConfig {
     fixups: FixupsConfig,
     #[serde(default)]
     buck: BuckConfig,
+    #[serde(default)]
+    lockfile: LockfileConfig,
     #[serde(default)]
     tree: BTreeMap<String, RawTree>,
 }
@@ -193,6 +202,7 @@ impl Config {
             platforms: raw.platforms,
             fixups: raw.fixups,
             buck: raw.buck,
+            lockfile: raw.lockfile,
         })
     }
 }
@@ -203,6 +213,9 @@ impl Config {
             validate_target_triple(name, &platform.target)?;
         }
         validate_registry(&self.fixups.registry)?;
+        for g in &self.lockfile.include_groups {
+            validate_group_name(g)?;
+        }
         Ok(())
     }
 }
@@ -224,6 +237,20 @@ fn validate_target_triple(name: &str, target: &str) -> Result<(), crate::error::
             reason: format!("unknown target triple `{target}`; expected one of {allowed:?}"),
         })
     }
+}
+
+fn validate_group_name(name: &str) -> Result<(), crate::error::ConfigError> {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_lowercase() => {}
+        _ => return Err(crate::error::ConfigError::BadGroupName(name.to_string())),
+    }
+    for c in chars {
+        if !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+            return Err(crate::error::ConfigError::BadGroupName(name.to_string()));
+        }
+    }
+    Ok(())
 }
 
 fn validate_registry(reg: &FixupRegistry) -> Result<(), crate::error::ConfigError> {
@@ -439,5 +466,57 @@ registry = "{r}"
                 .validate()
                 .unwrap_or_else(|_| panic!("validate `{r}`"));
         }
+    }
+
+    #[test]
+    fn parses_lockfile_config_section() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+
+[lockfile]
+include_groups = ["test", "docs"]
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        assert_eq!(
+            config.lockfile.include_groups,
+            vec!["test".to_string(), "docs".to_string()]
+        );
+    }
+
+    #[test]
+    fn lockfile_config_defaults_to_empty() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        assert!(config.lockfile.include_groups.is_empty());
+    }
+
+    #[test]
+    fn rejects_invalid_group_identifier() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+
+[lockfile]
+include_groups = ["bad name with space"]
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        let err = config.validate().expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadGroupName(_)));
     }
 }

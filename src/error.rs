@@ -23,6 +23,9 @@ pub enum ConfigError {
         "invalid registry `{0}`: expected \"none\", \"file://<path>\", or \"github.com/<owner>/<repo>\""
     )]
     BadRegistry(String),
+
+    #[error("invalid dependency-group name `{0}`: must match [a-z][a-z0-9-]*")]
+    BadGroupName(String),
 }
 
 #[derive(Debug, Error)]
