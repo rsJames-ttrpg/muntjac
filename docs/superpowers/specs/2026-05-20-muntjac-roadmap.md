@@ -228,7 +228,7 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 |---|---|---|---|
 | Design | [2026-05-20-muntjac-design.md](./2026-05-20-muntjac-design.md) | n/a | ✅ committed |
 | Roadmap | this document | n/a | ✅ committed |
-| S0 | [2026-05-20-muntjac-s0-scaffolding-design.md](./2026-05-20-muntjac-s0-scaffolding-design.md) | (not yet written) | 🟡 spec drafted |
+| S0 | [2026-05-20-muntjac-s0-scaffolding-design.md](./2026-05-20-muntjac-s0-scaffolding-design.md) | [2026-05-20-muntjac-s0-scaffolding.md](../plans/2026-05-20-muntjac-s0-scaffolding.md) | 🟡 plan drafted |
 | S1 | (not yet written) | (not yet written) | ⬜ blocked on S0 |
 | S2 | (not yet written) | (not yet written) | ⬜ blocked on S0 |
 | S3 | (not yet written) | (not yet written) | ⬜ blocked on S1+S2 |
