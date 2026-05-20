@@ -1,1 +1,2 @@
-dependency cycle(s) detected
+dependency cycle(s) detected:
+  - alpha@1.0 -> beta@1.0 -> alpha@1.0
