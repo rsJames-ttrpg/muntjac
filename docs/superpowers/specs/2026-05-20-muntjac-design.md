@@ -548,6 +548,7 @@ No PR activity on `muntjac-fixups` 90 days post-launch ⇒ assumption that this 
 - **Native sdist deferral.** v1 errors instead of handling. Acceptable for launch; the credible launch surface (numpy/pandas/scipy/torch/cryptography/requests/fastapi/ruff) all ship wheels. Real concern: long-tail packages without wheels will need fixups or v2.
 - **Determinism vs uv.lock churn.** uv may rewrite `uv.lock` with cosmetic changes. Mitigation: muntjac's input is the resolved data, not the file bytes — same resolved graph ⇒ same BUCK.
 - **Multi-tree composability.** Two trees sharing the same package at different versions: each gets its own targets. No risk of accidental version clash because target paths differ (`//third-party/python/modern:tensorflow` vs `//third-party/python/legacy:tensorflow`). Documented as the explicit semantics.
+- **Registry repo location undecided.** Spec uses `github.com/<user>/muntjac-fixups` as a placeholder. Real location is a launch-time decision: under the muntjac author's GitHub, under a neutral org, or hosted in a new org. Doesn't block the v0.1.0 implementation — only the `registry_rev` pin needs to be writable to the chosen URL before the first public release.
 
 ---
 
