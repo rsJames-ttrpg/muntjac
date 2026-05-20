@@ -181,32 +181,61 @@ pub fn edge_applies(
 
 pub fn detect_cycles(graph: &DepGraph) -> Result<(), LockfileError> {
     let sccs = tarjan_scc(graph);
-    let cycles: Vec<String> = sccs
-        .iter()
-        .filter(|scc| scc.len() > 1 || has_self_loop(graph, scc[0]))
-        .map(|scc| format_cycle(graph, scc))
-        .collect();
-    if cycles.is_empty() {
+    let mut out: Vec<Vec<String>> = Vec::new();
+    for scc in sccs {
+        let is_cycle = scc.len() > 1 || has_self_loop(graph, scc[0]);
+        if !is_cycle {
+            continue;
+        }
+
+        // Find the lex-smallest member by display string.
+        let mut members: Vec<NodeId> = scc.clone();
+        members.sort_by_key(|&n| display_string(graph, n));
+        let start = members[0];
+
+        // Walk along outgoing edges, preferring unvisited successors in the SCC.
+        let scc_set: std::collections::HashSet<NodeId> = scc.iter().copied().collect();
+        let mut path: Vec<NodeId> = vec![start];
+        let mut visited: std::collections::HashSet<NodeId> =
+            [start].into_iter().collect();
+
+        loop {
+            let current = *path.last().unwrap();
+            let edges = &graph.nodes[current as usize].edges_out;
+            let next = edges
+                .iter()
+                .filter(|&&succ| scc_set.contains(&succ))
+                .find(|&&succ| !visited.contains(&succ))
+                .or_else(|| edges.iter().find(|&&succ| scc_set.contains(&succ)));
+            match next {
+                Some(&n) if !visited.contains(&n) => {
+                    path.push(n);
+                    visited.insert(n);
+                }
+                Some(_) | None => break,
+            }
+        }
+
+        let path_strs: Vec<String> = path
+            .into_iter()
+            .map(|n| display_string(graph, n))
+            .collect();
+        out.push(path_strs);
+    }
+    out.sort();
+    if out.is_empty() {
         return Ok(());
     }
-    Err(LockfileError::Cycle(cycles))
+    Err(LockfileError::Cycle(out))
 }
 
 fn has_self_loop(graph: &DepGraph, id: NodeId) -> bool {
     graph.nodes[id as usize].edges_out.contains(&id)
 }
 
-fn format_cycle(graph: &DepGraph, scc: &[NodeId]) -> String {
-    let mut sorted = scc.to_vec();
-    sorted.sort();
-    sorted
-        .iter()
-        .map(|&id| {
-            let n = &graph.nodes[id as usize];
-            format!("{}@{}", n.pkg.name, n.pkg.version)
-        })
-        .collect::<Vec<_>>()
-        .join(" -> ")
+fn display_string(graph: &DepGraph, id: NodeId) -> String {
+    let n = &graph.nodes[id as usize];
+    format!("{}@{}", n.pkg.name, n.pkg.version)
 }
 
 fn tarjan_scc(graph: &DepGraph) -> Vec<Vec<NodeId>> {
@@ -382,7 +411,7 @@ mod tests {
         match err {
             LockfileError::Cycle(cycles) => {
                 assert_eq!(cycles.len(), 1);
-                assert!(cycles[0].contains("a@1.0"));
+                assert_eq!(cycles[0], vec!["a@1.0"]);
             }
             other => panic!("unexpected: {other:?}"),
         }
@@ -404,6 +433,31 @@ mod tests {
         let err = detect_cycles(&g).expect_err("should fail");
         let s = format!("{err}");
         assert!(s.contains("a@1.0") && s.contains("b@1.0") && s.contains("c@1.0"));
+        assert!(s.contains("dependency cycle(s) detected"));
+    }
+
+    #[test]
+    fn detect_cycles_finds_simple_cycle() {
+        // alpha -> beta -> alpha
+        let lock = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                pkg("alpha", "1.0", first_party(), vec!["beta"]),
+                pkg("beta", "1.0", registry(), vec!["alpha"]),
+            ],
+        };
+        let g = build(&lock).expect("build");
+        let err = detect_cycles(&g).expect_err("should fail");
+        match err {
+            LockfileError::Cycle(cycles) => {
+                assert_eq!(cycles.len(), 1);
+                // Rotated to start at lex-smallest member, walked along edges.
+                assert_eq!(cycles[0], vec!["alpha@1.0", "beta@1.0"]);
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
     }
 
     #[test]

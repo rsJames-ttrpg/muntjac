@@ -67,11 +67,30 @@ pub enum LockfileError {
     )]
     DuplicatePackageName { name: String, versions: Vec<String> },
 
-    #[error("dependency cycle(s) detected: {0:?}")]
-    Cycle(Vec<String>),
+    #[error(fmt = fmt_cycle)]
+    Cycle(Vec<Vec<String>>),
 
     #[error("invalid package name `{0}`: {1}")]
     BadPackageName(String, String),
+}
+
+fn fmt_cycle(cycles: &Vec<Vec<String>>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    writeln!(f, "dependency cycle(s) detected:")?;
+    for cycle in cycles {
+        write!(f, "  - ")?;
+        for (i, node) in cycle.iter().enumerate() {
+            if i > 0 {
+                write!(f, " -> ")?;
+            }
+            write!(f, "{node}")?;
+        }
+        if let Some(first) = cycle.first() {
+            writeln!(f, " -> {first}")?;
+        } else {
+            writeln!(f)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
