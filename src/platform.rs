@@ -70,15 +70,9 @@ fn derive_env_strings(target: &str) -> EnvStrings {
             platform_system: "Darwin",
             platform_machine: "arm64",
         },
-        other => {
-            eprintln!("warning: unknown target triple `{other}`; marker eval may be inaccurate");
-            EnvStrings {
-                os_name: "",
-                sys_platform: "",
-                platform_system: "",
-                platform_machine: "",
-            }
-        }
+        other => unreachable!(
+            "Config::validate must reject unknown target triple `{other}` before reaching here"
+        ),
     }
 }
 
