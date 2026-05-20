@@ -154,7 +154,9 @@ impl FromStr for Config {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let raw: RawConfig = toml::from_str(s).map_err(crate::error::ConfigError::Parse)?;
-        Self::from_raw(raw)
+        let config = Self::from_raw(raw)?;
+        config.validate()?;
+        Ok(config)
     }
 }
 
@@ -211,6 +213,7 @@ impl Config {
     pub fn validate(&self) -> Result<(), crate::error::ConfigError> {
         for (name, platform) in &self.platforms {
             validate_target_triple(name, &platform.target)?;
+            validate_platform_baseline(name, platform)?;
         }
         validate_registry(&self.fixups.registry)?;
         for g in &self.lockfile.include_groups {
@@ -218,6 +221,73 @@ impl Config {
         }
         Ok(())
     }
+}
+
+fn parse_underscore_pair(s: &str) -> Result<(u32, u32), ()> {
+    let (a, b) = s.split_once('_').ok_or(())?;
+    Ok((a.parse().map_err(|_| ())?, b.parse().map_err(|_| ())?))
+}
+
+fn parse_dot_pair(s: &str) -> Result<(u32, u32), ()> {
+    let (a, b) = s.split_once('.').ok_or(())?;
+    Ok((a.parse().map_err(|_| ())?, b.parse().map_err(|_| ())?))
+}
+
+fn validate_platform_baseline(name: &str, p: &Platform) -> Result<(), crate::error::ConfigError> {
+    let is_gnu = p.target.ends_with("linux-gnu");
+    let is_musl = p.target.ends_with("linux-musl");
+    let is_mac = p.target.ends_with("apple-darwin");
+
+    // Shape checks first.
+    if let Some(s) = &p.manylinux {
+        parse_underscore_pair(s).map_err(|_| crate::error::ConfigError::BadPlatform {
+            name: name.into(),
+            reason: format!("manylinux baseline must be N_M (got `{s}`); use `2_17` not `2014`"),
+        })?;
+    }
+    if let Some(s) = &p.musllinux {
+        parse_underscore_pair(s).map_err(|_| crate::error::ConfigError::BadPlatform {
+            name: name.into(),
+            reason: format!("musllinux baseline must be N_M (got `{s}`)"),
+        })?;
+    }
+    if let Some(s) = &p.macos_min {
+        parse_dot_pair(s).map_err(|_| crate::error::ConfigError::BadPlatform {
+            name: name.into(),
+            reason: format!("macos_min must be MAJOR.MINOR (got `{s}`)"),
+        })?;
+    }
+
+    // Policy: presence + libc coherence.
+    if is_gnu || is_musl {
+        if p.manylinux.is_none() && p.musllinux.is_none() {
+            return Err(crate::error::ConfigError::BadPlatform {
+                name: name.into(),
+                reason: "linux platform must declare manylinux and/or musllinux baseline".into(),
+            });
+        }
+        if is_gnu && p.musllinux.is_some() {
+            return Err(crate::error::ConfigError::BadPlatform {
+                name: name.into(),
+                reason: "musllinux baseline only valid on *-linux-musl targets, not linux-gnu"
+                    .into(),
+            });
+        }
+        if is_musl && p.manylinux.is_some() {
+            return Err(crate::error::ConfigError::BadPlatform {
+                name: name.into(),
+                reason: "manylinux baseline only valid on *-linux-gnu targets, not linux-musl"
+                    .into(),
+            });
+        }
+    }
+    if is_mac && p.macos_min.is_none() {
+        return Err(crate::error::ConfigError::BadPlatform {
+            name: name.into(),
+            reason: "macOS platform must declare macos_min (deployment target)".into(),
+        });
+    }
+    Ok(())
 }
 
 fn validate_target_triple(name: &str, target: &str) -> Result<(), crate::error::ConfigError> {
@@ -387,9 +457,9 @@ python_versions = ["3.12"]
 [platforms.bogus]
 target = "not-a-real-triple"
 "#;
-        let config = Config::from_str(toml_str).expect("parse");
-        let err = config.validate().expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { .. }));
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("unknown target triple")));
     }
 
     #[test]
@@ -432,12 +502,12 @@ python_versions = ["3.12"]
 
 [platforms.linux-x86_64-gnu]
 target = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
 
 [fixups]
 registry = "https://example.com/whatever"
 "#;
-        let config = Config::from_str(bad).expect("parse");
-        let err = config.validate().expect_err("should fail");
+        let err = Config::from_str(bad).expect_err("should fail");
         assert!(matches!(err, crate::error::ConfigError::BadRegistry(_)));
     }
 
@@ -455,16 +525,14 @@ third_party_dir = "."
 python_versions = ["3.12"]
 
 [platforms.linux-x86_64-gnu]
-target = "x86_64-unknown-linux-gnu"
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
 
 [fixups]
 registry = "{r}"
 "#
             );
-            let config = Config::from_str(&toml_str).expect("parse");
-            config
-                .validate()
-                .unwrap_or_else(|_| panic!("validate `{r}`"));
+            Config::from_str(&toml_str).unwrap_or_else(|_| panic!("parse+validate `{r}`"));
         }
     }
 
@@ -476,7 +544,8 @@ third_party_dir = "."
 python_versions = ["3.12"]
 
 [platforms.linux-x86_64-gnu]
-target = "x86_64-unknown-linux-gnu"
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
 
 [lockfile]
 include_groups = ["test", "docs"]
@@ -496,7 +565,8 @@ third_party_dir = "."
 python_versions = ["3.12"]
 
 [platforms.linux-x86_64-gnu]
-target = "x86_64-unknown-linux-gnu"
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
 "#;
         let config = Config::from_str(toml_str).expect("parse");
         assert!(config.lockfile.include_groups.is_empty());
@@ -510,13 +580,75 @@ third_party_dir = "."
 python_versions = ["3.12"]
 
 [platforms.linux-x86_64-gnu]
-target = "x86_64-unknown-linux-gnu"
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
 
 [lockfile]
 include_groups = ["bad name with space"]
 "#;
-        let config = Config::from_str(toml_str).expect("parse");
-        let err = config.validate().expect_err("should fail");
+        let err = Config::from_str(toml_str).expect_err("should fail");
         assert!(matches!(err, crate::error::ConfigError::BadGroupName(_)));
+    }
+
+    #[test]
+    fn rejects_linux_platform_without_any_baseline() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-bare]
+target = "x86_64-unknown-linux-gnu"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("manylinux") && reason.contains("musllinux")));
+    }
+
+    #[test]
+    fn rejects_macos_platform_without_macos_min() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.macos-bare]
+target = "aarch64-apple-darwin"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("macos_min")));
+    }
+
+    #[test]
+    fn rejects_bad_baseline_shape() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux]
+target = "x86_64-unknown-linux-gnu"
+manylinux = "2014"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("2014") && reason.contains("2_17")));
+    }
+
+    #[test]
+    fn rejects_musllinux_on_gnu_target() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.confused]
+target = "x86_64-unknown-linux-gnu"
+musllinux = "1_2"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("musllinux") && reason.contains("linux-gnu")));
     }
 }
