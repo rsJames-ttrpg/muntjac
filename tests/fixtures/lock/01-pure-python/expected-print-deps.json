@@ -1,0 +1,60 @@
+{
+  "configs": [
+    {
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "packages": [
+        {
+          "name": "pure-python-app",
+          "version": "0.1.0",
+          "kind": "first-party",
+          "first_party_kind": "virtual",
+          "first_party_path": ".",
+          "deps": [
+            "requests@2.34.2"
+          ]
+        },
+        {
+          "name": "certifi",
+          "version": "2026.5.20",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.4.7",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "idna",
+          "version": "3.15",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": [
+            "certifi@2026.5.20",
+            "charset-normalizer@3.4.7",
+            "idna@3.15",
+            "urllib3@2.7.0"
+          ]
+        },
+        {
+          "name": "urllib3",
+          "version": "2.7.0",
+          "kind": "registry",
+          "registry": "https://pypi.org/simple",
+          "deps": []
+        }
+      ]
+    }
+  ]
+}
