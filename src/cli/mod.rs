@@ -45,6 +45,17 @@ pub struct Globals {
     pub tree: Option<String>,
 }
 
+impl Globals {
+    /// Returns the resolved working directory: either the value of `-C` (canonicalized)
+    /// or `std::env::current_dir()` if not set.
+    pub fn workdir(&self) -> std::io::Result<PathBuf> {
+        match &self.cd {
+            Some(p) => std::fs::canonicalize(p),
+            None => std::env::current_dir(),
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Write a starter muntjac.toml and third-party/python/ skeleton.
@@ -82,10 +93,6 @@ pub enum ConfigOp {
 }
 
 pub fn run(cli: Cli) -> Result<()> {
-    if let Some(path) = &cli.globals.cd {
-        std::env::set_current_dir(path)
-            .map_err(|e| anyhow::anyhow!("failed to cd into {}: {e}", path.display()))?;
-    }
     match cli.command {
         Command::Init(args) => init::run(args, &cli.globals),
         Command::Config {

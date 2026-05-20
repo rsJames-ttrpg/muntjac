@@ -19,8 +19,8 @@ pub enum ConfigCheckFormat {
     Json,
 }
 
-pub fn run(args: ConfigCheckArgs, _globals: &Globals) -> Result<()> {
-    let cwd = std::env::current_dir().context("getting current dir")?;
+pub fn run(args: ConfigCheckArgs, globals: &Globals) -> Result<()> {
+    let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
 
     let bytes = fs::read_to_string(&cfg_path)

@@ -9,8 +9,8 @@ use crate::cli::debug::PrintDepsArgs;
 use crate::config::Config;
 use crate::lock;
 
-pub fn run(args: PrintDepsArgs, _globals: &Globals) -> Result<()> {
-    let cwd = std::env::current_dir().context("getting current dir")?;
+pub fn run(args: PrintDepsArgs, globals: &Globals) -> Result<()> {
+    let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
     let cfg_bytes =
         fs::read_to_string(&cfg_path).with_context(|| format!("reading {}", cfg_path.display()))?;

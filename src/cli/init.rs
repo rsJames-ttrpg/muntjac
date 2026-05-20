@@ -23,10 +23,10 @@ pub struct Detection {
     pub python_versions: Vec<PythonVersion>,
 }
 
-pub fn run(args: InitArgs, _globals: &Globals) -> Result<()> {
+pub fn run(args: InitArgs, globals: &Globals) -> Result<()> {
     let target = match args.path {
         Some(p) => p,
-        None => std::env::current_dir().context("getting current dir")?,
+        None => globals.workdir().context("resolving working directory")?,
     };
     fs::create_dir_all(&target)
         .with_context(|| format!("creating target directory {}", target.display()))?;

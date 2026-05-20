@@ -106,3 +106,21 @@ fn fixture_09_runs_twice_identically() {
         "print-deps is not deterministic across invocations"
     );
 }
+
+#[test]
+fn print_deps_does_not_depend_on_process_cwd() {
+    let tmp = tempfile::tempdir().unwrap();
+    let fixture = std::fs::canonicalize("tests/fixtures/lock/01-pure-python").unwrap();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_muntjac"))
+        .current_dir(tmp.path())
+        .arg("-C")
+        .arg(&fixture)
+        .args(["debug", "print-deps"])
+        .output()
+        .expect("run muntjac");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
