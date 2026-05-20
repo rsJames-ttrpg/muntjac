@@ -2,6 +2,7 @@
 name = "muntjac"
 version = "0.1.0-dev"
 edition = "2024"
+rust-version = "1.85"
 description = "Translate uv.lock into Buck2 build rules"
 license = "MIT"
 repository = "https://github.com/jackmpcollins/muntjac"
