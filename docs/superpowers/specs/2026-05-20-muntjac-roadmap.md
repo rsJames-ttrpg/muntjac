@@ -229,7 +229,7 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | Design | [2026-05-20-muntjac-design.md](./2026-05-20-muntjac-design.md) | n/a | ✅ committed |
 | Roadmap | this document | n/a | ✅ committed |
 | S0 | [2026-05-20-muntjac-s0-scaffolding-design.md](./2026-05-20-muntjac-s0-scaffolding-design.md) | [2026-05-20-muntjac-s0-scaffolding.md](../plans/2026-05-20-muntjac-s0-scaffolding.md) | ✅ shipped (tag `s0-complete`, 15 commits, 29 tests) |
-| S1 | [2026-05-20-muntjac-s1-lockfile-design.md](./2026-05-20-muntjac-s1-lockfile-design.md) | (not yet written) | 🟡 spec drafted |
+| S1 | [2026-05-20-muntjac-s1-lockfile-design.md](./2026-05-20-muntjac-s1-lockfile-design.md) | [2026-05-20-muntjac-s1-lockfile.md](../plans/2026-05-20-muntjac-s1-lockfile.md) | 🟡 plan drafted |
 | S2 | (not yet written) | (not yet written) | ⬜ ready (parallelizable with S1) |
 | S3 | (not yet written) | (not yet written) | ⬜ blocked on S1+S2 |
 | S4 | (not yet written) | (not yet written) | ⬜ blocked on S3 |
