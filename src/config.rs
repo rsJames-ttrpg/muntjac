@@ -193,4 +193,76 @@ macos_min = "11.0"
         assert_eq!(tree.python_versions, vec![PythonVersion(3, 11), PythonVersion(3, 12)]);
         assert_eq!(config.platforms.len(), 2);
     }
+
+    const MULTI_TREE: &str = r#"
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[tree.modern]
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python/modern"
+python_versions = ["3.12"]
+
+[tree.legacy]
+manifest_path   = "legacy/pyproject.toml"
+third_party_dir = "third-party/python/legacy"
+python_versions = ["3.10"]
+"#;
+
+    const MIXED_SHAPE: &str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+
+[tree.extra]
+manifest_path   = "other/pyproject.toml"
+third_party_dir = "other"
+python_versions = ["3.11"]
+"#;
+
+    #[test]
+    fn parses_multi_tree() {
+        let config = Config::from_str(MULTI_TREE).expect("parse");
+        assert_eq!(config.trees.len(), 2);
+        let names: Vec<&str> = config.trees.iter().map(|t| t.name.as_str()).collect();
+        // BTreeMap iteration is sorted, so we expect alphabetical.
+        assert_eq!(names, vec!["legacy", "modern"]);
+    }
+
+    #[test]
+    fn rejects_mixed_shape() {
+        let err = Config::from_str(MIXED_SHAPE).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::IncompatibleShape));
+    }
+
+    #[test]
+    fn rejects_missing_manifest_path_when_no_trees() {
+        let toml_str = r#"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::MissingField("manifest_path")));
+    }
+
+    #[test]
+    fn rejects_bad_python_version() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::Parse(_)));
+    }
 }
