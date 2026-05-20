@@ -59,11 +59,8 @@ pub enum Command {
     /// Hidden debug subcommands (not stable; for muntjac internals).
     #[command(hide = true)]
     Debug {
-        /// Subcommand name (none defined yet at S0; S1 will add `print-deps`).
-        subcommand: Option<String>,
-        /// Trailing args forwarded to the subcommand.
-        #[arg(trailing_var_arg = true)]
-        args: Vec<String>,
+        #[command(subcommand)]
+        op: Option<debug::DebugOp>,
     },
 
     /// Download wheels into ~/.cache/muntjac (or vendor/) — UNIMPLEMENTED (S5/S9).
@@ -94,7 +91,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Config {
             op: ConfigOp::Check(args),
         } => config_check::run(args, &cli.globals),
-        Command::Debug { subcommand, args } => debug::run(subcommand, args, &cli.globals),
+        Command::Debug { op } => debug::run(op, &cli.globals),
         Command::Vendor => stub::run("vendor", "S5/S9"),
         Command::Buckify => stub::run("buckify", "S3+"),
         Command::Audit => stub::run("audit", "S10"),
