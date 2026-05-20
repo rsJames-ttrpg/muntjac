@@ -425,6 +425,7 @@ dependencies = [
  "miette",
  "predicates",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "toml",
