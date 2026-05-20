@@ -8,4 +8,5 @@ pub mod tag;
 
 pub use tag::{
     AbiTag, LinuxArch, MacArch, PlatformTag, PythonTag, Tag, TagParseError, WheelTag,
+    parse_filename,
 };
