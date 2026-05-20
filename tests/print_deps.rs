@@ -67,3 +67,32 @@ fn fixture_05_dev_deps() {
 fn fixture_08_multi_platform_marker() {
     assert_golden("08-multi-platform-marker");
 }
+
+fn assert_error(fixture: &str) {
+    let (stdout, output) = run_print_deps(fixture);
+    assert!(
+        !output.status.success(),
+        "fixture {fixture}: expected failure but command succeeded; stdout=\n{stdout}"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("utf-8");
+    let expected_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/lock")
+        .join(fixture)
+        .join("expected-error.txt");
+    let expected = fs::read_to_string(&expected_path).expect("read expected-error.txt");
+    let expected = expected.trim();
+    assert!(
+        stderr.contains(expected),
+        "fixture {fixture}: stderr does not contain expected substring\n--- stderr ---\n{stderr}\n--- expected substring ---\n{expected}"
+    );
+}
+
+#[test]
+fn fixture_06_cycle_error() {
+    assert_error("06-cycle-error");
+}
+
+#[test]
+fn fixture_07_unresolved_dep_error() {
+    assert_error("07-unresolved-dep-error");
+}
