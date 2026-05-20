@@ -91,6 +91,9 @@ fn render_starter_config(target: &Path, detection: Option<&Detection>) -> String
          [platforms.macos-arm64]\n\
          target    = \"aarch64-apple-darwin\"\n\
          macos_min = \"11.0\"\n\n\
+         # Uncomment to include PEP 735 dependency groups in the resolved graph.\n\
+         # [lockfile]\n\
+         # include_groups = [\"test\"]\n\n\
          [fixups]\n\
          # Community fixup registry. Leave as \"none\" until a v0.1.0+ release exists.\n\
          registry              = \"none\"\n\

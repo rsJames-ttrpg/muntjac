@@ -21,6 +21,8 @@ fn init_creates_starter_in_empty_dir() {
     assert!(cfg.contains("TODO: muntjac init could not auto-detect"));
     assert!(cfg.contains("[platforms.linux-x86_64-gnu]"));
     assert!(cfg.contains("[fixups]"));
+    assert!(cfg.contains("# Uncomment to include PEP 735 dependency groups"));
+    assert!(cfg.contains("# [lockfile]"));
 
     assert!(dir.path().join("third-party/python/BUCK").exists());
     assert!(dir.path().join("third-party/python/.gitignore").exists());
