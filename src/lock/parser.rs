@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use pep440_rs::Version;
-use pep508_rs::PackageName;
+use pep508_rs::{MarkerTree, PackageName};
 use serde::Deserialize;
 use url::Url;
 
@@ -38,6 +38,8 @@ struct RawPackage {
     sdist: Option<RawArtifact>,
     #[serde(default)]
     wheels: Vec<RawArtifact>,
+    #[serde(default)]
+    metadata: Option<RawMetadata>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,8 +48,15 @@ struct RawDep {
     #[serde(default)]
     extra: Vec<String>,
     #[serde(default)]
-    #[allow(dead_code)] // Task 6 parses this into MarkerTree
     marker: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMetadata {
+    #[serde(default, rename = "requires-dist")]
+    requires_dist: Vec<RawDep>,
+    #[serde(default, rename = "provides-extras")]
+    provides_extras: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +160,21 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    let metadata = rp
+        .metadata
+        .map(|rm| -> Result<Metadata, LockfileError> {
+            let requires_dist = rm
+                .requires_dist
+                .into_iter()
+                .map(|rd| dep_from_raw(&rp.name, rd))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Metadata {
+                requires_dist,
+                provides_extras: rm.provides_extras,
+            })
+        })
+        .transpose()?;
+
     Ok(Package {
         name,
         version,
@@ -158,18 +182,29 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
         dependencies,
         sdist,
         wheels,
-        metadata: None, // Task 6 fills this
+        metadata,
     })
 }
 
 fn dep_from_raw(pkg_name: &str, rd: RawDep) -> Result<DepEdge, LockfileError> {
-    let _ = pkg_name; // Task 6 uses this for marker error reporting
     let name = PackageName::from_str(&rd.name)
         .map_err(|e| LockfileError::BadPackageName(rd.name.clone(), e.to_string()))?;
+    let marker = rd
+        .marker
+        .as_deref()
+        .map(|m| {
+            MarkerTree::from_str(m).map_err(|e| LockfileError::BadMarker {
+                package: pkg_name.into(),
+                dep: rd.name.clone(),
+                marker: m.into(),
+                reason: e.to_string(),
+            })
+        })
+        .transpose()?;
     Ok(DepEdge {
         name,
         extra: rd.extra,
-        marker: None, // Task 6 fills this
+        marker,
     })
 }
 
@@ -384,5 +419,95 @@ source = { registry = "https://pypi.org/simple" }
         assert_eq!(wheel.hash, "sha256:def");
         assert_eq!(wheel.size, Some(73075));
         assert!(wheel.filename.ends_with(".whl"));
+    }
+
+    const WITH_MARKERS_AND_METADATA: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "numpy" },
+    { name = "typing-extensions", marker = "python_version < '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "typing-extensions", marker = "python_version < '3.11'" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "numpy"
+version = "2.4.6"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "typing-extensions"
+version = "4.12.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn parses_markers_and_metadata() {
+        let lock = parse(WITH_MARKERS_AND_METADATA).expect("parse");
+        let app = lock
+            .packages
+            .iter()
+            .find(|p| p.name.as_ref() == "app")
+            .unwrap();
+
+        // Marker on the typing-extensions edge
+        let te_edge = app
+            .dependencies
+            .iter()
+            .find(|d| d.name.as_ref() == "typing-extensions")
+            .unwrap();
+        assert!(te_edge.marker.is_some());
+
+        let numpy_edge = app
+            .dependencies
+            .iter()
+            .find(|d| d.name.as_ref() == "numpy")
+            .unwrap();
+        assert!(numpy_edge.marker.is_none());
+
+        // Metadata
+        let meta = app.metadata.as_ref().expect("metadata");
+        assert_eq!(meta.requires_dist.len(), 2);
+        assert_eq!(meta.provides_extras, vec!["dev".to_string()]);
+
+        // First-party source
+        assert!(matches!(
+            app.source,
+            Source::FirstParty {
+                kind: FirstPartyKind::Virtual,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_bad_marker() {
+        let bad = r#"
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "x", marker = "this is not a marker expression" },
+]
+"#;
+        let err = parse(bad).expect_err("should fail");
+        assert!(matches!(err, LockfileError::BadMarker { .. }));
     }
 }
