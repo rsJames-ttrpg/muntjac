@@ -165,6 +165,52 @@ impl Config {
     }
 }
 
+impl Config {
+    pub fn validate(&self) -> Result<(), crate::error::ConfigError> {
+        for (name, platform) in &self.platforms {
+            validate_target_triple(name, &platform.target)?;
+        }
+        validate_registry(&self.fixups.registry)?;
+        Ok(())
+    }
+}
+
+fn validate_target_triple(name: &str, target: &str) -> Result<(), crate::error::ConfigError> {
+    let allowed = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+    ];
+    if allowed.contains(&target) {
+        Ok(())
+    } else {
+        Err(crate::error::ConfigError::BadPlatform {
+            name: name.into(),
+            reason: format!("unknown target triple `{target}`; expected one of {allowed:?}"),
+        })
+    }
+}
+
+fn validate_registry(reg: &FixupRegistry) -> Result<(), crate::error::ConfigError> {
+    let FixupRegistry(s) = reg;
+    if s == "none" {
+        return Ok(());
+    }
+    if s.starts_with("file://") {
+        return Ok(());
+    }
+    if let Some(rest) = s.strip_prefix("github.com/") {
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
+            return Ok(());
+        }
+    }
+    Err(crate::error::ConfigError::BadRegistry(s.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,5 +310,88 @@ target = "x86_64-unknown-linux-gnu"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
         assert!(matches!(err, crate::error::ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn validates_platform_target_triple() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.bogus]
+target = "not-a-real-triple"
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        let err = config.validate().expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadPlatform { .. }));
+    }
+
+    #[test]
+    fn accepts_known_target_triples() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[platforms.linux-aarch64-gnu]
+target = "aarch64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[platforms.linux-x86_64-musl]
+target = "x86_64-unknown-linux-musl"
+musllinux = "1_2"
+
+[platforms.macos-x86_64]
+target = "x86_64-apple-darwin"
+macos_min = "11.0"
+
+[platforms.macos-arm64]
+target = "aarch64-apple-darwin"
+macos_min = "11.0"
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        config.validate().expect("validate");
+    }
+
+    #[test]
+    fn validates_registry_form() {
+        let bad = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+
+[fixups]
+registry = "https://example.com/whatever"
+"#;
+        let config = Config::from_str(bad).expect("parse");
+        let err = config.validate().expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::BadRegistry(_)));
+    }
+
+    #[test]
+    fn accepts_registry_forms() {
+        for r in ["none", "file:///tmp/fixups", "github.com/jackmpcollins/muntjac-fixups"] {
+            let toml_str = format!(r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+
+[fixups]
+registry = "{r}"
+"#);
+            let config = Config::from_str(&toml_str).expect("parse");
+            config.validate().unwrap_or_else(|_| panic!("validate `{r}`"));
+        }
     }
 }
