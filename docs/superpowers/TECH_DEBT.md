@@ -49,14 +49,6 @@ similar issue surfaces.
 
 ### From S2 final stage review (2026-05-21, `s2-complete`)
 
-#### `render_tag` duplicated between handler and snapshot tests
-- **Source:** S2 T16 code-quality review
-- **Severity:** Polish
-- **What:** `src/cli/debug/pick_wheels.rs::render_tag` and `src/wheel/compat.rs::tests::render_tag` (plus their `render_python`/`render_abi`/`render_platform` helpers) are byte-for-byte identical. The snapshot copy is `#[cfg(test)]`-gated.
-- **Why it matters:** If a new variant is added to `PlatformTag`/`PythonTag`/`AbiTag`, both copies must be updated by hand. The compiler will flag missing variants on each side, but the duplication is unnecessary.
-- **Fix:** Implement `Display for Tag` in `src/wheel/tag.rs` (or lift `render_tag` to `pub(crate)`), then call it from both call sites.
-- **Target:** S3 or any stage that touches the wheel module.
-
 #### `cp313t` free-threaded ABI not first-class
 - **Source:** S2 T8 code-quality review
 - **Severity:** Minor
@@ -64,24 +56,6 @@ similar issue surfaces.
 - **Why it matters:** Free-threaded wheels are becoming common (numpy, ML libraries ship them). The `Other` routing keeps them visibly distinct, but the wheel selector can't *prefer* a free-threaded wheel on a free-threaded interpreter — they all lose to compatible-list entries.
 - **Fix:** Add a `free_threaded` boolean (or a `Threading` enum) to `AbiTag::CPython`. Extend `Config::Platform` and `PythonVersion` to carry a free-threading flag. Update the compatible-list builder.
 - **Target:** S4+ once Python 3.13 free-threading stabilizes (`PEP 703` finalized).
-
-### From S0 final stage review (2026-05-20, `s0-complete`)
-
-#### `expand_requires_python` floor of 3.11 is hard-coded
-- **Source:** S0 final code-quality review
-- **Severity:** Polish
-- **What:** `src/cli/init.rs` clamps Python versions to `>=3.11` regardless of what `pyproject.toml`'s `requires-python` says. So `requires-python = ">=3.10"` resolves to `[3.11, 3.12, 3.13]`, not `[3.10, ...]`.
-- **Why it matters:** Currently intentional — muntjac's MVP doesn't support 3.10. But documented only inline; surprising for users.
-- **Fix:** Add a doc comment on `expand_requires_python` explaining the floor. Better yet, sources the floor from a single constant `MIN_SUPPORTED_PY_MINOR = 11` referenced everywhere.
-- **Target:** Any stage; mechanical refactor.
-
-#### `RawConfig::platforms` has no `#[serde(default)]`
-- **Source:** S0 final code-quality review
-- **Severity:** Polish
-- **What:** A `muntjac.toml` with zero `[platforms.*]` tables fails with a generic Parse error instead of a clearer `MissingField` error.
-- **Why it matters:** Bad UX for a legitimate user mistake (forgot to declare any platform).
-- **Fix:** Add `#[serde(default)]` to `RawConfig::platforms`, then add an explicit check in `Config::from_raw` that returns `ConfigError::MissingField("platforms")` if the BTreeMap is empty.
-- **Target:** Any stage.
 
 ---
 
@@ -118,3 +92,15 @@ similar issue surfaces.
 ### `include_groups` duplicates are silently preserved
 - **Resolved:** S2, commit `174c4ba`
 - **Summary:** Added `Config::dedupe_include_groups` (called automatically from `Config::from_str`) that deduplicates while preserving order. A stderr warning fires if duplicates were dropped, so config typos surface visibly.
+
+### `render_tag` duplicated between handler and snapshot tests
+- **Resolved:** S3, commit `42431b3`
+- **Summary:** Implemented `Display` for `Tag`/`PythonTag`/`AbiTag`/`PlatformTag` in `src/wheel/tag.rs`. The duplicate `render_tag` in `src/cli/debug/pick_wheels.rs` and the test-only `render_*` helpers in `src/wheel/compat.rs::tests` were both deleted; all call sites now use `tag.to_string()`. Snapshot output is byte-identical to the previous helpers.
+
+### `expand_requires_python` floor of 3.11 is hard-coded
+- **Resolved:** S3, commit `6110d29`
+- **Summary:** Extracted the literal `11` floor in `src/cli/init.rs::expand_requires_python` into a named `pub(crate) const MIN_SUPPORTED_PY_MINOR: u8 = 11;` with a doc comment explaining the MVP rationale.
+
+### `RawConfig::platforms` has no `#[serde(default)]`
+- **Resolved:** S3, commit `08c42a6`
+- **Summary:** Added `#[serde(default)]` to `RawConfig::platforms` and an explicit `is_empty()` check in `Config::from_raw` that returns `ConfigError::MissingField("platforms")`. A `muntjac.toml` with zero `[platforms.*]` tables now fails with the clearer error rather than a generic Parse error.
