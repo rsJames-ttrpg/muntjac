@@ -180,7 +180,8 @@ impl FromStr for Config {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let raw: RawConfig = toml::from_str(s).map_err(crate::error::ConfigError::Parse)?;
-        let config = Self::from_raw(raw)?;
+        let mut config = Self::from_raw(raw)?;
+        config.dedupe_include_groups();
         config.validate()?;
         Ok(config)
     }
@@ -232,6 +233,21 @@ impl Config {
             buck: raw.buck,
             lockfile: raw.lockfile,
         })
+    }
+}
+
+impl Config {
+    pub(crate) fn dedupe_include_groups(&mut self) {
+        let original_len = self.lockfile.include_groups.len();
+        let mut seen = std::collections::HashSet::new();
+        self.lockfile.include_groups.retain(|g| seen.insert(g.clone()));
+        if self.lockfile.include_groups.len() < original_len {
+            eprintln!(
+                "warning: muntjac.toml [lockfile] include_groups contained duplicates ({} → {}); deduplicated",
+                original_len,
+                self.lockfile.include_groups.len()
+            );
+        }
     }
 }
 
@@ -676,6 +692,24 @@ musllinux = "1_2"
         let err = Config::from_str(toml_str).expect_err("should fail");
         assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
             if reason.contains("musllinux") && reason.contains("linux-gnu")));
+    }
+
+    #[test]
+    fn include_groups_dedups_with_warning() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[lockfile]
+include_groups = ["test", "test", "docs"]
+"#;
+        let config = Config::from_str(toml_str).expect("parse");
+        assert_eq!(config.lockfile.include_groups, vec!["test".to_string(), "docs".to_string()]);
     }
 
     #[test]
