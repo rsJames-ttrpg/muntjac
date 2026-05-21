@@ -62,3 +62,27 @@ fn fixture_01_pure_python_golden() {
     assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
     assert_files_match(&tmp.path().join("third-party/python"), &fix.join("expected"));
 }
+
+#[test]
+fn fixture_10_determinism_two_runs_byte_identical() {
+    let fix = fixture("01-pure-python");
+
+    let tmp_a = tempfile::tempdir().unwrap();
+    let tmp_b = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp_a.path());
+    copy_fixture_to(&fix, tmp_b.path());
+
+    let out_a = run_buckify(tmp_a.path());
+    assert!(out_a.status.success(), "run a failed: {}", String::from_utf8_lossy(&out_a.stderr));
+    let out_b = run_buckify(tmp_b.path());
+    assert!(out_b.status.success(), "run b failed: {}", String::from_utf8_lossy(&out_b.stderr));
+
+    let tpd_a = tmp_a.path().join("third-party/python");
+    let tpd_b = tmp_b.path().join("third-party/python");
+
+    for rel in ["BUCK", "muntjac.bzl", "PACKAGE", "config/BUCK"] {
+        let bytes_a = std::fs::read(tpd_a.join(rel)).unwrap();
+        let bytes_b = std::fs::read(tpd_b.join(rel)).unwrap();
+        assert_eq!(bytes_a, bytes_b, "{} differs across runs", rel);
+    }
+}
