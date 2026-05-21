@@ -21,71 +21,13 @@ similar issue surfaces.
 
 ### From S1 final stage review (2026-05-20, `s1-complete`)
 
-#### Cycle error formatting is opaque
-- **Source:** S1 final code-quality review
-- **Severity:** Important
-- **What:** `src/error.rs` `LockfileError::Cycle(Vec<String>)` uses `#[error("dependency cycle(s) detected: {0:?}")]`. Debug-formatting a `Vec<String>` renders as Rust-quoted: `["a@1.0 -> b@1.0", "c@1.0 -> d@1.0"]`.
-- **Why it matters:** End-user error messages contain rust syntax (`["..."]`). Multiple cycles aren't visually separated. The arrow direction in the cycle string reflects sorted `NodeId` order, not actual edge direction — misleading for debugging.
-- **Fix:** Hand-roll a `Display` impl that joins cycles with newlines and a leading `- ` bullet. Rotate each cycle's SCC to start at the lexicographically smallest member and walk along actual outgoing edges.
-- **Target:** S2 (cheap; do it before more cycle-emitting code lands).
-
-#### Fixture 06-cycle-error assertion is too loose
-- **Source:** S1 final code-quality review
-- **Severity:** Important
-- **What:** `tests/fixtures/lock/06-cycle-error/expected-error.txt` contains only the substring `dependency cycle(s) detected`. The test passes even if cycle members are wrong or missing.
-- **Why it matters:** Regressions that drop cycle member names from the error message wouldn't be caught.
-- **Fix:** Append at least one expected member identifier (e.g. `alpha@1.0`) to the fixture's expected-error.txt. The `assert_error` helper already uses substring matching so node ordering doesn't have to be byte-stable.
-- **Target:** S2 (pair with the cycle-formatting fix above).
-
-#### `marker_matches` in `src/platform.rs` is dead code
-- **Source:** S1 final code-quality review
-- **Severity:** Polish
-- **What:** Only `edge_applies` (in `src/lock/graph.rs`) is used downstream after Task 10. `marker_matches` is exported but never called.
-- **Why it matters:** Either delete or document. If left, future readers think it's the canonical helper.
-- **Fix:** Either remove, or add a doc comment saying "use this for non-edge marker checks (e.g. when S2 picks wheels based on tag-implied platform constraints)" and use it deliberately in S2.
-- **Target:** S2 (decide one way or the other when wheel selector lands).
-
-#### `derive_env_strings` warning branch is unreachable
-- **Source:** S1 final code-quality review
-- **Severity:** Polish
-- **What:** `src/platform.rs::derive_env_strings` prints `warning: unknown target triple` and returns empty strings for unrecognized triples. But `Config::validate` (S0) rejects unknown triples upstream, so this branch can't fire in practice.
-- **Why it matters:** Dead defensive code obscures the actual invariants.
-- **Fix:** Replace with `unreachable!("Config::validate must have rejected this triple")`, or remove the print and document the invariant.
-- **Target:** S2 (when wheel selector touches the same code path).
-
 #### `BadVersion` error variant overloaded for URL parse failures
 - **Source:** S1 final code-quality review
 - **Severity:** Polish
 - **What:** `src/lock/parser.rs` reuses `LockfileError::BadVersion` for sdist/wheel/git URL parse failures (with `reason: "wheel URL: ..."`). The error name implies a Python version string failed to parse.
 - **Why it matters:** Confusing in logs — "BadVersion" for a malformed URL doesn't match user mental model.
 - **Fix:** Add a `LockfileError::BadUrl { package: String, field: &'static str, url: String, reason: String }` variant. Migrate the URL parse failures to use it.
-- **Target:** S2 (when URL parsing surfaces more often).
-
-#### Fixture goldens are version-pinned to current PyPI
-- **Source:** S1 final code-quality review
-- **Severity:** Polish
-- **What:** Goldens like `tests/fixtures/lock/01-pure-python/expected-print-deps.json` contain concrete version pins (`certifi@2026.5.20`, `requests@2.34.2`, etc.). The `uv.lock` files travel with the goldens so PyPI changes don't break tests — but if a contributor regenerates fixtures with `uv lock` against live PyPI, both lockfile and golden drift together.
-- **Why it matters:** No silent rot, but a contributor might mistakenly regenerate just the lockfile and not the golden, then debug a phantom test failure.
-- **Fix:** Add `tests/fixtures/lock/README.md` explaining: lockfiles are frozen artifacts; regenerating requires also regenerating the golden; reviewers should diff both.
-- **Target:** S2 or any stage that adds another fixture.
-
-#### `pep508_rs` extras activation asymmetry needs a louder comment
-- **Source:** S1 final code-quality review
-- **Severity:** Polish
-- **What:** `src/lock/graph.rs::reachable_with_extras` (added in commit `913ef58`) handles two extras sources with different scopes:
-  - `include_groups` from `muntjac.toml` is **global** (activated on every node)
-  - `DepEdge.extra` from `pkg[extra]` requests is **target-side** (activated only on the requested target node, propagates via re-enqueue when new extras unlock edges)
-- **Why it matters:** Subtle. A future maintainer reading the code might assume both work the same way.
-- **Fix:** Expand the doc comment on `reachable_with_extras` to call out the asymmetry with example.
-- **Target:** S2.
-
-#### `print_deps.rs` uses `std::env::current_dir()` rather than `globals.workdir`
-- **Source:** S1 final code-quality review
-- **Severity:** Important
-- **What:** `src/cli/debug/print_deps.rs` calls `std::env::current_dir()` to find `muntjac.toml`. The `-C <path>` global flag works only because the CLI's `run()` calls `std::env::set_current_dir(path)` before dispatching.
-- **Why it matters:** The implicit chdir is fragile. If S2 introduces parallel work or a long-running mode, mutating the global cwd will surprise. Test isolation also depends on this happening early enough.
-- **Fix:** Plumb `&Globals` through, or add a `globals.workdir() -> PathBuf` helper that resolves the right base path. Audit all CLI subcommands to use it consistently.
-- **Target:** S2 or S3 (before more CLI surface lands).
+- **Target:** S4 (when wheel-URL handling surfaces during BUCK emission); originally targeted S2 but the wheel selector parses filenames not URLs, so the change can wait until URLs are more prominent.
 
 ### From S1 implementer self-reports
 
@@ -97,14 +39,6 @@ similar issue surfaces.
 - **Fix:** Cross-check the actual uv lockfile output against group names containing `_` / uppercase. Loosen the regex if real-world usage requires it.
 - **Target:** S6 (when fixup engine starts consuming group config).
 
-#### `include_groups` duplicates are silently preserved
-- **Source:** S1 Task 12 implementer concern
-- **Severity:** Polish
-- **What:** `[lockfile] include_groups = ["test", "test"]` parses without error and the resulting `Vec<String>` has duplicates.
-- **Why it matters:** Downstream uses set semantics for matching, so behavior is correct — but a typo in the config silently does nothing instead of being flagged.
-- **Fix:** Either dedup with a warning in `Config::validate`, or accept and document.
-- **Target:** S2.
-
 #### Tarjan SCC is recursive — could stack-overflow on adversarial input
 - **Source:** S1 Task 9 implementer concern
 - **Severity:** Polish
@@ -112,6 +46,24 @@ similar issue surfaces.
 - **Why it matters:** Not a security issue for v1; muntjac trusts uv.lock to be well-formed. But the failure mode would be panic, not error.
 - **Fix:** Convert to iterative form with an explicit stack. Standard Tarjan iterative algorithm.
 - **Target:** S4 or later, only if a real input triggers it.
+
+### From S2 final stage review (2026-05-21, `s2-complete`)
+
+#### `render_tag` duplicated between handler and snapshot tests
+- **Source:** S2 T16 code-quality review
+- **Severity:** Polish
+- **What:** `src/cli/debug/pick_wheels.rs::render_tag` and `src/wheel/compat.rs::tests::render_tag` (plus their `render_python`/`render_abi`/`render_platform` helpers) are byte-for-byte identical. The snapshot copy is `#[cfg(test)]`-gated.
+- **Why it matters:** If a new variant is added to `PlatformTag`/`PythonTag`/`AbiTag`, both copies must be updated by hand. The compiler will flag missing variants on each side, but the duplication is unnecessary.
+- **Fix:** Implement `Display for Tag` in `src/wheel/tag.rs` (or lift `render_tag` to `pub(crate)`), then call it from both call sites.
+- **Target:** S3 or any stage that touches the wheel module.
+
+#### `cp313t` free-threaded ABI not first-class
+- **Source:** S2 T8 code-quality review
+- **Severity:** Minor
+- **What:** Wheel filenames with `cp313t` (Python 3.13+ free-threaded ABI) currently parse as `AbiTag::Other("cp313t")`, which is correct for distinguishing from regular `cp313` but loses the structural info.
+- **Why it matters:** Free-threaded wheels are becoming common (numpy, ML libraries ship them). The `Other` routing keeps them visibly distinct, but the wheel selector can't *prefer* a free-threaded wheel on a free-threaded interpreter — they all lose to compatible-list entries.
+- **Fix:** Add a `free_threaded` boolean (or a `Threading` enum) to `AbiTag::CPython`. Extend `Config::Platform` and `PythonVersion` to carry a free-threading flag. Update the compatible-list builder.
+- **Target:** S4+ once Python 3.13 free-threading stabilizes (`PEP 703` finalized).
 
 ### From S0 final stage review (2026-05-20, `s0-complete`)
 
@@ -135,4 +87,34 @@ similar issue surfaces.
 
 ## Resolved
 
-(none yet — items move here with the commit SHA that closed them.)
+### Cycle error formatting is opaque
+- **Resolved:** S2, commit `a61b14d`
+- **Summary:** `LockfileError::Cycle` storage changed to `Vec<Vec<String>>` with a hand-rolled `Display` (`#[error(fmt = fmt_cycle)]`). `detect_cycles` walks each SCC starting from the lex-smallest member, preferring unvisited outgoing edges. Output is sorted for determinism. New fixture-06 test asserts walk order with `assert_eq!(cycles[0], vec!["alpha@1.0", "beta@1.0"])`.
+
+### Fixture 06-cycle-error assertion is too loose
+- **Resolved:** S2, commit `af0192c`
+- **Summary:** `tests/fixtures/lock/06-cycle-error/expected-error.txt` now contains both the header line and a member-identifier bullet line. Regressions that drop cycle member names from the error message will fail the substring assertion in `tests/print_deps.rs::fixture_06_cycle_error`.
+
+### `print_deps.rs` uses `std::env::current_dir()` rather than `globals.workdir`
+- **Resolved:** S2, commit `805c042`
+- **Summary:** Added `Globals::workdir() -> io::Result<PathBuf>` that canonicalizes `-C` if set, else returns `std::env::current_dir()`. Removed `std::env::set_current_dir(path)` from `cli::run`. All three handlers (`print_deps`, `init`, `config_check`) now consume `globals.workdir()` directly. New integration test `print_deps_does_not_depend_on_process_cwd` pins the contract.
+
+### `derive_env_strings` warning branch is unreachable
+- **Resolved:** S2, commit `09fdeeb`
+- **Summary:** `Config::validate`'s strict baseline check (added in commit `6152f90`) guarantees only known triples reach `derive_env_strings`. The fallback arm in `src/platform.rs::derive_env_strings` became `unreachable!("Config::validate must reject unknown target triple ... before reaching here")`.
+
+### `marker_matches` in `src/platform.rs` is dead code
+- **Resolved:** S2, commit `8e80bec`
+- **Summary:** Documented `marker_matches` as the canonical helper for *non-edge* marker checks (e.g. `requires-python` constraints), distinguished from `graph::edge_applies` which composes it with extras-aware logic specific to dep edges. Kept exported with the updated doc comment.
+
+### `pep508_rs` extras activation asymmetry needs a louder comment
+- **Resolved:** S2, commit `8e80bec`
+- **Summary:** Expanded the doc comment on `graph::reachable_with_extras` to spell out the asymmetry between `include_groups` (global, every-node) and `DepEdge.extra` (target-side, per-node) with a worked example walkthrough.
+
+### Fixture goldens are version-pinned to current PyPI
+- **Resolved:** S2, commit `b8b3651`
+- **Summary:** Added `tests/fixtures/lock/README.md` and `tests/fixtures/wheel/README.md` explaining the frozen-artifact convention: lockfiles are committed; regenerating requires also regenerating goldens in the same commit; reviewers should diff both.
+
+### `include_groups` duplicates are silently preserved
+- **Resolved:** S2, commit `174c4ba`
+- **Summary:** Added `Config::dedupe_include_groups` (called automatically from `Config::from_str`) that deduplicates while preserving order. A stderr warning fires if duplicates were dropped, so config typos surface visibly.
