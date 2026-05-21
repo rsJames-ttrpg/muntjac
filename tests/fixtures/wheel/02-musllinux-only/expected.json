@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "tree": "default",
+  "selections": [
+    {
+      "package": "musl-only-pkg",
+      "version": "0.1.0",
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "outcome": "no_wheel",
+      "wheels_considered": 1,
+      "wheels": [
+        "musl_only_pkg-0.1.0-cp312-cp312-musllinux_1_2_x86_64.whl"
+      ]
+    },
+    {
+      "package": "musl-only-pkg",
+      "version": "0.1.0",
+      "platform": "linux-x86_64-musl",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "musl_only_pkg-0.1.0-cp312-cp312-musllinux_1_2_x86_64.whl",
+        "url": "https://example.com/musl_only_pkg-0.1.0-cp312-cp312-musllinux_1_2_x86_64.whl",
+        "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "matched_tag": "cp312-cp312-musllinux_1_2_x86_64",
+      "rank": 0,
+      "wheels_considered": 1
+    }
+  ]
+}

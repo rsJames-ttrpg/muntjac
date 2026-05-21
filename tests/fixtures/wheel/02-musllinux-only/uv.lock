@@ -1,0 +1,22 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "fixture-02"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "musl-only-pkg" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "musl-only-pkg" }]
+
+[[package]]
+name = "musl-only-pkg"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://example.com/musl_only_pkg-0.1.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
+]

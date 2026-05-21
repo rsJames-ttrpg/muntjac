@@ -1,0 +1,5 @@
+[project]
+name = "fixture-03"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["legacy-pkg"]
