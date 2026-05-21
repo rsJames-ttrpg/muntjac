@@ -1,11 +1,64 @@
 //! PEP 425/600/656 wheel tag types and filename parser.
 
+use std::fmt::{self, Display, Formatter};
+
 /// A single fully-expanded PEP 425 tag triple.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tag {
     pub python: PythonTag,
     pub abi: AbiTag,
     pub plat: PlatformTag,
+}
+
+impl Display for Tag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}-{}-{}", self.python, self.abi, self.plat)
+    }
+}
+
+impl Display for PythonTag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            PythonTag::CPython(maj, min) => write!(f, "cp{maj}{min}"),
+            PythonTag::Py(maj, Some(min)) => write!(f, "py{maj}{min}"),
+            PythonTag::Py(maj, None) => write!(f, "py{maj}"),
+            PythonTag::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl Display for AbiTag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AbiTag::CPython(maj, min) => write!(f, "cp{maj}{min}"),
+            AbiTag::Abi3 => write!(f, "abi3"),
+            AbiTag::None => write!(f, "none"),
+            AbiTag::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl Display for PlatformTag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            PlatformTag::Any => write!(f, "any"),
+            PlatformTag::ManyLinux { major, minor, arch } => {
+                let a = match arch { LinuxArch::X86_64 => "x86_64", LinuxArch::Aarch64 => "aarch64" };
+                write!(f, "manylinux_{major}_{minor}_{a}")
+            }
+            PlatformTag::MuslLinux { major, minor, arch } => {
+                let a = match arch { LinuxArch::X86_64 => "x86_64", LinuxArch::Aarch64 => "aarch64" };
+                write!(f, "musllinux_{major}_{minor}_{a}")
+            }
+            PlatformTag::MacOs { major, minor, arch } => {
+                let a = match arch {
+                    MacArch::X86_64 => "x86_64", MacArch::Arm64 => "arm64", MacArch::Universal2 => "universal2",
+                };
+                write!(f, "macosx_{major}_{minor}_{a}")
+            }
+            PlatformTag::Other(s) => write!(f, "{s}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -358,5 +411,43 @@ mod tests {
         let w = parse("foo-1.0-cp313t-cp313t-manylinux_2_28_x86_64.whl");
         assert!(matches!(w.tags[0].python, PythonTag::Other(ref s) if s == "cp313t"));
         assert!(matches!(w.tags[0].abi, AbiTag::Other(ref s) if s == "cp313t"));
+    }
+
+    #[test]
+    fn tag_display_canonical_cases() {
+        let cp312 = Tag {
+            python: PythonTag::CPython(3, 12),
+            abi:    AbiTag::CPython(3, 12),
+            plat:   PlatformTag::ManyLinux { major: 2, minor: 17, arch: LinuxArch::X86_64 },
+        };
+        assert_eq!(cp312.to_string(), "cp312-cp312-manylinux_2_17_x86_64");
+
+        let abi3 = Tag {
+            python: PythonTag::CPython(3, 12),
+            abi:    AbiTag::Abi3,
+            plat:   PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::Universal2 },
+        };
+        assert_eq!(abi3.to_string(), "cp312-abi3-macosx_11_0_universal2");
+
+        let pure = Tag {
+            python: PythonTag::Py(3, None),
+            abi:    AbiTag::None,
+            plat:   PlatformTag::Any,
+        };
+        assert_eq!(pure.to_string(), "py3-none-any");
+
+        let py_minor = Tag {
+            python: PythonTag::Py(3, Some(7)),
+            abi:    AbiTag::None,
+            plat:   PlatformTag::Any,
+        };
+        assert_eq!(py_minor.to_string(), "py37-none-any");
+
+        let other = Tag {
+            python: PythonTag::Other("pp310".into()),
+            abi:    AbiTag::Other("pypy310_pp73".into()),
+            plat:   PlatformTag::MuslLinux { major: 1, minor: 2, arch: LinuxArch::Aarch64 },
+        };
+        assert_eq!(other.to_string(), "pp310-pypy310_pp73-musllinux_1_2_aarch64");
     }
 }

@@ -14,10 +14,7 @@ use crate::cli::debug::PickWheelsArgs;
 use crate::config::{Config, PythonVersion, Tree};
 use crate::lock;
 use crate::lock::types::{Lockfile, Wheel};
-use crate::wheel::{
-    AbiTag, LinuxArch, MacArch, PickResult, PlatformTag, PythonTag, Tag, build_compatible_tags,
-    pick_wheel,
-};
+use crate::wheel::{PickResult, build_compatible_tags, pick_wheel};
 
 // ---- JSON output shape (spec §9) ----
 
@@ -164,7 +161,7 @@ fn build_tree_output(
                         url: wheel.url.to_string(),
                         hash: wheel.hash.clone(),
                     },
-                    matched_tag: render_tag(&matched_tag),
+                    matched_tag: matched_tag.to_string(),
                     rank,
                     wheels_considered: wheels.len(),
                 },
@@ -216,44 +213,3 @@ fn build_wheels_index(lockfile: &Lockfile) -> BTreeMap<(String, String), &[Wheel
     idx
 }
 
-fn render_tag(t: &Tag) -> String {
-    let python = match &t.python {
-        PythonTag::CPython(maj, min) => format!("cp{maj}{min}"),
-        PythonTag::Py(maj, Some(min)) => format!("py{maj}{min}"),
-        PythonTag::Py(maj, None) => format!("py{maj}"),
-        PythonTag::Other(s) => s.clone(),
-    };
-    let abi = match &t.abi {
-        AbiTag::CPython(maj, min) => format!("cp{maj}{min}"),
-        AbiTag::Abi3 => "abi3".into(),
-        AbiTag::None => "none".into(),
-        AbiTag::Other(s) => s.clone(),
-    };
-    let plat = match &t.plat {
-        PlatformTag::Any => "any".into(),
-        PlatformTag::ManyLinux { major, minor, arch } => {
-            let a = match arch {
-                LinuxArch::X86_64 => "x86_64",
-                LinuxArch::Aarch64 => "aarch64",
-            };
-            format!("manylinux_{major}_{minor}_{a}")
-        }
-        PlatformTag::MuslLinux { major, minor, arch } => {
-            let a = match arch {
-                LinuxArch::X86_64 => "x86_64",
-                LinuxArch::Aarch64 => "aarch64",
-            };
-            format!("musllinux_{major}_{minor}_{a}")
-        }
-        PlatformTag::MacOs { major, minor, arch } => {
-            let a = match arch {
-                MacArch::X86_64 => "x86_64",
-                MacArch::Arm64 => "arm64",
-                MacArch::Universal2 => "universal2",
-            };
-            format!("macosx_{major}_{minor}_{a}")
-        }
-        PlatformTag::Other(s) => s.clone(),
-    };
-    format!("{python}-{abi}-{plat}")
-}

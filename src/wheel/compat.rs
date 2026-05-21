@@ -393,48 +393,9 @@ mod tests {
     fn format_compat_for_snapshot(compat: &CompatibleTags) -> String {
         compat.ordered().iter()
             .enumerate()
-            .map(|(i, t)| format!("{:3}: {}", i, render_tag(t)))
+            .map(|(i, t)| format!("{:3}: {}", i, t))
             .collect::<Vec<_>>()
             .join("\n")
-    }
-
-    fn render_tag(t: &Tag) -> String {
-        format!("{}-{}-{}", render_python(&t.python), render_abi(&t.abi), render_platform(&t.plat))
-    }
-
-    fn render_python(p: &PythonTag) -> String {
-        match p {
-            PythonTag::CPython(maj, min) => format!("cp{}{}", maj, min),
-            PythonTag::Py(maj, Some(min)) => format!("py{}{}", maj, min),
-            PythonTag::Py(maj, None) => format!("py{}", maj),
-            PythonTag::Other(s) => s.clone(),
-        }
-    }
-
-    fn render_abi(a: &AbiTag) -> String {
-        match a {
-            AbiTag::CPython(maj, min) => format!("cp{}{}", maj, min),
-            AbiTag::Abi3 => "abi3".into(),
-            AbiTag::None => "none".into(),
-            AbiTag::Other(s) => s.clone(),
-        }
-    }
-
-    fn render_platform(p: &PlatformTag) -> String {
-        let arch_l = |a: &LinuxArch| match a { LinuxArch::X86_64 => "x86_64", LinuxArch::Aarch64 => "aarch64" };
-        let arch_m = |a: &MacArch| match a {
-            MacArch::X86_64 => "x86_64", MacArch::Arm64 => "arm64", MacArch::Universal2 => "universal2",
-        };
-        match p {
-            PlatformTag::Any => "any".into(),
-            PlatformTag::ManyLinux { major, minor, arch } =>
-                format!("manylinux_{}_{}_{}", major, minor, arch_l(arch)),
-            PlatformTag::MuslLinux { major, minor, arch } =>
-                format!("musllinux_{}_{}_{}", major, minor, arch_l(arch)),
-            PlatformTag::MacOs { major, minor, arch } =>
-                format!("macosx_{}_{}_{}", major, minor, arch_m(arch)),
-            PlatformTag::Other(s) => s.clone(),
-        }
     }
 
     fn platform_for_snapshot(target: &str, mnl: Option<&str>, msl: Option<&str>, mac: Option<&str>) -> crate::config::Platform {
