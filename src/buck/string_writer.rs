@@ -350,4 +350,89 @@ mod tests {
         let certifi_pos = out.buck.find("name = \"certifi\"").expect("certifi not emitted");
         assert!(alpha_pos < certifi_pos, "alpha must precede certifi in output:\n{}", out.buck);
     }
+
+    fn multi_package_input() -> EmitInput {
+        let cfg_311 = ConfigName::new("3.11", "linux-x86_64-gnu");
+        let cfg_312 = ConfigName::new("3.12", "linux-x86_64-gnu");
+
+        let mut requests_wheels = BTreeMap::new();
+        requests_wheels.insert(cfg_311.clone(), EmitWheel {
+            url: "https://example.com/requests-2.32.3-py3-none-any.whl".into(),
+            hash: "sha256:rrrr".into(),
+        });
+        requests_wheels.insert(cfg_312.clone(), EmitWheel {
+            url: "https://example.com/requests-2.32.3-py3-none-any.whl".into(),
+            hash: "sha256:rrrr".into(),
+        });
+
+        let mut idna_wheels = BTreeMap::new();
+        idna_wheels.insert(cfg_311.clone(), EmitWheel {
+            url: "https://example.com/idna-3.7-py3-none-any.whl".into(),
+            hash: "sha256:iiii".into(),
+        });
+        idna_wheels.insert(cfg_312.clone(), EmitWheel {
+            url: "https://example.com/idna-3.7-py3-none-any.whl".into(),
+            hash: "sha256:iiii".into(),
+        });
+
+        EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            configs: vec![cfg_311, cfg_312],
+            packages: vec![
+                EmitPackage {
+                    name: "idna".into(),
+                    version: "3.7".into(),
+                    deps: vec![],
+                    wheels: idna_wheels,
+                },
+                EmitPackage {
+                    name: "requests".into(),
+                    version: "2.32.3".into(),
+                    deps: vec![":idna".into()],
+                    wheels: requests_wheels,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn snapshot_empty_buck() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&empty_input()).buck);
+    }
+
+    #[test]
+    fn snapshot_empty_muntjac_bzl() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&empty_input()).muntjac_bzl);
+    }
+
+    #[test]
+    fn snapshot_empty_config_buck() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&empty_input()).config_buck);
+    }
+
+    #[test]
+    fn snapshot_empty_package_file() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&empty_input()).package_file);
+    }
+
+    #[test]
+    fn snapshot_single_package_buck() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&single_package_input()).buck);
+    }
+
+    #[test]
+    fn snapshot_multi_package_buck() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&multi_package_input()).buck);
+    }
+
+    #[test]
+    fn snapshot_multi_package_muntjac_bzl() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&multi_package_input()).muntjac_bzl);
+    }
+
+    #[test]
+    fn snapshot_multi_package_config_buck() {
+        insta::assert_snapshot!(StringTemplateEmitter.emit(&multi_package_input()).config_buck);
+    }
 }
