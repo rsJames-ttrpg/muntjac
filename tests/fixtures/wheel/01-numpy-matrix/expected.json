@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "tree": "default",
+  "selections": [
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-aarch64-gnu",
+      "python_version": "3.11",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "url": "https://files.pythonhosted.org/packages/27/2f/21b94664f23af2bb52030653697c685022119e0dc93d6097c3cb45bce5f9/numpy-2.1.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "hash": "sha256:762479be47a4863e261a840e8e01608d124ee1361e48b96916f38b119cfda04a"
+      },
+      "matched_tag": "cp311-cp311-manylinux_2_17_aarch64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-aarch64-gnu",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "url": "https://files.pythonhosted.org/packages/5e/da/1a429ae58b3b6c364eeec93bf044c532f2ff7b48a52e41050896cf15d5b1/numpy-2.1.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "hash": "sha256:8637dcd2caa676e475503d1f8fdb327bc495554e10838019651b76d17b98e512"
+      },
+      "matched_tag": "cp312-cp312-manylinux_2_17_aarch64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-aarch64-gnu",
+      "python_version": "3.13",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "url": "https://files.pythonhosted.org/packages/3e/46/48bdf9b7241e317e6cf94276fe11ba673c06d1fdf115d8b4ebf616affd1a/numpy-2.1.3-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "hash": "sha256:c181ba05ce8299c7aa3125c27b9c2167bca4a4445b7ce73d5febc411ca692e43"
+      },
+      "matched_tag": "cp313-cp313-manylinux_2_17_aarch64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.11",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/7a/f0/80811e836484262b236c684a75dfc4ba0424bc670e765afaa911468d9f39/numpy-2.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "hash": "sha256:bc6f24b3d1ecc1eebfbf5d6051faa49af40b03be1aaa781ebdadcbc090b4539b"
+      },
+      "matched_tag": "cp311-cp311-manylinux_2_17_x86_64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/9e/3e/3757f304c704f2f0294a6b8340fcf2be244038be07da4cccf390fa678a9f/numpy-2.1.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "hash": "sha256:2312b2aa89e1f43ecea6da6ea9a810d06aae08321609d8dc0d0eda6d946a541b"
+      },
+      "matched_tag": "cp312-cp312-manylinux_2_17_x86_64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-gnu",
+      "python_version": "3.13",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/70/50/73f9a5aa0810cdccda9c1d20be3cbe4a4d6ea6bfd6931464a44c95eef731/numpy-2.1.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "hash": "sha256:5641516794ca9e5f8a4d17bb45446998c6554704d888f86df9b200e66bdcce56"
+      },
+      "matched_tag": "cp313-cp313-manylinux_2_17_x86_64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-musl",
+      "python_version": "3.11",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp311-cp311-musllinux_1_1_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/fa/81/ce213159a1ed8eb7d88a2a6ef4fbdb9e4ffd0c76b866c350eb4e3c37e640/numpy-2.1.3-cp311-cp311-musllinux_1_1_x86_64.whl",
+        "hash": "sha256:17ee83a1f4fef3c94d16dc1802b998668b5419362c8a4f4e8a491de1b41cc3ee"
+      },
+      "matched_tag": "cp311-cp311-musllinux_1_1_x86_64",
+      "rank": 1,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-musl",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp312-cp312-musllinux_1_1_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/43/97/75329c28fea3113d00c8d2daf9bc5828d58d78ed661d8e05e234f86f0f6d/numpy-2.1.3-cp312-cp312-musllinux_1_1_x86_64.whl",
+        "hash": "sha256:a38c19106902bb19351b83802531fea19dee18e5b37b36454f27f11ff956f7fc"
+      },
+      "matched_tag": "cp312-cp312-musllinux_1_1_x86_64",
+      "rank": 1,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "linux-x86_64-musl",
+      "python_version": "3.13",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp313-cp313-musllinux_1_1_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/ad/cd/098bc1d5a5bc5307cfc65ee9369d0ca658ed88fbd7307b0d49fab6ca5fa5/numpy-2.1.3-cp313-cp313-musllinux_1_1_x86_64.whl",
+        "hash": "sha256:ea4dedd6e394a9c180b33c2c872b92f7ce0f8e7ad93e9585312b0c5a04777a4a"
+      },
+      "matched_tag": "cp313-cp313-musllinux_1_1_x86_64",
+      "rank": 1,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-arm64",
+      "python_version": "3.11",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp311-cp311-macosx_11_0_arm64.whl",
+        "url": "https://files.pythonhosted.org/packages/da/74/5a60003fc3d8a718d830b08b654d0eea2d2db0806bab8f3c2aca7e18e010/numpy-2.1.3-cp311-cp311-macosx_11_0_arm64.whl",
+        "hash": "sha256:c80e4a09b3d95b4e1cac08643f1152fa71a0a821a2d4277334c88d54b2219a41"
+      },
+      "matched_tag": "cp311-cp311-macosx_11_0_arm64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-arm64",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp312-cp312-macosx_11_0_arm64.whl",
+        "url": "https://files.pythonhosted.org/packages/54/4a/765b4607f0fecbb239638d610d04ec0a0ded9b4951c56dc68cef79026abf/numpy-2.1.3-cp312-cp312-macosx_11_0_arm64.whl",
+        "hash": "sha256:13138eadd4f4da03074851a698ffa7e405f41a0845a6b1ad135b81596e4e9958"
+      },
+      "matched_tag": "cp312-cp312-macosx_11_0_arm64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-arm64",
+      "python_version": "3.13",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp313-cp313-macosx_11_0_arm64.whl",
+        "url": "https://files.pythonhosted.org/packages/45/e1/210b2d8b31ce9119145433e6ea78046e30771de3fe353f313b2778142f34/numpy-2.1.3-cp313-cp313-macosx_11_0_arm64.whl",
+        "hash": "sha256:f653490b33e9c3a4c1c01d41bc2aef08f9475af51146e4a7710c450cf9761598"
+      },
+      "matched_tag": "cp313-cp313-macosx_11_0_arm64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-x86_64",
+      "python_version": "3.11",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp311-cp311-macosx_10_9_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/ad/81/c8167192eba5247593cd9d305ac236847c2912ff39e11402e72ae28a4985/numpy-2.1.3-cp311-cp311-macosx_10_9_x86_64.whl",
+        "hash": "sha256:4d1167c53b93f1f5d8a139a742b3c6f4d429b54e74e6b57d0eff40045187b15d"
+      },
+      "matched_tag": "cp311-cp311-macosx_10_9_x86_64",
+      "rank": 8,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-x86_64",
+      "python_version": "3.12",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp312-cp312-macosx_10_13_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/8a/f0/385eb9970309643cbca4fc6eebc8bb16e560de129c91258dfaa18498da8b/numpy-2.1.3-cp312-cp312-macosx_10_13_x86_64.whl",
+        "hash": "sha256:f55ba01150f52b1027829b50d70ef1dafd9821ea82905b63936668403c3b471e"
+      },
+      "matched_tag": "cp312-cp312-macosx_10_13_x86_64",
+      "rank": 0,
+      "wheels_considered": 40
+    },
+    {
+      "package": "numpy",
+      "version": "2.1.3",
+      "platform": "macos-x86_64",
+      "python_version": "3.13",
+      "outcome": "picked",
+      "wheel": {
+        "filename": "numpy-2.1.3-cp313-cp313-macosx_10_13_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/4d/0b/620591441457e25f3404c8057eb924d04f161244cb8a3680d529419aa86e/numpy-2.1.3-cp313-cp313-macosx_10_13_x86_64.whl",
+        "hash": "sha256:96fe52fcdb9345b7cd82ecd34547fca4321f7656d500eca497eb7ea5a926692f"
+      },
+      "matched_tag": "cp313-cp313-macosx_10_13_x86_64",
+      "rank": 0,
+      "wheels_considered": 40
+    }
+  ]
+}

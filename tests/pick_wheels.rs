@@ -36,3 +36,18 @@ fn fixture_04_pure_python_picks_any_wheel() {
         assert_eq!(s["outcome"], "picked", "expected picked for {s}");
     }
 }
+
+#[test]
+fn fixture_01_numpy_matrix_golden() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/wheel/01-numpy-matrix");
+    let out = run_pick_wheels(&fixture, &[]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let actual = String::from_utf8(out.stdout).unwrap();
+    let expected = std::fs::read_to_string(fixture.join("expected.json")).unwrap();
+    assert_eq!(actual.trim(), expected.trim(), "golden mismatch");
+}
