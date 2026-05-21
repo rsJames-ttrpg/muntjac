@@ -230,8 +230,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | Roadmap | this document | n/a | ✅ committed |
 | S0 | [2026-05-20-muntjac-s0-scaffolding-design.md](./2026-05-20-muntjac-s0-scaffolding-design.md) | [2026-05-20-muntjac-s0-scaffolding.md](../plans/2026-05-20-muntjac-s0-scaffolding.md) | ✅ shipped (tag `s0-complete`, 15 commits, 29 tests) |
 | S1 | [2026-05-20-muntjac-s1-lockfile-design.md](./2026-05-20-muntjac-s1-lockfile-design.md) | [2026-05-20-muntjac-s1-lockfile.md](../plans/2026-05-20-muntjac-s1-lockfile.md) | ✅ shipped (tag `s1-complete`, 19 commits, 68 tests) |
-| S2 | (not yet written) | (not yet written) | ⬜ next |
-| S3 | (not yet written) | (not yet written) | ⬜ blocked on S1+S2 |
+| S2 | [2026-05-20-muntjac-s2-wheel-selector-design.md](./2026-05-20-muntjac-s2-wheel-selector-design.md) | [2026-05-20-muntjac-s2-wheel-selector.md](../plans/2026-05-20-muntjac-s2-wheel-selector.md) | ✅ shipped (tag `s2-complete`, 23 commits, 118 tests) |
+| S3 | (not yet written) | (not yet written) | ⬜ next |
 | S4 | (not yet written) | (not yet written) | ⬜ blocked on S3 |
 | S5 | (not yet written) | (not yet written) | ⬜ blocked on S4 |
 | S6 | (not yet written) | (not yet written) | ⬜ blocked on S5 |
