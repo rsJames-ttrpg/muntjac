@@ -22,8 +22,7 @@ pub fn write_outputs(output: &EmitOutput, third_party_dir: &Path) -> anyhow::Res
 fn atomic_write(path: &Path, contents: &str) -> anyhow::Result<()> {
     use anyhow::Context;
     let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, contents)
-        .with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::write(&tmp, contents).with_context(|| format!("writing {}", tmp.display()))?;
     std::fs::rename(&tmp, path)
         .with_context(|| format!("renaming {} -> {}", tmp.display(), path.display()))?;
     Ok(())
@@ -47,14 +46,29 @@ mod tests {
 
         write_outputs(&out, &tpd).unwrap();
 
-        assert_eq!(std::fs::read_to_string(tpd.join("BUCK")).unwrap(), "BUCK_BODY\n");
-        assert_eq!(std::fs::read_to_string(tpd.join("muntjac.bzl")).unwrap(), "BZL_BODY\n");
-        assert_eq!(std::fs::read_to_string(tpd.join("PACKAGE")).unwrap(), "PACKAGE_BODY\n");
-        assert_eq!(std::fs::read_to_string(tpd.join("config/BUCK")).unwrap(), "CONFIG_BODY\n");
+        assert_eq!(
+            std::fs::read_to_string(tpd.join("BUCK")).unwrap(),
+            "BUCK_BODY\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(tpd.join("muntjac.bzl")).unwrap(),
+            "BZL_BODY\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(tpd.join("PACKAGE")).unwrap(),
+            "PACKAGE_BODY\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(tpd.join("config/BUCK")).unwrap(),
+            "CONFIG_BODY\n"
+        );
         for entry in std::fs::read_dir(&tpd).unwrap() {
             let path = entry.unwrap().path();
-            assert!(path.extension().map_or(true, |e| e != "tmp"),
-                "leftover .tmp file: {:?}", path);
+            assert!(
+                path.extension().is_none_or(|e| e != "tmp"),
+                "leftover .tmp file: {:?}",
+                path
+            );
         }
     }
 

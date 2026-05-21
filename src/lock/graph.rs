@@ -226,8 +226,7 @@ pub fn detect_cycles(graph: &DepGraph) -> Result<(), LockfileError> {
         // Walk along outgoing edges, preferring unvisited successors in the SCC.
         let scc_set: std::collections::HashSet<NodeId> = scc.iter().copied().collect();
         let mut path: Vec<NodeId> = vec![start];
-        let mut visited: std::collections::HashSet<NodeId> =
-            [start].into_iter().collect();
+        let mut visited: std::collections::HashSet<NodeId> = [start].into_iter().collect();
 
         loop {
             let current = *path.last().unwrap();
@@ -246,10 +245,7 @@ pub fn detect_cycles(graph: &DepGraph) -> Result<(), LockfileError> {
             }
         }
 
-        let path_strs: Vec<String> = path
-            .into_iter()
-            .map(|n| display_string(graph, n))
-            .collect();
+        let path_strs: Vec<String> = path.into_iter().map(|n| display_string(graph, n)).collect();
         out.push(path_strs);
     }
     out.sort();

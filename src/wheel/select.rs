@@ -1,12 +1,16 @@
 //! Wheel selection by min-rank lookup against a CompatibleTags list.
 
-use crate::lock::types::Wheel;
-use super::tag::{parse_filename, Tag};
 use super::compat::CompatibleTags;
+use super::tag::{Tag, parse_filename};
+use crate::lock::types::Wheel;
 
 #[derive(Debug, Clone)]
 pub enum PickResult<'a> {
-    Picked { wheel: &'a Wheel, matched_tag: Tag, rank: usize },
+    Picked {
+        wheel: &'a Wheel,
+        matched_tag: Tag,
+        rank: usize,
+    },
     NoWheel,
 }
 
@@ -35,8 +39,11 @@ pub fn pick_wheel<'a>(wheels: &'a [Wheel], compat: &CompatibleTags) -> PickResul
                     // emit two wheels with identical tag triples.
                     if let Some((r, _, w_prev)) = best.as_ref() {
                         if *r == rank && !std::ptr::eq(*w_prev, wheel) {
-                            debug_assert_ne!(w_prev.filename, wheel.filename,
-                                "two wheels share best rank {} — uv.lock duplicates?", rank);
+                            debug_assert_ne!(
+                                w_prev.filename, wheel.filename,
+                                "two wheels share best rank {} — uv.lock duplicates?",
+                                rank
+                            );
                         }
                     }
                 }
@@ -45,7 +52,11 @@ pub fn pick_wheel<'a>(wheels: &'a [Wheel], compat: &CompatibleTags) -> PickResul
     }
 
     match best {
-        Some((rank, matched_tag, wheel)) => PickResult::Picked { wheel, matched_tag, rank },
+        Some((rank, matched_tag, wheel)) => PickResult::Picked {
+            wheel,
+            matched_tag,
+            rank,
+        },
         None => PickResult::NoWheel,
     }
 }
@@ -85,8 +96,10 @@ mod tests {
         let compat = build_compatible_tags(&linux_gnu_x86(), PythonVersion(3, 12));
         let pick = pick_wheel(&wheels, &compat);
         match pick {
-            PickResult::Picked { wheel, .. } =>
-                assert_eq!(wheel.filename, "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+            PickResult::Picked { wheel, .. } => assert_eq!(
+                wheel.filename,
+                "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+            ),
             _ => panic!("expected Picked"),
         }
     }
@@ -106,7 +119,9 @@ mod tests {
         ];
         let compat = build_compatible_tags(&linux_gnu_x86(), PythonVersion(3, 12));
         match pick_wheel(&wheels, &compat) {
-            PickResult::Picked { wheel, .. } => assert_eq!(wheel.filename, "foo-1.0-py3-none-any.whl"),
+            PickResult::Picked { wheel, .. } => {
+                assert_eq!(wheel.filename, "foo-1.0-py3-none-any.whl")
+            }
             _ => panic!("expected Picked"),
         }
     }
@@ -121,8 +136,9 @@ mod tests {
         let pick_a = pick_wheel(&order_a, &compat);
         let pick_b = pick_wheel(&order_b, &compat);
         match (pick_a, pick_b) {
-            (PickResult::Picked { wheel: a, .. }, PickResult::Picked { wheel: b, .. }) =>
-                assert_eq!(a.filename, b.filename),
+            (PickResult::Picked { wheel: a, .. }, PickResult::Picked { wheel: b, .. }) => {
+                assert_eq!(a.filename, b.filename)
+            }
             _ => panic!("expected both Picked"),
         }
     }

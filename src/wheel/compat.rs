@@ -16,7 +16,11 @@ pub struct CompatibleTags {
 
 impl CompatibleTags {
     pub(crate) fn from_ordered(ordered: Vec<Tag>) -> Self {
-        let by_tag = ordered.iter().enumerate().map(|(i, t)| (t.clone(), i)).collect();
+        let by_tag = ordered
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.clone(), i))
+            .collect();
         Self { ordered, by_tag }
     }
 
@@ -43,7 +47,10 @@ pub(crate) fn build_python_axis(py: PythonVersion) -> Vec<(PythonTag, AbiTag)> {
     let mut out = Vec::new();
 
     // 1-3: Current interpreter, full / stable-ABI / no-ABI.
-    out.push((PythonTag::CPython(major, minor), AbiTag::CPython(major, minor)));
+    out.push((
+        PythonTag::CPython(major, minor),
+        AbiTag::CPython(major, minor),
+    ));
     out.push((PythonTag::CPython(major, minor), AbiTag::Abi3));
     out.push((PythonTag::CPython(major, minor), AbiTag::None));
 
@@ -71,7 +78,11 @@ pub(crate) fn build_manylinux_axis(baseline: (u32, u32), arch: LinuxArch) -> Vec
     assert!(major == 2, "manylinux baseline must have major == 2");
     let mut out = Vec::new();
     for n in (MANYLINUX_FLOOR_MINOR..=max_minor).rev() {
-        out.push(PlatformTag::ManyLinux { major, minor: n, arch: arch.clone() });
+        out.push(PlatformTag::ManyLinux {
+            major,
+            minor: n,
+            arch: arch.clone(),
+        });
     }
     out
 }
@@ -80,12 +91,19 @@ pub(crate) fn build_musllinux_axis(baseline: (u32, u32), arch: LinuxArch) -> Vec
     let (major, max_minor) = baseline;
     let mut out = Vec::new();
     for n in (MUSLLINUX_FLOOR_MINOR..=max_minor).rev() {
-        out.push(PlatformTag::MuslLinux { major, minor: n, arch: arch.clone() });
+        out.push(PlatformTag::MuslLinux {
+            major,
+            minor: n,
+            arch: arch.clone(),
+        });
     }
     out
 }
 
-pub fn build_compatible_tags(platform: &crate::config::Platform, py: PythonVersion) -> CompatibleTags {
+pub fn build_compatible_tags(
+    platform: &crate::config::Platform,
+    py: PythonVersion,
+) -> CompatibleTags {
     let python_axis = build_python_axis(py);
     let mut platform_axis = build_target_platform_axis(platform);
     platform_axis.push(PlatformTag::Any);
@@ -96,8 +114,8 @@ pub fn build_compatible_tags(platform: &crate::config::Platform, py: PythonVersi
         for plat_tag in &platform_axis {
             ordered.push(Tag {
                 python: py_tag.clone(),
-                abi:    abi_tag.clone(),
-                plat:   plat_tag.clone(),
+                abi: abi_tag.clone(),
+                plat: plat_tag.clone(),
             });
         }
     }
@@ -115,15 +133,18 @@ fn build_target_platform_axis(platform: &crate::config::Platform) -> Vec<Platfor
     };
 
     if target.ends_with("linux-gnu") {
-        let baseline = platform.manylinux_baseline()
+        let baseline = platform
+            .manylinux_baseline()
             .expect("validated linux-gnu platform has manylinux baseline");
         build_manylinux_axis(baseline, linux_arch)
     } else if target.ends_with("linux-musl") {
-        let baseline = platform.musllinux_baseline()
+        let baseline = platform
+            .musllinux_baseline()
             .expect("validated linux-musl platform has musllinux baseline");
         build_musllinux_axis(baseline, linux_arch)
     } else if target.ends_with("apple-darwin") {
-        let macos_min = platform.macos_min_parsed()
+        let macos_min = platform
+            .macos_min_parsed()
             .expect("validated macOS platform has macos_min");
         let primary = if target.starts_with("x86_64") {
             MacArch::X86_64
@@ -142,24 +163,56 @@ pub(crate) fn build_macos_axis(macos_min: (u32, u32), primary: MacArch) -> Vec<P
 
     if min_major >= 11 {
         // First entries: the exact macos_min target (most-preferred), primary arch + universal2.
-        out.push(PlatformTag::MacOs { major: min_major, minor: min_minor, arch: primary.clone() });
-        out.push(PlatformTag::MacOs { major: min_major, minor: min_minor, arch: MacArch::Universal2 });
+        out.push(PlatformTag::MacOs {
+            major: min_major,
+            minor: min_minor,
+            arch: primary.clone(),
+        });
+        out.push(PlatformTag::MacOs {
+            major: min_major,
+            minor: min_minor,
+            arch: MacArch::Universal2,
+        });
         // Then majors below min_major down to 11 (with minor=0).
         for m in (11..min_major).rev() {
-            out.push(PlatformTag::MacOs { major: m, minor: 0, arch: primary.clone() });
-            out.push(PlatformTag::MacOs { major: m, minor: 0, arch: MacArch::Universal2 });
+            out.push(PlatformTag::MacOs {
+                major: m,
+                minor: 0,
+                arch: primary.clone(),
+            });
+            out.push(PlatformTag::MacOs {
+                major: m,
+                minor: 0,
+                arch: MacArch::Universal2,
+            });
         }
         // 10.x range: from 10.16 down to 10.4.
         for n in (MACOS_10_MIN_MINOR..=MACOS_10_MAX_MINOR).rev() {
-            out.push(PlatformTag::MacOs { major: 10, minor: n, arch: primary.clone() });
-            out.push(PlatformTag::MacOs { major: 10, minor: n, arch: MacArch::Universal2 });
+            out.push(PlatformTag::MacOs {
+                major: 10,
+                minor: n,
+                arch: primary.clone(),
+            });
+            out.push(PlatformTag::MacOs {
+                major: 10,
+                minor: n,
+                arch: MacArch::Universal2,
+            });
         }
     } else {
         // min_major == 10: only the 10.x range from min_minor down to 4.
         assert!(min_major == 10, "macos_min major must be >= 10");
         for n in (MACOS_10_MIN_MINOR..=min_minor).rev() {
-            out.push(PlatformTag::MacOs { major: 10, minor: n, arch: primary.clone() });
-            out.push(PlatformTag::MacOs { major: 10, minor: n, arch: MacArch::Universal2 });
+            out.push(PlatformTag::MacOs {
+                major: 10,
+                minor: n,
+                arch: primary.clone(),
+            });
+            out.push(PlatformTag::MacOs {
+                major: 10,
+                minor: n,
+                arch: MacArch::Universal2,
+            });
         }
     }
     out
@@ -173,13 +226,13 @@ mod tests {
     fn rank_of_returns_index() {
         let tag_a = Tag {
             python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::Any,
+            abi: AbiTag::CPython(3, 12),
+            plat: PlatformTag::Any,
         };
         let tag_b = Tag {
             python: PythonTag::Py(3, None),
-            abi:    AbiTag::None,
-            plat:   PlatformTag::Any,
+            abi: AbiTag::None,
+            plat: PlatformTag::Any,
         };
         let compat = CompatibleTags::from_ordered(vec![tag_a.clone(), tag_b.clone()]);
         assert_eq!(compat.rank_of(&tag_a), Some(0));
@@ -187,8 +240,12 @@ mod tests {
 
         let unknown = Tag {
             python: PythonTag::CPython(3, 10),
-            abi:    AbiTag::None,
-            plat:   PlatformTag::ManyLinux { major: 2, minor: 17, arch: LinuxArch::X86_64 },
+            abi: AbiTag::None,
+            plat: PlatformTag::ManyLinux {
+                major: 2,
+                minor: 17,
+                arch: LinuxArch::X86_64,
+            },
         };
         assert_eq!(compat.rank_of(&unknown), None);
     }
@@ -232,8 +289,22 @@ mod tests {
         let axis = build_manylinux_axis((2, 28), LinuxArch::X86_64);
         // 2_28 down to 2_5 = 24 entries.
         assert_eq!(axis.len(), 24);
-        assert_eq!(axis[0], PlatformTag::ManyLinux { major: 2, minor: 28, arch: LinuxArch::X86_64 });
-        assert_eq!(axis[23], PlatformTag::ManyLinux { major: 2, minor: 5, arch: LinuxArch::X86_64 });
+        assert_eq!(
+            axis[0],
+            PlatformTag::ManyLinux {
+                major: 2,
+                minor: 28,
+                arch: LinuxArch::X86_64
+            }
+        );
+        assert_eq!(
+            axis[23],
+            PlatformTag::ManyLinux {
+                major: 2,
+                minor: 5,
+                arch: LinuxArch::X86_64
+            }
+        );
     }
 
     #[test]
@@ -241,17 +312,52 @@ mod tests {
         let axis = build_musllinux_axis((1, 2), LinuxArch::Aarch64);
         // 1_2 down to 1_0 = 3 entries.
         assert_eq!(axis.len(), 3);
-        assert_eq!(axis[0], PlatformTag::MuslLinux { major: 1, minor: 2, arch: LinuxArch::Aarch64 });
-        assert_eq!(axis[2], PlatformTag::MuslLinux { major: 1, minor: 0, arch: LinuxArch::Aarch64 });
+        assert_eq!(
+            axis[0],
+            PlatformTag::MuslLinux {
+                major: 1,
+                minor: 2,
+                arch: LinuxArch::Aarch64
+            }
+        );
+        assert_eq!(
+            axis[2],
+            PlatformTag::MuslLinux {
+                major: 1,
+                minor: 0,
+                arch: LinuxArch::Aarch64
+            }
+        );
     }
 
     #[test]
     fn macos_axis_11_0_arm64() {
         let axis = build_macos_axis((11, 0), MacArch::Arm64);
         // First entry: 11_0 arm64.
-        assert_eq!(axis[0], PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::Arm64 });
-        assert_eq!(axis[1], PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::Universal2 });
-        assert_eq!(axis[2], PlatformTag::MacOs { major: 10, minor: 16, arch: MacArch::Arm64 });
+        assert_eq!(
+            axis[0],
+            PlatformTag::MacOs {
+                major: 11,
+                minor: 0,
+                arch: MacArch::Arm64
+            }
+        );
+        assert_eq!(
+            axis[1],
+            PlatformTag::MacOs {
+                major: 11,
+                minor: 0,
+                arch: MacArch::Universal2
+            }
+        );
+        assert_eq!(
+            axis[2],
+            PlatformTag::MacOs {
+                major: 10,
+                minor: 16,
+                arch: MacArch::Arm64
+            }
+        );
         // 10.16 down to 10.4 = 13 minors × 2 arches = 26.  Plus macos_min entry × 2 arches = 28.
         assert_eq!(axis.len(), 28);
         // No entries above 11_0.
@@ -266,8 +372,22 @@ mod tests {
         // 10.16 down to 10.4 × 2 arches = 26 entries
         // Total = 34
         assert_eq!(axis.len(), 34);
-        assert_eq!(axis[0], PlatformTag::MacOs { major: 14, minor: 0, arch: MacArch::X86_64 });
-        assert_eq!(axis[2], PlatformTag::MacOs { major: 13, minor: 0, arch: MacArch::X86_64 });
+        assert_eq!(
+            axis[0],
+            PlatformTag::MacOs {
+                major: 14,
+                minor: 0,
+                arch: MacArch::X86_64
+            }
+        );
+        assert_eq!(
+            axis[2],
+            PlatformTag::MacOs {
+                major: 13,
+                minor: 0,
+                arch: MacArch::X86_64
+            }
+        );
     }
 
     #[test]
@@ -275,8 +395,10 @@ mod tests {
         let axis = build_macos_axis((10, 15), MacArch::Arm64);
         // 10.15 down to 10.4 = 12 minors × 2 arches = 24.
         assert_eq!(axis.len(), 24);
-        assert!(axis.iter().all(|t| matches!(t,
-            PlatformTag::MacOs { major: 10, .. })));
+        assert!(
+            axis.iter()
+                .all(|t| matches!(t, PlatformTag::MacOs { major: 10, .. }))
+        );
     }
 
     #[test]
@@ -291,27 +413,41 @@ mod tests {
         let compat = build_compatible_tags(&platform, PythonVersion(3, 12));
 
         // Most-preferred entry: cp312-cp312-manylinux_2_28_x86_64.
-        assert_eq!(compat.ordered()[0], Tag {
-            python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::ManyLinux { major: 2, minor: 28, arch: LinuxArch::X86_64 },
-        });
+        assert_eq!(
+            compat.ordered()[0],
+            Tag {
+                python: PythonTag::CPython(3, 12),
+                abi: AbiTag::CPython(3, 12),
+                plat: PlatformTag::ManyLinux {
+                    major: 2,
+                    minor: 28,
+                    arch: LinuxArch::X86_64
+                },
+            }
+        );
         // Final entry is always py3-none-any.
-        assert_eq!(compat.ordered().last(), Some(&Tag {
-            python: PythonTag::Py(3, None),
-            abi:    AbiTag::None,
-            plat:   PlatformTag::Any,
-        }));
+        assert_eq!(
+            compat.ordered().last(),
+            Some(&Tag {
+                python: PythonTag::Py(3, None),
+                abi: AbiTag::None,
+                plat: PlatformTag::Any,
+            })
+        );
 
         let py3_manylinux = Tag {
             python: PythonTag::Py(3, None),
-            abi:    AbiTag::None,
-            plat:   PlatformTag::ManyLinux { major: 2, minor: 28, arch: LinuxArch::X86_64 },
+            abi: AbiTag::None,
+            plat: PlatformTag::ManyLinux {
+                major: 2,
+                minor: 28,
+                arch: LinuxArch::X86_64,
+            },
         };
         let py3_any = Tag {
             python: PythonTag::Py(3, None),
-            abi:    AbiTag::None,
-            plat:   PlatformTag::Any,
+            abi: AbiTag::None,
+            plat: PlatformTag::Any,
         };
         assert!(compat.rank_of(&py3_manylinux).unwrap() < compat.rank_of(&py3_any).unwrap());
     }
@@ -330,32 +466,48 @@ mod tests {
         // Rejects wheels for macOS 12+ (above deployment target).
         let mac_12 = Tag {
             python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::MacOs { major: 12, minor: 0, arch: MacArch::Arm64 },
+            abi: AbiTag::CPython(3, 12),
+            plat: PlatformTag::MacOs {
+                major: 12,
+                minor: 0,
+                arch: MacArch::Arm64,
+            },
         };
         assert_eq!(compat.rank_of(&mac_12), None);
 
         // Accepts deployment target == macos_min.
         let mac_11 = Tag {
             python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::Arm64 },
+            abi: AbiTag::CPython(3, 12),
+            plat: PlatformTag::MacOs {
+                major: 11,
+                minor: 0,
+                arch: MacArch::Arm64,
+            },
         };
         assert!(compat.rank_of(&mac_11).is_some());
 
         // arm64 platform does NOT accept x86_64-tagged wheels.
         let mac_11_x86 = Tag {
             python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::X86_64 },
+            abi: AbiTag::CPython(3, 12),
+            plat: PlatformTag::MacOs {
+                major: 11,
+                minor: 0,
+                arch: MacArch::X86_64,
+            },
         };
         assert_eq!(compat.rank_of(&mac_11_x86), None);
 
         // universal2 IS accepted on arm64 platforms.
         let mac_11_universal = Tag {
             python: PythonTag::CPython(3, 12),
-            abi:    AbiTag::CPython(3, 12),
-            plat:   PlatformTag::MacOs { major: 11, minor: 0, arch: MacArch::Universal2 },
+            abi: AbiTag::CPython(3, 12),
+            plat: PlatformTag::MacOs {
+                major: 11,
+                minor: 0,
+                arch: MacArch::Universal2,
+            },
         };
         assert!(compat.rank_of(&mac_11_universal).is_some());
     }
@@ -373,32 +525,51 @@ mod tests {
 
         let m_12 = Tag {
             python: PythonTag::CPython(3, 11),
-            abi:    AbiTag::CPython(3, 11),
-            plat:   PlatformTag::MuslLinux { major: 1, minor: 2, arch: LinuxArch::X86_64 },
+            abi: AbiTag::CPython(3, 11),
+            plat: PlatformTag::MuslLinux {
+                major: 1,
+                minor: 2,
+                arch: LinuxArch::X86_64,
+            },
         };
         let m_11 = Tag {
             python: PythonTag::CPython(3, 11),
-            abi:    AbiTag::CPython(3, 11),
-            plat:   PlatformTag::MuslLinux { major: 1, minor: 1, arch: LinuxArch::X86_64 },
+            abi: AbiTag::CPython(3, 11),
+            plat: PlatformTag::MuslLinux {
+                major: 1,
+                minor: 1,
+                arch: LinuxArch::X86_64,
+            },
         };
         let m_13 = Tag {
             python: PythonTag::CPython(3, 11),
-            abi:    AbiTag::CPython(3, 11),
-            plat:   PlatformTag::MuslLinux { major: 1, minor: 3, arch: LinuxArch::X86_64 },
+            abi: AbiTag::CPython(3, 11),
+            plat: PlatformTag::MuslLinux {
+                major: 1,
+                minor: 3,
+                arch: LinuxArch::X86_64,
+            },
         };
         assert!(compat.rank_of(&m_12).unwrap() < compat.rank_of(&m_11).unwrap());
         assert_eq!(compat.rank_of(&m_13), None);
     }
 
     fn format_compat_for_snapshot(compat: &CompatibleTags) -> String {
-        compat.ordered().iter()
+        compat
+            .ordered()
+            .iter()
             .enumerate()
             .map(|(i, t)| format!("{:3}: {}", i, t))
             .collect::<Vec<_>>()
             .join("\n")
     }
 
-    fn platform_for_snapshot(target: &str, mnl: Option<&str>, msl: Option<&str>, mac: Option<&str>) -> crate::config::Platform {
+    fn platform_for_snapshot(
+        target: &str,
+        mnl: Option<&str>,
+        msl: Option<&str>,
+        mac: Option<&str>,
+    ) -> crate::config::Platform {
         crate::config::Platform {
             target: target.into(),
             manylinux: mnl.map(String::from),

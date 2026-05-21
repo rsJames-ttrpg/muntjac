@@ -36,15 +36,17 @@ impl Platform {
     /// Returns the parsed manylinux baseline `(major, minor)` if set.
     /// Assumes `Config::validate` has run; panics if the string is malformed.
     pub fn manylinux_baseline(&self) -> Option<(u32, u32)> {
-        self.manylinux.as_deref().map(|s| parse_underscore_pair(s)
-            .expect("validated manylinux string"))
+        self.manylinux
+            .as_deref()
+            .map(|s| parse_underscore_pair(s).expect("validated manylinux string"))
     }
 
     /// Returns the parsed musllinux baseline `(major, minor)` if set.
     /// Assumes `Config::validate` has run; panics if the string is malformed.
     pub fn musllinux_baseline(&self) -> Option<(u32, u32)> {
-        self.musllinux.as_deref().map(|s| parse_underscore_pair(s)
-            .expect("validated musllinux string"))
+        self.musllinux
+            .as_deref()
+            .map(|s| parse_underscore_pair(s).expect("validated musllinux string"))
     }
 
     /// Returns the parsed `macos_min` deployment target `(major, minor)` if set.
@@ -53,8 +55,9 @@ impl Platform {
     /// whose required deployment target is <= this value.
     /// Assumes `Config::validate` has run; panics if the string is malformed.
     pub fn macos_min_parsed(&self) -> Option<(u32, u32)> {
-        self.macos_min.as_deref().map(|s| parse_dot_pair(s)
-            .expect("validated macos_min string"))
+        self.macos_min
+            .as_deref()
+            .map(|s| parse_dot_pair(s).expect("validated macos_min string"))
     }
 }
 
@@ -245,7 +248,9 @@ impl Config {
     pub(crate) fn dedupe_include_groups(&mut self) {
         let original_len = self.lockfile.include_groups.len();
         let mut seen = std::collections::HashSet::new();
-        self.lockfile.include_groups.retain(|g| seen.insert(g.clone()));
+        self.lockfile
+            .include_groups
+            .retain(|g| seen.insert(g.clone()));
         if self.lockfile.include_groups.len() < original_len {
             eprintln!(
                 "warning: muntjac.toml [lockfile] include_groups contained duplicates ({} → {}); deduplicated",
@@ -505,8 +510,10 @@ python_versions = ["3.12"]
 target = "not-a-real-triple"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
-            if reason.contains("unknown target triple")));
+        assert!(
+            matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("unknown target triple"))
+        );
     }
 
     #[test]
@@ -648,8 +655,10 @@ python_versions = ["3.12"]
 target = "x86_64-unknown-linux-gnu"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
-            if reason.contains("manylinux") && reason.contains("musllinux")));
+        assert!(
+            matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("manylinux") && reason.contains("musllinux"))
+        );
     }
 
     #[test]
@@ -663,8 +672,10 @@ python_versions = ["3.12"]
 target = "aarch64-apple-darwin"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
-            if reason.contains("macos_min")));
+        assert!(
+            matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("macos_min"))
+        );
     }
 
     #[test]
@@ -679,8 +690,10 @@ target = "x86_64-unknown-linux-gnu"
 manylinux = "2014"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
-            if reason.contains("2014") && reason.contains("2_17")));
+        assert!(
+            matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("2014") && reason.contains("2_17"))
+        );
     }
 
     #[test]
@@ -695,8 +708,10 @@ target = "x86_64-unknown-linux-gnu"
 musllinux = "1_2"
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
-            if reason.contains("musllinux") && reason.contains("linux-gnu")));
+        assert!(
+            matches!(err, crate::error::ConfigError::BadPlatform { ref reason, .. }
+            if reason.contains("musllinux") && reason.contains("linux-gnu"))
+        );
     }
 
     #[test]
@@ -714,7 +729,10 @@ manylinux = "2_17"
 include_groups = ["test", "test", "docs"]
 "#;
         let config = Config::from_str(toml_str).expect("parse");
-        assert_eq!(config.lockfile.include_groups, vec!["test".to_string(), "docs".to_string()]);
+        assert_eq!(
+            config.lockfile.include_groups,
+            vec!["test".to_string(), "docs".to_string()]
+        );
     }
 
     #[test]
@@ -725,7 +743,10 @@ third_party_dir = "."
 python_versions = ["3.12"]
 "#;
         let err = Config::from_str(toml_str).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::MissingField("platforms")));
+        assert!(matches!(
+            err,
+            crate::error::ConfigError::MissingField("platforms")
+        ));
     }
 
     #[test]

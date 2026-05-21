@@ -62,10 +62,10 @@ struct WheelOutput {
 pub fn run(args: PickWheelsArgs, globals: &Globals) -> Result<()> {
     let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
-    let cfg_bytes = fs::read_to_string(&cfg_path)
-        .with_context(|| format!("reading {}", cfg_path.display()))?;
-    let config = Config::from_str(&cfg_bytes)
-        .with_context(|| format!("parsing {}", cfg_path.display()))?;
+    let cfg_bytes =
+        fs::read_to_string(&cfg_path).with_context(|| format!("reading {}", cfg_path.display()))?;
+    let config =
+        Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
     // Config::from_str already validates.
 
     let mut outputs: Vec<Output> = Vec::new();
@@ -212,4 +212,3 @@ fn build_wheels_index(lockfile: &Lockfile) -> BTreeMap<(String, String), &[Wheel
     }
     idx
 }
-

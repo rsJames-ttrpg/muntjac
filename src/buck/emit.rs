@@ -112,10 +112,7 @@ pub fn build_emit_input(
     let mut configs: Vec<ConfigName> = Vec::new();
     for plat_name in config.platforms.keys() {
         for py in &tree.python_versions {
-            configs.push(ConfigName::new(
-                &format!("{}.{}", py.0, py.1),
-                plat_name,
-            ));
+            configs.push(ConfigName::new(&format!("{}.{}", py.0, py.1), plat_name));
         }
     }
     configs.sort();
@@ -131,8 +128,8 @@ pub fn build_emit_input(
             .platforms
             .get(plat_name)
             .ok_or_else(|| anyhow::anyhow!("platform `{}` missing from config", plat_name))?;
-        let py = PythonVersion::from_str(&resolved_cfg.python_version)
-            .map_err(anyhow::Error::msg)?;
+        let py =
+            PythonVersion::from_str(&resolved_cfg.python_version).map_err(anyhow::Error::msg)?;
         let cfg_name = ConfigName::new(&resolved_cfg.python_version, plat_name);
         let compat = build_compatible_tags(plat, py.clone());
 
@@ -147,16 +144,13 @@ pub fn build_emit_input(
             }
             match pick_wheel(wheels, &compat) {
                 PickResult::Picked { wheel, .. } => {
-                    pkg_wheels
-                        .entry(key.clone())
-                        .or_default()
-                        .insert(
-                            cfg_name.clone(),
-                            EmitWheel {
-                                url: wheel.url.to_string(),
-                                hash: wheel.hash.clone(),
-                            },
-                        );
+                    pkg_wheels.entry(key.clone()).or_default().insert(
+                        cfg_name.clone(),
+                        EmitWheel {
+                            url: wheel.url.to_string(),
+                            hash: wheel.hash.clone(),
+                        },
+                    );
                     pkg_deps_per_cell
                         .entry(key)
                         .or_default()
@@ -272,9 +266,7 @@ mod tests {
     #[test]
     fn build_emit_input_from_synthetic_resolved() {
         use crate::config::{Config, Platform, PythonVersion, Tree};
-        use crate::lock::types::{
-            DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel,
-        };
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
         use pep440_rs::Version;
         use pep508_rs::PackageName;
         use std::str::FromStr;
@@ -352,8 +344,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile)
-            .expect("build_emit_input succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile).expect("build_emit_input succeeds");
 
         assert_eq!(input.tree, "default");
         assert_eq!(input.third_party_dir, "third-party/python");
@@ -451,8 +442,7 @@ mod tests {
             packages: vec![app, ancient],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile)
-            .expect_err("should fail on NoWheel");
+        let err = build_emit_input(&config, &tree, &lockfile).expect_err("should fail on NoWheel");
         let msg = format!("{:#}", err);
         assert!(
             msg.contains("ancient-pkg"),

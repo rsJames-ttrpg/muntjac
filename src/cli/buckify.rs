@@ -14,10 +14,10 @@ use crate::lock;
 pub fn run(globals: &Globals) -> Result<()> {
     let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
-    let cfg_bytes = fs::read_to_string(&cfg_path)
-        .with_context(|| format!("reading {}", cfg_path.display()))?;
-    let config = Config::from_str(&cfg_bytes)
-        .with_context(|| format!("parsing {}", cfg_path.display()))?;
+    let cfg_bytes =
+        fs::read_to_string(&cfg_path).with_context(|| format!("reading {}", cfg_path.display()))?;
+    let config =
+        Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
 
     let emitter = StringTemplateEmitter;
     let cfg_dir = cfg_path.parent().unwrap_or(Path::new("."));
