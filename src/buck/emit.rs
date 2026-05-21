@@ -371,4 +371,104 @@ mod tests {
         assert!(wheel.url.contains("certifi-2025.4.26"));
         assert_eq!(wheel.hash, "sha256:abc");
     }
+
+    #[test]
+    fn build_emit_input_errors_on_no_wheel() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use std::str::FromStr;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+
+        // First-party root depending on ancient-pkg, mirroring T11's pattern.
+        // Without a first-party root the resolved-view projector returns empty
+        // `view.configs[*].packages` and the NoWheel path is never reached.
+        let app = Package {
+            name: PackageName::from_str("app").unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            source: Source::FirstParty {
+                kind: FirstPartyKind::Virtual,
+                path: ".".into(),
+            },
+            dependencies: vec![DepEdge {
+                name: PackageName::from_str("ancient-pkg").unwrap(),
+                extra: vec![],
+                marker: None,
+            }],
+            sdist: None,
+            wheels: vec![],
+            metadata: None,
+        };
+        let ancient = Package {
+            name: PackageName::from_str("ancient-pkg").unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            source: Source::Registry {
+                url: Url::parse("https://pypi.org/simple").unwrap(),
+            },
+            dependencies: vec![],
+            sdist: None,
+            wheels: vec![Wheel {
+                url: Url::parse(
+                    "https://example.com/ancient_pkg-0.1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                )
+                .unwrap(),
+                hash: "sha256:aaaa".into(),
+                size: None,
+                filename: "ancient_pkg-0.1.0-cp310-cp310-manylinux_2_17_x86_64.whl".into(),
+            }],
+            metadata: None,
+        };
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![app, ancient],
+        };
+
+        let err = build_emit_input(&config, &tree, &lockfile)
+            .expect_err("should fail on NoWheel");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("ancient-pkg"),
+            "error must name the package: {}",
+            msg
+        );
+        assert!(
+            msg.contains("3.12"),
+            "error must name the python version: {}",
+            msg
+        );
+        assert!(
+            msg.contains("linux-x86_64-gnu"),
+            "error must name the platform: {}",
+            msg
+        );
+        assert!(msg.contains("S5"), "error must point at S5: {}", msg);
+    }
 }
