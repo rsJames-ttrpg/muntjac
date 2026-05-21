@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
+pub mod buckify;
 pub mod config_check;
 pub mod debug;
 pub mod init;
@@ -76,7 +77,7 @@ pub enum Command {
 
     /// Download wheels into ~/.cache/muntjac (or vendor/) — UNIMPLEMENTED (S5/S9).
     Vendor,
-    /// Read uv.lock + fixups and emit BUCK — UNIMPLEMENTED (S3+).
+    /// Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and PACKAGE.
     Buckify,
     /// Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10).
     Audit,
@@ -100,7 +101,7 @@ pub fn run(cli: Cli) -> Result<()> {
         } => config_check::run(args, &cli.globals),
         Command::Debug { op } => debug::run(op, &cli.globals),
         Command::Vendor => stub::run("vendor", "S5/S9"),
-        Command::Buckify => stub::run("buckify", "S3+"),
+        Command::Buckify => buckify::run(&cli.globals),
         Command::Audit => stub::run("audit", "S10"),
         Command::Fixups => stub::run("fixups", "S6/S7"),
         Command::Unused => stub::run("unused", "S10"),

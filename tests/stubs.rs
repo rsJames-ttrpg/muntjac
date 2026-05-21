@@ -14,15 +14,6 @@ fn vendor_says_unimplemented() {
 }
 
 #[test]
-fn buckify_says_unimplemented() {
-    muntjac()
-        .arg("buckify")
-        .assert()
-        .failure()
-        .stderr(contains("not implemented yet (planned for S3+)"));
-}
-
-#[test]
 fn audit_says_unimplemented() {
     muntjac()
         .arg("audit")
