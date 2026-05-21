@@ -6,5 +6,7 @@
 pub mod emit;
 pub mod string_writer;
 
-pub use emit::{BuckEmitter, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel};
+pub use emit::{
+    BuckEmitter, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel, build_emit_input,
+};
 pub use string_writer::StringTemplateEmitter;
