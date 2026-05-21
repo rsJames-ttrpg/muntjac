@@ -1,0 +1,354 @@
+---
+source: src/wheel/compat.rs
+expression: format_compat_for_snapshot(&c)
+---
+  0: cp311-cp311-manylinux_2_17_aarch64
+  1: cp311-cp311-manylinux_2_16_aarch64
+  2: cp311-cp311-manylinux_2_15_aarch64
+  3: cp311-cp311-manylinux_2_14_aarch64
+  4: cp311-cp311-manylinux_2_13_aarch64
+  5: cp311-cp311-manylinux_2_12_aarch64
+  6: cp311-cp311-manylinux_2_11_aarch64
+  7: cp311-cp311-manylinux_2_10_aarch64
+  8: cp311-cp311-manylinux_2_9_aarch64
+  9: cp311-cp311-manylinux_2_8_aarch64
+ 10: cp311-cp311-manylinux_2_7_aarch64
+ 11: cp311-cp311-manylinux_2_6_aarch64
+ 12: cp311-cp311-manylinux_2_5_aarch64
+ 13: cp311-cp311-any
+ 14: cp311-abi3-manylinux_2_17_aarch64
+ 15: cp311-abi3-manylinux_2_16_aarch64
+ 16: cp311-abi3-manylinux_2_15_aarch64
+ 17: cp311-abi3-manylinux_2_14_aarch64
+ 18: cp311-abi3-manylinux_2_13_aarch64
+ 19: cp311-abi3-manylinux_2_12_aarch64
+ 20: cp311-abi3-manylinux_2_11_aarch64
+ 21: cp311-abi3-manylinux_2_10_aarch64
+ 22: cp311-abi3-manylinux_2_9_aarch64
+ 23: cp311-abi3-manylinux_2_8_aarch64
+ 24: cp311-abi3-manylinux_2_7_aarch64
+ 25: cp311-abi3-manylinux_2_6_aarch64
+ 26: cp311-abi3-manylinux_2_5_aarch64
+ 27: cp311-abi3-any
+ 28: cp311-none-manylinux_2_17_aarch64
+ 29: cp311-none-manylinux_2_16_aarch64
+ 30: cp311-none-manylinux_2_15_aarch64
+ 31: cp311-none-manylinux_2_14_aarch64
+ 32: cp311-none-manylinux_2_13_aarch64
+ 33: cp311-none-manylinux_2_12_aarch64
+ 34: cp311-none-manylinux_2_11_aarch64
+ 35: cp311-none-manylinux_2_10_aarch64
+ 36: cp311-none-manylinux_2_9_aarch64
+ 37: cp311-none-manylinux_2_8_aarch64
+ 38: cp311-none-manylinux_2_7_aarch64
+ 39: cp311-none-manylinux_2_6_aarch64
+ 40: cp311-none-manylinux_2_5_aarch64
+ 41: cp311-none-any
+ 42: cp310-abi3-manylinux_2_17_aarch64
+ 43: cp310-abi3-manylinux_2_16_aarch64
+ 44: cp310-abi3-manylinux_2_15_aarch64
+ 45: cp310-abi3-manylinux_2_14_aarch64
+ 46: cp310-abi3-manylinux_2_13_aarch64
+ 47: cp310-abi3-manylinux_2_12_aarch64
+ 48: cp310-abi3-manylinux_2_11_aarch64
+ 49: cp310-abi3-manylinux_2_10_aarch64
+ 50: cp310-abi3-manylinux_2_9_aarch64
+ 51: cp310-abi3-manylinux_2_8_aarch64
+ 52: cp310-abi3-manylinux_2_7_aarch64
+ 53: cp310-abi3-manylinux_2_6_aarch64
+ 54: cp310-abi3-manylinux_2_5_aarch64
+ 55: cp310-abi3-any
+ 56: cp39-abi3-manylinux_2_17_aarch64
+ 57: cp39-abi3-manylinux_2_16_aarch64
+ 58: cp39-abi3-manylinux_2_15_aarch64
+ 59: cp39-abi3-manylinux_2_14_aarch64
+ 60: cp39-abi3-manylinux_2_13_aarch64
+ 61: cp39-abi3-manylinux_2_12_aarch64
+ 62: cp39-abi3-manylinux_2_11_aarch64
+ 63: cp39-abi3-manylinux_2_10_aarch64
+ 64: cp39-abi3-manylinux_2_9_aarch64
+ 65: cp39-abi3-manylinux_2_8_aarch64
+ 66: cp39-abi3-manylinux_2_7_aarch64
+ 67: cp39-abi3-manylinux_2_6_aarch64
+ 68: cp39-abi3-manylinux_2_5_aarch64
+ 69: cp39-abi3-any
+ 70: cp38-abi3-manylinux_2_17_aarch64
+ 71: cp38-abi3-manylinux_2_16_aarch64
+ 72: cp38-abi3-manylinux_2_15_aarch64
+ 73: cp38-abi3-manylinux_2_14_aarch64
+ 74: cp38-abi3-manylinux_2_13_aarch64
+ 75: cp38-abi3-manylinux_2_12_aarch64
+ 76: cp38-abi3-manylinux_2_11_aarch64
+ 77: cp38-abi3-manylinux_2_10_aarch64
+ 78: cp38-abi3-manylinux_2_9_aarch64
+ 79: cp38-abi3-manylinux_2_8_aarch64
+ 80: cp38-abi3-manylinux_2_7_aarch64
+ 81: cp38-abi3-manylinux_2_6_aarch64
+ 82: cp38-abi3-manylinux_2_5_aarch64
+ 83: cp38-abi3-any
+ 84: cp37-abi3-manylinux_2_17_aarch64
+ 85: cp37-abi3-manylinux_2_16_aarch64
+ 86: cp37-abi3-manylinux_2_15_aarch64
+ 87: cp37-abi3-manylinux_2_14_aarch64
+ 88: cp37-abi3-manylinux_2_13_aarch64
+ 89: cp37-abi3-manylinux_2_12_aarch64
+ 90: cp37-abi3-manylinux_2_11_aarch64
+ 91: cp37-abi3-manylinux_2_10_aarch64
+ 92: cp37-abi3-manylinux_2_9_aarch64
+ 93: cp37-abi3-manylinux_2_8_aarch64
+ 94: cp37-abi3-manylinux_2_7_aarch64
+ 95: cp37-abi3-manylinux_2_6_aarch64
+ 96: cp37-abi3-manylinux_2_5_aarch64
+ 97: cp37-abi3-any
+ 98: cp36-abi3-manylinux_2_17_aarch64
+ 99: cp36-abi3-manylinux_2_16_aarch64
+100: cp36-abi3-manylinux_2_15_aarch64
+101: cp36-abi3-manylinux_2_14_aarch64
+102: cp36-abi3-manylinux_2_13_aarch64
+103: cp36-abi3-manylinux_2_12_aarch64
+104: cp36-abi3-manylinux_2_11_aarch64
+105: cp36-abi3-manylinux_2_10_aarch64
+106: cp36-abi3-manylinux_2_9_aarch64
+107: cp36-abi3-manylinux_2_8_aarch64
+108: cp36-abi3-manylinux_2_7_aarch64
+109: cp36-abi3-manylinux_2_6_aarch64
+110: cp36-abi3-manylinux_2_5_aarch64
+111: cp36-abi3-any
+112: cp35-abi3-manylinux_2_17_aarch64
+113: cp35-abi3-manylinux_2_16_aarch64
+114: cp35-abi3-manylinux_2_15_aarch64
+115: cp35-abi3-manylinux_2_14_aarch64
+116: cp35-abi3-manylinux_2_13_aarch64
+117: cp35-abi3-manylinux_2_12_aarch64
+118: cp35-abi3-manylinux_2_11_aarch64
+119: cp35-abi3-manylinux_2_10_aarch64
+120: cp35-abi3-manylinux_2_9_aarch64
+121: cp35-abi3-manylinux_2_8_aarch64
+122: cp35-abi3-manylinux_2_7_aarch64
+123: cp35-abi3-manylinux_2_6_aarch64
+124: cp35-abi3-manylinux_2_5_aarch64
+125: cp35-abi3-any
+126: cp34-abi3-manylinux_2_17_aarch64
+127: cp34-abi3-manylinux_2_16_aarch64
+128: cp34-abi3-manylinux_2_15_aarch64
+129: cp34-abi3-manylinux_2_14_aarch64
+130: cp34-abi3-manylinux_2_13_aarch64
+131: cp34-abi3-manylinux_2_12_aarch64
+132: cp34-abi3-manylinux_2_11_aarch64
+133: cp34-abi3-manylinux_2_10_aarch64
+134: cp34-abi3-manylinux_2_9_aarch64
+135: cp34-abi3-manylinux_2_8_aarch64
+136: cp34-abi3-manylinux_2_7_aarch64
+137: cp34-abi3-manylinux_2_6_aarch64
+138: cp34-abi3-manylinux_2_5_aarch64
+139: cp34-abi3-any
+140: cp33-abi3-manylinux_2_17_aarch64
+141: cp33-abi3-manylinux_2_16_aarch64
+142: cp33-abi3-manylinux_2_15_aarch64
+143: cp33-abi3-manylinux_2_14_aarch64
+144: cp33-abi3-manylinux_2_13_aarch64
+145: cp33-abi3-manylinux_2_12_aarch64
+146: cp33-abi3-manylinux_2_11_aarch64
+147: cp33-abi3-manylinux_2_10_aarch64
+148: cp33-abi3-manylinux_2_9_aarch64
+149: cp33-abi3-manylinux_2_8_aarch64
+150: cp33-abi3-manylinux_2_7_aarch64
+151: cp33-abi3-manylinux_2_6_aarch64
+152: cp33-abi3-manylinux_2_5_aarch64
+153: cp33-abi3-any
+154: cp32-abi3-manylinux_2_17_aarch64
+155: cp32-abi3-manylinux_2_16_aarch64
+156: cp32-abi3-manylinux_2_15_aarch64
+157: cp32-abi3-manylinux_2_14_aarch64
+158: cp32-abi3-manylinux_2_13_aarch64
+159: cp32-abi3-manylinux_2_12_aarch64
+160: cp32-abi3-manylinux_2_11_aarch64
+161: cp32-abi3-manylinux_2_10_aarch64
+162: cp32-abi3-manylinux_2_9_aarch64
+163: cp32-abi3-manylinux_2_8_aarch64
+164: cp32-abi3-manylinux_2_7_aarch64
+165: cp32-abi3-manylinux_2_6_aarch64
+166: cp32-abi3-manylinux_2_5_aarch64
+167: cp32-abi3-any
+168: py311-none-manylinux_2_17_aarch64
+169: py311-none-manylinux_2_16_aarch64
+170: py311-none-manylinux_2_15_aarch64
+171: py311-none-manylinux_2_14_aarch64
+172: py311-none-manylinux_2_13_aarch64
+173: py311-none-manylinux_2_12_aarch64
+174: py311-none-manylinux_2_11_aarch64
+175: py311-none-manylinux_2_10_aarch64
+176: py311-none-manylinux_2_9_aarch64
+177: py311-none-manylinux_2_8_aarch64
+178: py311-none-manylinux_2_7_aarch64
+179: py311-none-manylinux_2_6_aarch64
+180: py311-none-manylinux_2_5_aarch64
+181: py311-none-any
+182: py310-none-manylinux_2_17_aarch64
+183: py310-none-manylinux_2_16_aarch64
+184: py310-none-manylinux_2_15_aarch64
+185: py310-none-manylinux_2_14_aarch64
+186: py310-none-manylinux_2_13_aarch64
+187: py310-none-manylinux_2_12_aarch64
+188: py310-none-manylinux_2_11_aarch64
+189: py310-none-manylinux_2_10_aarch64
+190: py310-none-manylinux_2_9_aarch64
+191: py310-none-manylinux_2_8_aarch64
+192: py310-none-manylinux_2_7_aarch64
+193: py310-none-manylinux_2_6_aarch64
+194: py310-none-manylinux_2_5_aarch64
+195: py310-none-any
+196: py39-none-manylinux_2_17_aarch64
+197: py39-none-manylinux_2_16_aarch64
+198: py39-none-manylinux_2_15_aarch64
+199: py39-none-manylinux_2_14_aarch64
+200: py39-none-manylinux_2_13_aarch64
+201: py39-none-manylinux_2_12_aarch64
+202: py39-none-manylinux_2_11_aarch64
+203: py39-none-manylinux_2_10_aarch64
+204: py39-none-manylinux_2_9_aarch64
+205: py39-none-manylinux_2_8_aarch64
+206: py39-none-manylinux_2_7_aarch64
+207: py39-none-manylinux_2_6_aarch64
+208: py39-none-manylinux_2_5_aarch64
+209: py39-none-any
+210: py38-none-manylinux_2_17_aarch64
+211: py38-none-manylinux_2_16_aarch64
+212: py38-none-manylinux_2_15_aarch64
+213: py38-none-manylinux_2_14_aarch64
+214: py38-none-manylinux_2_13_aarch64
+215: py38-none-manylinux_2_12_aarch64
+216: py38-none-manylinux_2_11_aarch64
+217: py38-none-manylinux_2_10_aarch64
+218: py38-none-manylinux_2_9_aarch64
+219: py38-none-manylinux_2_8_aarch64
+220: py38-none-manylinux_2_7_aarch64
+221: py38-none-manylinux_2_6_aarch64
+222: py38-none-manylinux_2_5_aarch64
+223: py38-none-any
+224: py37-none-manylinux_2_17_aarch64
+225: py37-none-manylinux_2_16_aarch64
+226: py37-none-manylinux_2_15_aarch64
+227: py37-none-manylinux_2_14_aarch64
+228: py37-none-manylinux_2_13_aarch64
+229: py37-none-manylinux_2_12_aarch64
+230: py37-none-manylinux_2_11_aarch64
+231: py37-none-manylinux_2_10_aarch64
+232: py37-none-manylinux_2_9_aarch64
+233: py37-none-manylinux_2_8_aarch64
+234: py37-none-manylinux_2_7_aarch64
+235: py37-none-manylinux_2_6_aarch64
+236: py37-none-manylinux_2_5_aarch64
+237: py37-none-any
+238: py36-none-manylinux_2_17_aarch64
+239: py36-none-manylinux_2_16_aarch64
+240: py36-none-manylinux_2_15_aarch64
+241: py36-none-manylinux_2_14_aarch64
+242: py36-none-manylinux_2_13_aarch64
+243: py36-none-manylinux_2_12_aarch64
+244: py36-none-manylinux_2_11_aarch64
+245: py36-none-manylinux_2_10_aarch64
+246: py36-none-manylinux_2_9_aarch64
+247: py36-none-manylinux_2_8_aarch64
+248: py36-none-manylinux_2_7_aarch64
+249: py36-none-manylinux_2_6_aarch64
+250: py36-none-manylinux_2_5_aarch64
+251: py36-none-any
+252: py35-none-manylinux_2_17_aarch64
+253: py35-none-manylinux_2_16_aarch64
+254: py35-none-manylinux_2_15_aarch64
+255: py35-none-manylinux_2_14_aarch64
+256: py35-none-manylinux_2_13_aarch64
+257: py35-none-manylinux_2_12_aarch64
+258: py35-none-manylinux_2_11_aarch64
+259: py35-none-manylinux_2_10_aarch64
+260: py35-none-manylinux_2_9_aarch64
+261: py35-none-manylinux_2_8_aarch64
+262: py35-none-manylinux_2_7_aarch64
+263: py35-none-manylinux_2_6_aarch64
+264: py35-none-manylinux_2_5_aarch64
+265: py35-none-any
+266: py34-none-manylinux_2_17_aarch64
+267: py34-none-manylinux_2_16_aarch64
+268: py34-none-manylinux_2_15_aarch64
+269: py34-none-manylinux_2_14_aarch64
+270: py34-none-manylinux_2_13_aarch64
+271: py34-none-manylinux_2_12_aarch64
+272: py34-none-manylinux_2_11_aarch64
+273: py34-none-manylinux_2_10_aarch64
+274: py34-none-manylinux_2_9_aarch64
+275: py34-none-manylinux_2_8_aarch64
+276: py34-none-manylinux_2_7_aarch64
+277: py34-none-manylinux_2_6_aarch64
+278: py34-none-manylinux_2_5_aarch64
+279: py34-none-any
+280: py33-none-manylinux_2_17_aarch64
+281: py33-none-manylinux_2_16_aarch64
+282: py33-none-manylinux_2_15_aarch64
+283: py33-none-manylinux_2_14_aarch64
+284: py33-none-manylinux_2_13_aarch64
+285: py33-none-manylinux_2_12_aarch64
+286: py33-none-manylinux_2_11_aarch64
+287: py33-none-manylinux_2_10_aarch64
+288: py33-none-manylinux_2_9_aarch64
+289: py33-none-manylinux_2_8_aarch64
+290: py33-none-manylinux_2_7_aarch64
+291: py33-none-manylinux_2_6_aarch64
+292: py33-none-manylinux_2_5_aarch64
+293: py33-none-any
+294: py32-none-manylinux_2_17_aarch64
+295: py32-none-manylinux_2_16_aarch64
+296: py32-none-manylinux_2_15_aarch64
+297: py32-none-manylinux_2_14_aarch64
+298: py32-none-manylinux_2_13_aarch64
+299: py32-none-manylinux_2_12_aarch64
+300: py32-none-manylinux_2_11_aarch64
+301: py32-none-manylinux_2_10_aarch64
+302: py32-none-manylinux_2_9_aarch64
+303: py32-none-manylinux_2_8_aarch64
+304: py32-none-manylinux_2_7_aarch64
+305: py32-none-manylinux_2_6_aarch64
+306: py32-none-manylinux_2_5_aarch64
+307: py32-none-any
+308: py31-none-manylinux_2_17_aarch64
+309: py31-none-manylinux_2_16_aarch64
+310: py31-none-manylinux_2_15_aarch64
+311: py31-none-manylinux_2_14_aarch64
+312: py31-none-manylinux_2_13_aarch64
+313: py31-none-manylinux_2_12_aarch64
+314: py31-none-manylinux_2_11_aarch64
+315: py31-none-manylinux_2_10_aarch64
+316: py31-none-manylinux_2_9_aarch64
+317: py31-none-manylinux_2_8_aarch64
+318: py31-none-manylinux_2_7_aarch64
+319: py31-none-manylinux_2_6_aarch64
+320: py31-none-manylinux_2_5_aarch64
+321: py31-none-any
+322: py30-none-manylinux_2_17_aarch64
+323: py30-none-manylinux_2_16_aarch64
+324: py30-none-manylinux_2_15_aarch64
+325: py30-none-manylinux_2_14_aarch64
+326: py30-none-manylinux_2_13_aarch64
+327: py30-none-manylinux_2_12_aarch64
+328: py30-none-manylinux_2_11_aarch64
+329: py30-none-manylinux_2_10_aarch64
+330: py30-none-manylinux_2_9_aarch64
+331: py30-none-manylinux_2_8_aarch64
+332: py30-none-manylinux_2_7_aarch64
+333: py30-none-manylinux_2_6_aarch64
+334: py30-none-manylinux_2_5_aarch64
+335: py30-none-any
+336: py3-none-manylinux_2_17_aarch64
+337: py3-none-manylinux_2_16_aarch64
+338: py3-none-manylinux_2_15_aarch64
+339: py3-none-manylinux_2_14_aarch64
+340: py3-none-manylinux_2_13_aarch64
+341: py3-none-manylinux_2_12_aarch64
+342: py3-none-manylinux_2_11_aarch64
+343: py3-none-manylinux_2_10_aarch64
+344: py3-none-manylinux_2_9_aarch64
+345: py3-none-manylinux_2_8_aarch64
+346: py3-none-manylinux_2_7_aarch64
+347: py3-none-manylinux_2_6_aarch64
+348: py3-none-manylinux_2_5_aarch64
+349: py3-none-any

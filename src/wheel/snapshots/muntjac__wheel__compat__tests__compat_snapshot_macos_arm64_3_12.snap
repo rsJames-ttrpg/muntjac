@@ -1,0 +1,787 @@
+---
+source: src/wheel/compat.rs
+expression: format_compat_for_snapshot(&c)
+---
+  0: cp312-cp312-macosx_11_0_arm64
+  1: cp312-cp312-macosx_11_0_universal2
+  2: cp312-cp312-macosx_10_16_arm64
+  3: cp312-cp312-macosx_10_16_universal2
+  4: cp312-cp312-macosx_10_15_arm64
+  5: cp312-cp312-macosx_10_15_universal2
+  6: cp312-cp312-macosx_10_14_arm64
+  7: cp312-cp312-macosx_10_14_universal2
+  8: cp312-cp312-macosx_10_13_arm64
+  9: cp312-cp312-macosx_10_13_universal2
+ 10: cp312-cp312-macosx_10_12_arm64
+ 11: cp312-cp312-macosx_10_12_universal2
+ 12: cp312-cp312-macosx_10_11_arm64
+ 13: cp312-cp312-macosx_10_11_universal2
+ 14: cp312-cp312-macosx_10_10_arm64
+ 15: cp312-cp312-macosx_10_10_universal2
+ 16: cp312-cp312-macosx_10_9_arm64
+ 17: cp312-cp312-macosx_10_9_universal2
+ 18: cp312-cp312-macosx_10_8_arm64
+ 19: cp312-cp312-macosx_10_8_universal2
+ 20: cp312-cp312-macosx_10_7_arm64
+ 21: cp312-cp312-macosx_10_7_universal2
+ 22: cp312-cp312-macosx_10_6_arm64
+ 23: cp312-cp312-macosx_10_6_universal2
+ 24: cp312-cp312-macosx_10_5_arm64
+ 25: cp312-cp312-macosx_10_5_universal2
+ 26: cp312-cp312-macosx_10_4_arm64
+ 27: cp312-cp312-macosx_10_4_universal2
+ 28: cp312-cp312-any
+ 29: cp312-abi3-macosx_11_0_arm64
+ 30: cp312-abi3-macosx_11_0_universal2
+ 31: cp312-abi3-macosx_10_16_arm64
+ 32: cp312-abi3-macosx_10_16_universal2
+ 33: cp312-abi3-macosx_10_15_arm64
+ 34: cp312-abi3-macosx_10_15_universal2
+ 35: cp312-abi3-macosx_10_14_arm64
+ 36: cp312-abi3-macosx_10_14_universal2
+ 37: cp312-abi3-macosx_10_13_arm64
+ 38: cp312-abi3-macosx_10_13_universal2
+ 39: cp312-abi3-macosx_10_12_arm64
+ 40: cp312-abi3-macosx_10_12_universal2
+ 41: cp312-abi3-macosx_10_11_arm64
+ 42: cp312-abi3-macosx_10_11_universal2
+ 43: cp312-abi3-macosx_10_10_arm64
+ 44: cp312-abi3-macosx_10_10_universal2
+ 45: cp312-abi3-macosx_10_9_arm64
+ 46: cp312-abi3-macosx_10_9_universal2
+ 47: cp312-abi3-macosx_10_8_arm64
+ 48: cp312-abi3-macosx_10_8_universal2
+ 49: cp312-abi3-macosx_10_7_arm64
+ 50: cp312-abi3-macosx_10_7_universal2
+ 51: cp312-abi3-macosx_10_6_arm64
+ 52: cp312-abi3-macosx_10_6_universal2
+ 53: cp312-abi3-macosx_10_5_arm64
+ 54: cp312-abi3-macosx_10_5_universal2
+ 55: cp312-abi3-macosx_10_4_arm64
+ 56: cp312-abi3-macosx_10_4_universal2
+ 57: cp312-abi3-any
+ 58: cp312-none-macosx_11_0_arm64
+ 59: cp312-none-macosx_11_0_universal2
+ 60: cp312-none-macosx_10_16_arm64
+ 61: cp312-none-macosx_10_16_universal2
+ 62: cp312-none-macosx_10_15_arm64
+ 63: cp312-none-macosx_10_15_universal2
+ 64: cp312-none-macosx_10_14_arm64
+ 65: cp312-none-macosx_10_14_universal2
+ 66: cp312-none-macosx_10_13_arm64
+ 67: cp312-none-macosx_10_13_universal2
+ 68: cp312-none-macosx_10_12_arm64
+ 69: cp312-none-macosx_10_12_universal2
+ 70: cp312-none-macosx_10_11_arm64
+ 71: cp312-none-macosx_10_11_universal2
+ 72: cp312-none-macosx_10_10_arm64
+ 73: cp312-none-macosx_10_10_universal2
+ 74: cp312-none-macosx_10_9_arm64
+ 75: cp312-none-macosx_10_9_universal2
+ 76: cp312-none-macosx_10_8_arm64
+ 77: cp312-none-macosx_10_8_universal2
+ 78: cp312-none-macosx_10_7_arm64
+ 79: cp312-none-macosx_10_7_universal2
+ 80: cp312-none-macosx_10_6_arm64
+ 81: cp312-none-macosx_10_6_universal2
+ 82: cp312-none-macosx_10_5_arm64
+ 83: cp312-none-macosx_10_5_universal2
+ 84: cp312-none-macosx_10_4_arm64
+ 85: cp312-none-macosx_10_4_universal2
+ 86: cp312-none-any
+ 87: cp311-abi3-macosx_11_0_arm64
+ 88: cp311-abi3-macosx_11_0_universal2
+ 89: cp311-abi3-macosx_10_16_arm64
+ 90: cp311-abi3-macosx_10_16_universal2
+ 91: cp311-abi3-macosx_10_15_arm64
+ 92: cp311-abi3-macosx_10_15_universal2
+ 93: cp311-abi3-macosx_10_14_arm64
+ 94: cp311-abi3-macosx_10_14_universal2
+ 95: cp311-abi3-macosx_10_13_arm64
+ 96: cp311-abi3-macosx_10_13_universal2
+ 97: cp311-abi3-macosx_10_12_arm64
+ 98: cp311-abi3-macosx_10_12_universal2
+ 99: cp311-abi3-macosx_10_11_arm64
+100: cp311-abi3-macosx_10_11_universal2
+101: cp311-abi3-macosx_10_10_arm64
+102: cp311-abi3-macosx_10_10_universal2
+103: cp311-abi3-macosx_10_9_arm64
+104: cp311-abi3-macosx_10_9_universal2
+105: cp311-abi3-macosx_10_8_arm64
+106: cp311-abi3-macosx_10_8_universal2
+107: cp311-abi3-macosx_10_7_arm64
+108: cp311-abi3-macosx_10_7_universal2
+109: cp311-abi3-macosx_10_6_arm64
+110: cp311-abi3-macosx_10_6_universal2
+111: cp311-abi3-macosx_10_5_arm64
+112: cp311-abi3-macosx_10_5_universal2
+113: cp311-abi3-macosx_10_4_arm64
+114: cp311-abi3-macosx_10_4_universal2
+115: cp311-abi3-any
+116: cp310-abi3-macosx_11_0_arm64
+117: cp310-abi3-macosx_11_0_universal2
+118: cp310-abi3-macosx_10_16_arm64
+119: cp310-abi3-macosx_10_16_universal2
+120: cp310-abi3-macosx_10_15_arm64
+121: cp310-abi3-macosx_10_15_universal2
+122: cp310-abi3-macosx_10_14_arm64
+123: cp310-abi3-macosx_10_14_universal2
+124: cp310-abi3-macosx_10_13_arm64
+125: cp310-abi3-macosx_10_13_universal2
+126: cp310-abi3-macosx_10_12_arm64
+127: cp310-abi3-macosx_10_12_universal2
+128: cp310-abi3-macosx_10_11_arm64
+129: cp310-abi3-macosx_10_11_universal2
+130: cp310-abi3-macosx_10_10_arm64
+131: cp310-abi3-macosx_10_10_universal2
+132: cp310-abi3-macosx_10_9_arm64
+133: cp310-abi3-macosx_10_9_universal2
+134: cp310-abi3-macosx_10_8_arm64
+135: cp310-abi3-macosx_10_8_universal2
+136: cp310-abi3-macosx_10_7_arm64
+137: cp310-abi3-macosx_10_7_universal2
+138: cp310-abi3-macosx_10_6_arm64
+139: cp310-abi3-macosx_10_6_universal2
+140: cp310-abi3-macosx_10_5_arm64
+141: cp310-abi3-macosx_10_5_universal2
+142: cp310-abi3-macosx_10_4_arm64
+143: cp310-abi3-macosx_10_4_universal2
+144: cp310-abi3-any
+145: cp39-abi3-macosx_11_0_arm64
+146: cp39-abi3-macosx_11_0_universal2
+147: cp39-abi3-macosx_10_16_arm64
+148: cp39-abi3-macosx_10_16_universal2
+149: cp39-abi3-macosx_10_15_arm64
+150: cp39-abi3-macosx_10_15_universal2
+151: cp39-abi3-macosx_10_14_arm64
+152: cp39-abi3-macosx_10_14_universal2
+153: cp39-abi3-macosx_10_13_arm64
+154: cp39-abi3-macosx_10_13_universal2
+155: cp39-abi3-macosx_10_12_arm64
+156: cp39-abi3-macosx_10_12_universal2
+157: cp39-abi3-macosx_10_11_arm64
+158: cp39-abi3-macosx_10_11_universal2
+159: cp39-abi3-macosx_10_10_arm64
+160: cp39-abi3-macosx_10_10_universal2
+161: cp39-abi3-macosx_10_9_arm64
+162: cp39-abi3-macosx_10_9_universal2
+163: cp39-abi3-macosx_10_8_arm64
+164: cp39-abi3-macosx_10_8_universal2
+165: cp39-abi3-macosx_10_7_arm64
+166: cp39-abi3-macosx_10_7_universal2
+167: cp39-abi3-macosx_10_6_arm64
+168: cp39-abi3-macosx_10_6_universal2
+169: cp39-abi3-macosx_10_5_arm64
+170: cp39-abi3-macosx_10_5_universal2
+171: cp39-abi3-macosx_10_4_arm64
+172: cp39-abi3-macosx_10_4_universal2
+173: cp39-abi3-any
+174: cp38-abi3-macosx_11_0_arm64
+175: cp38-abi3-macosx_11_0_universal2
+176: cp38-abi3-macosx_10_16_arm64
+177: cp38-abi3-macosx_10_16_universal2
+178: cp38-abi3-macosx_10_15_arm64
+179: cp38-abi3-macosx_10_15_universal2
+180: cp38-abi3-macosx_10_14_arm64
+181: cp38-abi3-macosx_10_14_universal2
+182: cp38-abi3-macosx_10_13_arm64
+183: cp38-abi3-macosx_10_13_universal2
+184: cp38-abi3-macosx_10_12_arm64
+185: cp38-abi3-macosx_10_12_universal2
+186: cp38-abi3-macosx_10_11_arm64
+187: cp38-abi3-macosx_10_11_universal2
+188: cp38-abi3-macosx_10_10_arm64
+189: cp38-abi3-macosx_10_10_universal2
+190: cp38-abi3-macosx_10_9_arm64
+191: cp38-abi3-macosx_10_9_universal2
+192: cp38-abi3-macosx_10_8_arm64
+193: cp38-abi3-macosx_10_8_universal2
+194: cp38-abi3-macosx_10_7_arm64
+195: cp38-abi3-macosx_10_7_universal2
+196: cp38-abi3-macosx_10_6_arm64
+197: cp38-abi3-macosx_10_6_universal2
+198: cp38-abi3-macosx_10_5_arm64
+199: cp38-abi3-macosx_10_5_universal2
+200: cp38-abi3-macosx_10_4_arm64
+201: cp38-abi3-macosx_10_4_universal2
+202: cp38-abi3-any
+203: cp37-abi3-macosx_11_0_arm64
+204: cp37-abi3-macosx_11_0_universal2
+205: cp37-abi3-macosx_10_16_arm64
+206: cp37-abi3-macosx_10_16_universal2
+207: cp37-abi3-macosx_10_15_arm64
+208: cp37-abi3-macosx_10_15_universal2
+209: cp37-abi3-macosx_10_14_arm64
+210: cp37-abi3-macosx_10_14_universal2
+211: cp37-abi3-macosx_10_13_arm64
+212: cp37-abi3-macosx_10_13_universal2
+213: cp37-abi3-macosx_10_12_arm64
+214: cp37-abi3-macosx_10_12_universal2
+215: cp37-abi3-macosx_10_11_arm64
+216: cp37-abi3-macosx_10_11_universal2
+217: cp37-abi3-macosx_10_10_arm64
+218: cp37-abi3-macosx_10_10_universal2
+219: cp37-abi3-macosx_10_9_arm64
+220: cp37-abi3-macosx_10_9_universal2
+221: cp37-abi3-macosx_10_8_arm64
+222: cp37-abi3-macosx_10_8_universal2
+223: cp37-abi3-macosx_10_7_arm64
+224: cp37-abi3-macosx_10_7_universal2
+225: cp37-abi3-macosx_10_6_arm64
+226: cp37-abi3-macosx_10_6_universal2
+227: cp37-abi3-macosx_10_5_arm64
+228: cp37-abi3-macosx_10_5_universal2
+229: cp37-abi3-macosx_10_4_arm64
+230: cp37-abi3-macosx_10_4_universal2
+231: cp37-abi3-any
+232: cp36-abi3-macosx_11_0_arm64
+233: cp36-abi3-macosx_11_0_universal2
+234: cp36-abi3-macosx_10_16_arm64
+235: cp36-abi3-macosx_10_16_universal2
+236: cp36-abi3-macosx_10_15_arm64
+237: cp36-abi3-macosx_10_15_universal2
+238: cp36-abi3-macosx_10_14_arm64
+239: cp36-abi3-macosx_10_14_universal2
+240: cp36-abi3-macosx_10_13_arm64
+241: cp36-abi3-macosx_10_13_universal2
+242: cp36-abi3-macosx_10_12_arm64
+243: cp36-abi3-macosx_10_12_universal2
+244: cp36-abi3-macosx_10_11_arm64
+245: cp36-abi3-macosx_10_11_universal2
+246: cp36-abi3-macosx_10_10_arm64
+247: cp36-abi3-macosx_10_10_universal2
+248: cp36-abi3-macosx_10_9_arm64
+249: cp36-abi3-macosx_10_9_universal2
+250: cp36-abi3-macosx_10_8_arm64
+251: cp36-abi3-macosx_10_8_universal2
+252: cp36-abi3-macosx_10_7_arm64
+253: cp36-abi3-macosx_10_7_universal2
+254: cp36-abi3-macosx_10_6_arm64
+255: cp36-abi3-macosx_10_6_universal2
+256: cp36-abi3-macosx_10_5_arm64
+257: cp36-abi3-macosx_10_5_universal2
+258: cp36-abi3-macosx_10_4_arm64
+259: cp36-abi3-macosx_10_4_universal2
+260: cp36-abi3-any
+261: cp35-abi3-macosx_11_0_arm64
+262: cp35-abi3-macosx_11_0_universal2
+263: cp35-abi3-macosx_10_16_arm64
+264: cp35-abi3-macosx_10_16_universal2
+265: cp35-abi3-macosx_10_15_arm64
+266: cp35-abi3-macosx_10_15_universal2
+267: cp35-abi3-macosx_10_14_arm64
+268: cp35-abi3-macosx_10_14_universal2
+269: cp35-abi3-macosx_10_13_arm64
+270: cp35-abi3-macosx_10_13_universal2
+271: cp35-abi3-macosx_10_12_arm64
+272: cp35-abi3-macosx_10_12_universal2
+273: cp35-abi3-macosx_10_11_arm64
+274: cp35-abi3-macosx_10_11_universal2
+275: cp35-abi3-macosx_10_10_arm64
+276: cp35-abi3-macosx_10_10_universal2
+277: cp35-abi3-macosx_10_9_arm64
+278: cp35-abi3-macosx_10_9_universal2
+279: cp35-abi3-macosx_10_8_arm64
+280: cp35-abi3-macosx_10_8_universal2
+281: cp35-abi3-macosx_10_7_arm64
+282: cp35-abi3-macosx_10_7_universal2
+283: cp35-abi3-macosx_10_6_arm64
+284: cp35-abi3-macosx_10_6_universal2
+285: cp35-abi3-macosx_10_5_arm64
+286: cp35-abi3-macosx_10_5_universal2
+287: cp35-abi3-macosx_10_4_arm64
+288: cp35-abi3-macosx_10_4_universal2
+289: cp35-abi3-any
+290: cp34-abi3-macosx_11_0_arm64
+291: cp34-abi3-macosx_11_0_universal2
+292: cp34-abi3-macosx_10_16_arm64
+293: cp34-abi3-macosx_10_16_universal2
+294: cp34-abi3-macosx_10_15_arm64
+295: cp34-abi3-macosx_10_15_universal2
+296: cp34-abi3-macosx_10_14_arm64
+297: cp34-abi3-macosx_10_14_universal2
+298: cp34-abi3-macosx_10_13_arm64
+299: cp34-abi3-macosx_10_13_universal2
+300: cp34-abi3-macosx_10_12_arm64
+301: cp34-abi3-macosx_10_12_universal2
+302: cp34-abi3-macosx_10_11_arm64
+303: cp34-abi3-macosx_10_11_universal2
+304: cp34-abi3-macosx_10_10_arm64
+305: cp34-abi3-macosx_10_10_universal2
+306: cp34-abi3-macosx_10_9_arm64
+307: cp34-abi3-macosx_10_9_universal2
+308: cp34-abi3-macosx_10_8_arm64
+309: cp34-abi3-macosx_10_8_universal2
+310: cp34-abi3-macosx_10_7_arm64
+311: cp34-abi3-macosx_10_7_universal2
+312: cp34-abi3-macosx_10_6_arm64
+313: cp34-abi3-macosx_10_6_universal2
+314: cp34-abi3-macosx_10_5_arm64
+315: cp34-abi3-macosx_10_5_universal2
+316: cp34-abi3-macosx_10_4_arm64
+317: cp34-abi3-macosx_10_4_universal2
+318: cp34-abi3-any
+319: cp33-abi3-macosx_11_0_arm64
+320: cp33-abi3-macosx_11_0_universal2
+321: cp33-abi3-macosx_10_16_arm64
+322: cp33-abi3-macosx_10_16_universal2
+323: cp33-abi3-macosx_10_15_arm64
+324: cp33-abi3-macosx_10_15_universal2
+325: cp33-abi3-macosx_10_14_arm64
+326: cp33-abi3-macosx_10_14_universal2
+327: cp33-abi3-macosx_10_13_arm64
+328: cp33-abi3-macosx_10_13_universal2
+329: cp33-abi3-macosx_10_12_arm64
+330: cp33-abi3-macosx_10_12_universal2
+331: cp33-abi3-macosx_10_11_arm64
+332: cp33-abi3-macosx_10_11_universal2
+333: cp33-abi3-macosx_10_10_arm64
+334: cp33-abi3-macosx_10_10_universal2
+335: cp33-abi3-macosx_10_9_arm64
+336: cp33-abi3-macosx_10_9_universal2
+337: cp33-abi3-macosx_10_8_arm64
+338: cp33-abi3-macosx_10_8_universal2
+339: cp33-abi3-macosx_10_7_arm64
+340: cp33-abi3-macosx_10_7_universal2
+341: cp33-abi3-macosx_10_6_arm64
+342: cp33-abi3-macosx_10_6_universal2
+343: cp33-abi3-macosx_10_5_arm64
+344: cp33-abi3-macosx_10_5_universal2
+345: cp33-abi3-macosx_10_4_arm64
+346: cp33-abi3-macosx_10_4_universal2
+347: cp33-abi3-any
+348: cp32-abi3-macosx_11_0_arm64
+349: cp32-abi3-macosx_11_0_universal2
+350: cp32-abi3-macosx_10_16_arm64
+351: cp32-abi3-macosx_10_16_universal2
+352: cp32-abi3-macosx_10_15_arm64
+353: cp32-abi3-macosx_10_15_universal2
+354: cp32-abi3-macosx_10_14_arm64
+355: cp32-abi3-macosx_10_14_universal2
+356: cp32-abi3-macosx_10_13_arm64
+357: cp32-abi3-macosx_10_13_universal2
+358: cp32-abi3-macosx_10_12_arm64
+359: cp32-abi3-macosx_10_12_universal2
+360: cp32-abi3-macosx_10_11_arm64
+361: cp32-abi3-macosx_10_11_universal2
+362: cp32-abi3-macosx_10_10_arm64
+363: cp32-abi3-macosx_10_10_universal2
+364: cp32-abi3-macosx_10_9_arm64
+365: cp32-abi3-macosx_10_9_universal2
+366: cp32-abi3-macosx_10_8_arm64
+367: cp32-abi3-macosx_10_8_universal2
+368: cp32-abi3-macosx_10_7_arm64
+369: cp32-abi3-macosx_10_7_universal2
+370: cp32-abi3-macosx_10_6_arm64
+371: cp32-abi3-macosx_10_6_universal2
+372: cp32-abi3-macosx_10_5_arm64
+373: cp32-abi3-macosx_10_5_universal2
+374: cp32-abi3-macosx_10_4_arm64
+375: cp32-abi3-macosx_10_4_universal2
+376: cp32-abi3-any
+377: py312-none-macosx_11_0_arm64
+378: py312-none-macosx_11_0_universal2
+379: py312-none-macosx_10_16_arm64
+380: py312-none-macosx_10_16_universal2
+381: py312-none-macosx_10_15_arm64
+382: py312-none-macosx_10_15_universal2
+383: py312-none-macosx_10_14_arm64
+384: py312-none-macosx_10_14_universal2
+385: py312-none-macosx_10_13_arm64
+386: py312-none-macosx_10_13_universal2
+387: py312-none-macosx_10_12_arm64
+388: py312-none-macosx_10_12_universal2
+389: py312-none-macosx_10_11_arm64
+390: py312-none-macosx_10_11_universal2
+391: py312-none-macosx_10_10_arm64
+392: py312-none-macosx_10_10_universal2
+393: py312-none-macosx_10_9_arm64
+394: py312-none-macosx_10_9_universal2
+395: py312-none-macosx_10_8_arm64
+396: py312-none-macosx_10_8_universal2
+397: py312-none-macosx_10_7_arm64
+398: py312-none-macosx_10_7_universal2
+399: py312-none-macosx_10_6_arm64
+400: py312-none-macosx_10_6_universal2
+401: py312-none-macosx_10_5_arm64
+402: py312-none-macosx_10_5_universal2
+403: py312-none-macosx_10_4_arm64
+404: py312-none-macosx_10_4_universal2
+405: py312-none-any
+406: py311-none-macosx_11_0_arm64
+407: py311-none-macosx_11_0_universal2
+408: py311-none-macosx_10_16_arm64
+409: py311-none-macosx_10_16_universal2
+410: py311-none-macosx_10_15_arm64
+411: py311-none-macosx_10_15_universal2
+412: py311-none-macosx_10_14_arm64
+413: py311-none-macosx_10_14_universal2
+414: py311-none-macosx_10_13_arm64
+415: py311-none-macosx_10_13_universal2
+416: py311-none-macosx_10_12_arm64
+417: py311-none-macosx_10_12_universal2
+418: py311-none-macosx_10_11_arm64
+419: py311-none-macosx_10_11_universal2
+420: py311-none-macosx_10_10_arm64
+421: py311-none-macosx_10_10_universal2
+422: py311-none-macosx_10_9_arm64
+423: py311-none-macosx_10_9_universal2
+424: py311-none-macosx_10_8_arm64
+425: py311-none-macosx_10_8_universal2
+426: py311-none-macosx_10_7_arm64
+427: py311-none-macosx_10_7_universal2
+428: py311-none-macosx_10_6_arm64
+429: py311-none-macosx_10_6_universal2
+430: py311-none-macosx_10_5_arm64
+431: py311-none-macosx_10_5_universal2
+432: py311-none-macosx_10_4_arm64
+433: py311-none-macosx_10_4_universal2
+434: py311-none-any
+435: py310-none-macosx_11_0_arm64
+436: py310-none-macosx_11_0_universal2
+437: py310-none-macosx_10_16_arm64
+438: py310-none-macosx_10_16_universal2
+439: py310-none-macosx_10_15_arm64
+440: py310-none-macosx_10_15_universal2
+441: py310-none-macosx_10_14_arm64
+442: py310-none-macosx_10_14_universal2
+443: py310-none-macosx_10_13_arm64
+444: py310-none-macosx_10_13_universal2
+445: py310-none-macosx_10_12_arm64
+446: py310-none-macosx_10_12_universal2
+447: py310-none-macosx_10_11_arm64
+448: py310-none-macosx_10_11_universal2
+449: py310-none-macosx_10_10_arm64
+450: py310-none-macosx_10_10_universal2
+451: py310-none-macosx_10_9_arm64
+452: py310-none-macosx_10_9_universal2
+453: py310-none-macosx_10_8_arm64
+454: py310-none-macosx_10_8_universal2
+455: py310-none-macosx_10_7_arm64
+456: py310-none-macosx_10_7_universal2
+457: py310-none-macosx_10_6_arm64
+458: py310-none-macosx_10_6_universal2
+459: py310-none-macosx_10_5_arm64
+460: py310-none-macosx_10_5_universal2
+461: py310-none-macosx_10_4_arm64
+462: py310-none-macosx_10_4_universal2
+463: py310-none-any
+464: py39-none-macosx_11_0_arm64
+465: py39-none-macosx_11_0_universal2
+466: py39-none-macosx_10_16_arm64
+467: py39-none-macosx_10_16_universal2
+468: py39-none-macosx_10_15_arm64
+469: py39-none-macosx_10_15_universal2
+470: py39-none-macosx_10_14_arm64
+471: py39-none-macosx_10_14_universal2
+472: py39-none-macosx_10_13_arm64
+473: py39-none-macosx_10_13_universal2
+474: py39-none-macosx_10_12_arm64
+475: py39-none-macosx_10_12_universal2
+476: py39-none-macosx_10_11_arm64
+477: py39-none-macosx_10_11_universal2
+478: py39-none-macosx_10_10_arm64
+479: py39-none-macosx_10_10_universal2
+480: py39-none-macosx_10_9_arm64
+481: py39-none-macosx_10_9_universal2
+482: py39-none-macosx_10_8_arm64
+483: py39-none-macosx_10_8_universal2
+484: py39-none-macosx_10_7_arm64
+485: py39-none-macosx_10_7_universal2
+486: py39-none-macosx_10_6_arm64
+487: py39-none-macosx_10_6_universal2
+488: py39-none-macosx_10_5_arm64
+489: py39-none-macosx_10_5_universal2
+490: py39-none-macosx_10_4_arm64
+491: py39-none-macosx_10_4_universal2
+492: py39-none-any
+493: py38-none-macosx_11_0_arm64
+494: py38-none-macosx_11_0_universal2
+495: py38-none-macosx_10_16_arm64
+496: py38-none-macosx_10_16_universal2
+497: py38-none-macosx_10_15_arm64
+498: py38-none-macosx_10_15_universal2
+499: py38-none-macosx_10_14_arm64
+500: py38-none-macosx_10_14_universal2
+501: py38-none-macosx_10_13_arm64
+502: py38-none-macosx_10_13_universal2
+503: py38-none-macosx_10_12_arm64
+504: py38-none-macosx_10_12_universal2
+505: py38-none-macosx_10_11_arm64
+506: py38-none-macosx_10_11_universal2
+507: py38-none-macosx_10_10_arm64
+508: py38-none-macosx_10_10_universal2
+509: py38-none-macosx_10_9_arm64
+510: py38-none-macosx_10_9_universal2
+511: py38-none-macosx_10_8_arm64
+512: py38-none-macosx_10_8_universal2
+513: py38-none-macosx_10_7_arm64
+514: py38-none-macosx_10_7_universal2
+515: py38-none-macosx_10_6_arm64
+516: py38-none-macosx_10_6_universal2
+517: py38-none-macosx_10_5_arm64
+518: py38-none-macosx_10_5_universal2
+519: py38-none-macosx_10_4_arm64
+520: py38-none-macosx_10_4_universal2
+521: py38-none-any
+522: py37-none-macosx_11_0_arm64
+523: py37-none-macosx_11_0_universal2
+524: py37-none-macosx_10_16_arm64
+525: py37-none-macosx_10_16_universal2
+526: py37-none-macosx_10_15_arm64
+527: py37-none-macosx_10_15_universal2
+528: py37-none-macosx_10_14_arm64
+529: py37-none-macosx_10_14_universal2
+530: py37-none-macosx_10_13_arm64
+531: py37-none-macosx_10_13_universal2
+532: py37-none-macosx_10_12_arm64
+533: py37-none-macosx_10_12_universal2
+534: py37-none-macosx_10_11_arm64
+535: py37-none-macosx_10_11_universal2
+536: py37-none-macosx_10_10_arm64
+537: py37-none-macosx_10_10_universal2
+538: py37-none-macosx_10_9_arm64
+539: py37-none-macosx_10_9_universal2
+540: py37-none-macosx_10_8_arm64
+541: py37-none-macosx_10_8_universal2
+542: py37-none-macosx_10_7_arm64
+543: py37-none-macosx_10_7_universal2
+544: py37-none-macosx_10_6_arm64
+545: py37-none-macosx_10_6_universal2
+546: py37-none-macosx_10_5_arm64
+547: py37-none-macosx_10_5_universal2
+548: py37-none-macosx_10_4_arm64
+549: py37-none-macosx_10_4_universal2
+550: py37-none-any
+551: py36-none-macosx_11_0_arm64
+552: py36-none-macosx_11_0_universal2
+553: py36-none-macosx_10_16_arm64
+554: py36-none-macosx_10_16_universal2
+555: py36-none-macosx_10_15_arm64
+556: py36-none-macosx_10_15_universal2
+557: py36-none-macosx_10_14_arm64
+558: py36-none-macosx_10_14_universal2
+559: py36-none-macosx_10_13_arm64
+560: py36-none-macosx_10_13_universal2
+561: py36-none-macosx_10_12_arm64
+562: py36-none-macosx_10_12_universal2
+563: py36-none-macosx_10_11_arm64
+564: py36-none-macosx_10_11_universal2
+565: py36-none-macosx_10_10_arm64
+566: py36-none-macosx_10_10_universal2
+567: py36-none-macosx_10_9_arm64
+568: py36-none-macosx_10_9_universal2
+569: py36-none-macosx_10_8_arm64
+570: py36-none-macosx_10_8_universal2
+571: py36-none-macosx_10_7_arm64
+572: py36-none-macosx_10_7_universal2
+573: py36-none-macosx_10_6_arm64
+574: py36-none-macosx_10_6_universal2
+575: py36-none-macosx_10_5_arm64
+576: py36-none-macosx_10_5_universal2
+577: py36-none-macosx_10_4_arm64
+578: py36-none-macosx_10_4_universal2
+579: py36-none-any
+580: py35-none-macosx_11_0_arm64
+581: py35-none-macosx_11_0_universal2
+582: py35-none-macosx_10_16_arm64
+583: py35-none-macosx_10_16_universal2
+584: py35-none-macosx_10_15_arm64
+585: py35-none-macosx_10_15_universal2
+586: py35-none-macosx_10_14_arm64
+587: py35-none-macosx_10_14_universal2
+588: py35-none-macosx_10_13_arm64
+589: py35-none-macosx_10_13_universal2
+590: py35-none-macosx_10_12_arm64
+591: py35-none-macosx_10_12_universal2
+592: py35-none-macosx_10_11_arm64
+593: py35-none-macosx_10_11_universal2
+594: py35-none-macosx_10_10_arm64
+595: py35-none-macosx_10_10_universal2
+596: py35-none-macosx_10_9_arm64
+597: py35-none-macosx_10_9_universal2
+598: py35-none-macosx_10_8_arm64
+599: py35-none-macosx_10_8_universal2
+600: py35-none-macosx_10_7_arm64
+601: py35-none-macosx_10_7_universal2
+602: py35-none-macosx_10_6_arm64
+603: py35-none-macosx_10_6_universal2
+604: py35-none-macosx_10_5_arm64
+605: py35-none-macosx_10_5_universal2
+606: py35-none-macosx_10_4_arm64
+607: py35-none-macosx_10_4_universal2
+608: py35-none-any
+609: py34-none-macosx_11_0_arm64
+610: py34-none-macosx_11_0_universal2
+611: py34-none-macosx_10_16_arm64
+612: py34-none-macosx_10_16_universal2
+613: py34-none-macosx_10_15_arm64
+614: py34-none-macosx_10_15_universal2
+615: py34-none-macosx_10_14_arm64
+616: py34-none-macosx_10_14_universal2
+617: py34-none-macosx_10_13_arm64
+618: py34-none-macosx_10_13_universal2
+619: py34-none-macosx_10_12_arm64
+620: py34-none-macosx_10_12_universal2
+621: py34-none-macosx_10_11_arm64
+622: py34-none-macosx_10_11_universal2
+623: py34-none-macosx_10_10_arm64
+624: py34-none-macosx_10_10_universal2
+625: py34-none-macosx_10_9_arm64
+626: py34-none-macosx_10_9_universal2
+627: py34-none-macosx_10_8_arm64
+628: py34-none-macosx_10_8_universal2
+629: py34-none-macosx_10_7_arm64
+630: py34-none-macosx_10_7_universal2
+631: py34-none-macosx_10_6_arm64
+632: py34-none-macosx_10_6_universal2
+633: py34-none-macosx_10_5_arm64
+634: py34-none-macosx_10_5_universal2
+635: py34-none-macosx_10_4_arm64
+636: py34-none-macosx_10_4_universal2
+637: py34-none-any
+638: py33-none-macosx_11_0_arm64
+639: py33-none-macosx_11_0_universal2
+640: py33-none-macosx_10_16_arm64
+641: py33-none-macosx_10_16_universal2
+642: py33-none-macosx_10_15_arm64
+643: py33-none-macosx_10_15_universal2
+644: py33-none-macosx_10_14_arm64
+645: py33-none-macosx_10_14_universal2
+646: py33-none-macosx_10_13_arm64
+647: py33-none-macosx_10_13_universal2
+648: py33-none-macosx_10_12_arm64
+649: py33-none-macosx_10_12_universal2
+650: py33-none-macosx_10_11_arm64
+651: py33-none-macosx_10_11_universal2
+652: py33-none-macosx_10_10_arm64
+653: py33-none-macosx_10_10_universal2
+654: py33-none-macosx_10_9_arm64
+655: py33-none-macosx_10_9_universal2
+656: py33-none-macosx_10_8_arm64
+657: py33-none-macosx_10_8_universal2
+658: py33-none-macosx_10_7_arm64
+659: py33-none-macosx_10_7_universal2
+660: py33-none-macosx_10_6_arm64
+661: py33-none-macosx_10_6_universal2
+662: py33-none-macosx_10_5_arm64
+663: py33-none-macosx_10_5_universal2
+664: py33-none-macosx_10_4_arm64
+665: py33-none-macosx_10_4_universal2
+666: py33-none-any
+667: py32-none-macosx_11_0_arm64
+668: py32-none-macosx_11_0_universal2
+669: py32-none-macosx_10_16_arm64
+670: py32-none-macosx_10_16_universal2
+671: py32-none-macosx_10_15_arm64
+672: py32-none-macosx_10_15_universal2
+673: py32-none-macosx_10_14_arm64
+674: py32-none-macosx_10_14_universal2
+675: py32-none-macosx_10_13_arm64
+676: py32-none-macosx_10_13_universal2
+677: py32-none-macosx_10_12_arm64
+678: py32-none-macosx_10_12_universal2
+679: py32-none-macosx_10_11_arm64
+680: py32-none-macosx_10_11_universal2
+681: py32-none-macosx_10_10_arm64
+682: py32-none-macosx_10_10_universal2
+683: py32-none-macosx_10_9_arm64
+684: py32-none-macosx_10_9_universal2
+685: py32-none-macosx_10_8_arm64
+686: py32-none-macosx_10_8_universal2
+687: py32-none-macosx_10_7_arm64
+688: py32-none-macosx_10_7_universal2
+689: py32-none-macosx_10_6_arm64
+690: py32-none-macosx_10_6_universal2
+691: py32-none-macosx_10_5_arm64
+692: py32-none-macosx_10_5_universal2
+693: py32-none-macosx_10_4_arm64
+694: py32-none-macosx_10_4_universal2
+695: py32-none-any
+696: py31-none-macosx_11_0_arm64
+697: py31-none-macosx_11_0_universal2
+698: py31-none-macosx_10_16_arm64
+699: py31-none-macosx_10_16_universal2
+700: py31-none-macosx_10_15_arm64
+701: py31-none-macosx_10_15_universal2
+702: py31-none-macosx_10_14_arm64
+703: py31-none-macosx_10_14_universal2
+704: py31-none-macosx_10_13_arm64
+705: py31-none-macosx_10_13_universal2
+706: py31-none-macosx_10_12_arm64
+707: py31-none-macosx_10_12_universal2
+708: py31-none-macosx_10_11_arm64
+709: py31-none-macosx_10_11_universal2
+710: py31-none-macosx_10_10_arm64
+711: py31-none-macosx_10_10_universal2
+712: py31-none-macosx_10_9_arm64
+713: py31-none-macosx_10_9_universal2
+714: py31-none-macosx_10_8_arm64
+715: py31-none-macosx_10_8_universal2
+716: py31-none-macosx_10_7_arm64
+717: py31-none-macosx_10_7_universal2
+718: py31-none-macosx_10_6_arm64
+719: py31-none-macosx_10_6_universal2
+720: py31-none-macosx_10_5_arm64
+721: py31-none-macosx_10_5_universal2
+722: py31-none-macosx_10_4_arm64
+723: py31-none-macosx_10_4_universal2
+724: py31-none-any
+725: py30-none-macosx_11_0_arm64
+726: py30-none-macosx_11_0_universal2
+727: py30-none-macosx_10_16_arm64
+728: py30-none-macosx_10_16_universal2
+729: py30-none-macosx_10_15_arm64
+730: py30-none-macosx_10_15_universal2
+731: py30-none-macosx_10_14_arm64
+732: py30-none-macosx_10_14_universal2
+733: py30-none-macosx_10_13_arm64
+734: py30-none-macosx_10_13_universal2
+735: py30-none-macosx_10_12_arm64
+736: py30-none-macosx_10_12_universal2
+737: py30-none-macosx_10_11_arm64
+738: py30-none-macosx_10_11_universal2
+739: py30-none-macosx_10_10_arm64
+740: py30-none-macosx_10_10_universal2
+741: py30-none-macosx_10_9_arm64
+742: py30-none-macosx_10_9_universal2
+743: py30-none-macosx_10_8_arm64
+744: py30-none-macosx_10_8_universal2
+745: py30-none-macosx_10_7_arm64
+746: py30-none-macosx_10_7_universal2
+747: py30-none-macosx_10_6_arm64
+748: py30-none-macosx_10_6_universal2
+749: py30-none-macosx_10_5_arm64
+750: py30-none-macosx_10_5_universal2
+751: py30-none-macosx_10_4_arm64
+752: py30-none-macosx_10_4_universal2
+753: py30-none-any
+754: py3-none-macosx_11_0_arm64
+755: py3-none-macosx_11_0_universal2
+756: py3-none-macosx_10_16_arm64
+757: py3-none-macosx_10_16_universal2
+758: py3-none-macosx_10_15_arm64
+759: py3-none-macosx_10_15_universal2
+760: py3-none-macosx_10_14_arm64
+761: py3-none-macosx_10_14_universal2
+762: py3-none-macosx_10_13_arm64
+763: py3-none-macosx_10_13_universal2
+764: py3-none-macosx_10_12_arm64
+765: py3-none-macosx_10_12_universal2
+766: py3-none-macosx_10_11_arm64
+767: py3-none-macosx_10_11_universal2
+768: py3-none-macosx_10_10_arm64
+769: py3-none-macosx_10_10_universal2
+770: py3-none-macosx_10_9_arm64
+771: py3-none-macosx_10_9_universal2
+772: py3-none-macosx_10_8_arm64
+773: py3-none-macosx_10_8_universal2
+774: py3-none-macosx_10_7_arm64
+775: py3-none-macosx_10_7_universal2
+776: py3-none-macosx_10_6_arm64
+777: py3-none-macosx_10_6_universal2
+778: py3-none-macosx_10_5_arm64
+779: py3-none-macosx_10_5_universal2
+780: py3-none-macosx_10_4_arm64
+781: py3-none-macosx_10_4_universal2
+782: py3-none-any
