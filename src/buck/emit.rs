@@ -461,4 +461,128 @@ mod tests {
         );
         assert!(msg.contains("S5"), "error must point at S5: {}", msg);
     }
+
+    #[test]
+    fn build_emit_input_errors_on_dep_mismatch() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::{MarkerTree, PackageName};
+        use std::str::FromStr;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 11), PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+
+        // First-party root with a normal dep on `parent`.
+        let app = Package {
+            name: PackageName::from_str("app").unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            source: Source::FirstParty {
+                kind: FirstPartyKind::Virtual,
+                path: ".".into(),
+            },
+            dependencies: vec![DepEdge {
+                name: PackageName::from_str("parent").unwrap(),
+                extra: vec![],
+                marker: None,
+            }],
+            sdist: None,
+            wheels: vec![],
+            metadata: None,
+        };
+
+        // `parent` has a marker-gated dep on `child` that fires only for py<3.12.
+        // Result: parent's resolved deps differ across py3.11 vs py3.12 cells,
+        // which the composer's cross-cell equality check must reject.
+        let parent_marker = MarkerTree::from_str("python_version < '3.12'").expect("parse marker");
+        let parent = Package {
+            name: PackageName::from_str("parent").unwrap(),
+            version: Version::from_str("1.0.0").unwrap(),
+            source: Source::Registry {
+                url: Url::parse("https://pypi.org/simple").unwrap(),
+            },
+            dependencies: vec![DepEdge {
+                name: PackageName::from_str("child").unwrap(),
+                extra: vec![],
+                marker: Some(parent_marker),
+            }],
+            sdist: None,
+            wheels: vec![Wheel {
+                url: Url::parse("https://example.com/parent-1.0.0-py3-none-any.whl").unwrap(),
+                hash: "sha256:pppp".into(),
+                size: None,
+                filename: "parent-1.0.0-py3-none-any.whl".into(),
+            }],
+            metadata: None,
+        };
+
+        let child = Package {
+            name: PackageName::from_str("child").unwrap(),
+            version: Version::from_str("1.0.0").unwrap(),
+            source: Source::Registry {
+                url: Url::parse("https://pypi.org/simple").unwrap(),
+            },
+            dependencies: vec![],
+            sdist: None,
+            wheels: vec![Wheel {
+                url: Url::parse("https://example.com/child-1.0.0-py3-none-any.whl").unwrap(),
+                hash: "sha256:cccc".into(),
+                size: None,
+                filename: "child-1.0.0-py3-none-any.whl".into(),
+            }],
+            metadata: None,
+        };
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.11".into(),
+            packages: vec![app, parent, child],
+        };
+
+        let err = build_emit_input(&config, &tree, &lockfile)
+            .expect_err("should fail on cross-cell dep mismatch");
+        let msg = format!("{:#}", err);
+        // Error must name the package whose deps differ:
+        assert!(
+            msg.contains("parent"),
+            "error must name the package: {}",
+            msg
+        );
+        // Both cells named:
+        assert!(
+            msg.contains("py311") || msg.contains("3.11"),
+            "error must name py3.11 cell: {}",
+            msg
+        );
+        assert!(
+            msg.contains("py312") || msg.contains("3.12"),
+            "error must name py3.12 cell: {}",
+            msg
+        );
+        // S4 reference:
+        assert!(msg.contains("S4"), "error must point at S4: {}", msg);
+    }
 }
