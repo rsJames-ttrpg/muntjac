@@ -24,7 +24,7 @@ pub fn pick_wheel<'a>(wheels: &'a [Wheel], compat: &CompatibleTags) -> PickResul
         };
         for tag in &parsed.tags {
             if let Some(rank) = compat.rank_of(tag) {
-                let improves = best.as_ref().map_or(true, |(r, _, _)| rank < *r);
+                let improves = best.as_ref().is_none_or(|(r, _, _)| rank < *r);
                 if improves {
                     best = Some((rank, tag.clone(), wheel));
                 }

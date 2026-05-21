@@ -31,6 +31,10 @@ impl CompatibleTags {
     pub fn len(&self) -> usize {
         self.ordered.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.ordered.is_empty()
+    }
 }
 
 pub(crate) fn build_python_axis(py: PythonVersion) -> Vec<(PythonTag, AbiTag)> {
