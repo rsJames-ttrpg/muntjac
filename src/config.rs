@@ -157,6 +157,7 @@ struct RawConfig {
     manifest_path: Option<PathBuf>,
     third_party_dir: Option<PathBuf>,
     python_versions: Option<Vec<PythonVersion>>,
+    #[serde(default)]
     platforms: BTreeMap<String, Platform>,
     #[serde(default)]
     fixups: FixupsConfig,
@@ -225,6 +226,10 @@ impl Config {
                 python_versions,
             }]
         };
+
+        if raw.platforms.is_empty() {
+            return Err(crate::error::ConfigError::MissingField("platforms"));
+        }
 
         Ok(Config {
             trees,
@@ -710,6 +715,17 @@ include_groups = ["test", "test", "docs"]
 "#;
         let config = Config::from_str(toml_str).expect("parse");
         assert_eq!(config.lockfile.include_groups, vec!["test".to_string(), "docs".to_string()]);
+    }
+
+    #[test]
+    fn missing_platforms_table_produces_clear_error() {
+        let toml_str = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+"#;
+        let err = Config::from_str(toml_str).expect_err("should fail");
+        assert!(matches!(err, crate::error::ConfigError::MissingField("platforms")));
     }
 
     #[test]
