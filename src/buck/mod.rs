@@ -4,5 +4,7 @@
 //! for the design.
 
 pub mod emit;
+pub mod string_writer;
 
 pub use emit::{BuckEmitter, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel};
+pub use string_writer::StringTemplateEmitter;
