@@ -1,0 +1,4 @@
+third-party/
+buck-out/
+.buckd/
+.venv/

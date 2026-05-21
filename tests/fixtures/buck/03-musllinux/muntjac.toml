@@ -1,0 +1,14 @@
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+
+[platforms]
+linux-x86_64-musl = { target = "x86_64-unknown-linux-musl", musllinux = "1_2" }
+
+[fixups]
+registry              = "none"
+allow_local_overrides = false
+
+[buck]
+file_name = "BUCK"
+vendor    = false
