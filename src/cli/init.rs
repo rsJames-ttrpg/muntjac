@@ -7,6 +7,13 @@ use std::path::{Path, PathBuf};
 use crate::cli::Globals;
 use crate::config::PythonVersion;
 
+/// The minimum Python minor version muntjac supports for new projects.
+/// Requires-python constraints below 3.X for X < MIN_SUPPORTED_PY_MINOR are
+/// clamped to this floor in `expand_requires_python`. Muntjac's MVP does not
+/// validate against 3.10 or earlier; raise this constant only after CI runs
+/// against the new minimum.
+pub(crate) const MIN_SUPPORTED_PY_MINOR: u8 = 11;
+
 const LATEST_KNOWN_STABLE_PY: u8 = 13;
 
 #[derive(Args, Debug)]
@@ -192,9 +199,13 @@ fn extract_python_versions(toml_src: &str) -> Vec<PythonVersion> {
     vec![PythonVersion(3, 12)]
 }
 
+/// Expand a `requires-python` constraint into a concrete list of Python
+/// (major, minor) versions. Constraints below MIN_SUPPORTED_PY_MINOR (3.11)
+/// are silently clamped — muntjac does not support Python 3.10 or earlier
+/// for new projects.
 pub fn expand_requires_python(spec: &str) -> Result<Vec<PythonVersion>> {
     // Very small subset: ">=X.Y", ">=X.Y,<X.Z", "==X.Y.*", "==X.Y".
-    let mut min_minor: u8 = 11; // muntjac MVP floor
+    let mut min_minor: u8 = MIN_SUPPORTED_PY_MINOR;
     let mut max_minor: u8 = LATEST_KNOWN_STABLE_PY;
     for part in spec.split(',') {
         let part = part.trim();
