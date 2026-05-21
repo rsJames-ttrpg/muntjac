@@ -1,0 +1,6 @@
+python_binary(
+    name = "numpy_demo",
+    main = "demo.py",
+    modifiers = ["//third-party/python/config:py312"],
+    deps = ["//third-party/python:numpy"],
+)

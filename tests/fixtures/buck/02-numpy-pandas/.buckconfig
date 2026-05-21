@@ -21,4 +21,4 @@
   execution_platforms = prelude//platforms:default
 
 [project]
-  ignore = .git, prelude/.git, third-party
+  ignore = .git, prelude/.git
