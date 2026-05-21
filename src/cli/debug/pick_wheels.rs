@@ -168,10 +168,15 @@ fn build_tree_output(
                     rank,
                     wheels_considered: wheels.len(),
                 },
-                PickResult::NoWheel => SelectionOutcome::NoWheel {
-                    wheels_considered: wheels.len(),
-                    wheels: wheels.iter().map(|w| w.filename.clone()).collect(),
-                },
+                PickResult::NoWheel => {
+                    let mut filenames: Vec<String> =
+                        wheels.iter().map(|w| w.filename.clone()).collect();
+                    filenames.sort();
+                    SelectionOutcome::NoWheel {
+                        wheels_considered: wheels.len(),
+                        wheels: filenames,
+                    }
+                }
             };
 
             selections.push(Selection {
