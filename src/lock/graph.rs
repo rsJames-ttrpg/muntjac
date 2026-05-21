@@ -104,10 +104,40 @@ pub fn reachable_from(
         .collect()
 }
 
-/// Like `reachable_from` but also returns the set of activated extras for each
-/// visited node. PEP 508 request-side extras (e.g. `httpx[http2]`) activate
-/// extras only on the target node; PEP 735 include_groups are active on every
-/// node.
+/// Computes the set of reachable nodes for a given `(platform, python_version)`,
+/// activating extras either globally (from `include_groups`) or per-target node.
+///
+/// ## Two asymmetric extras sources
+///
+/// 1. **`include_groups` (global, every-node):** dependency-groups declared in
+///    `muntjac.toml`'s `[lockfile] include_groups` apply to EVERY node in the
+///    graph. A `tool.uv.dev-dependencies` group named `"test"` becomes a global
+///    activation: every package's `[package.dev-dependencies.test]` edges fire.
+///
+/// 2. **`DepEdge.extra` (target-side, per-node):** when a package `A` depends on
+///    `B[extra]`, the `[extra]` activation lives on `B`'s outgoing edges, not on
+///    `A`'s. `A` doesn't gain anything from declaring the extra; only `B`'s
+///    `[package.optional-dependencies.extra]` edges activate.
+///
+/// ## Worked example
+///
+/// Suppose `muntjac.toml` has `include_groups = ["test"]`, and the graph has:
+///
+/// ```text
+/// app  ──> requests[security]
+/// app  ──> pytest    (gated by `extra == 'test'` marker)
+/// requests ──> certifi
+/// requests ──> chardet    (gated by `extra == 'security'`)
+/// pytest   ──> iniconfig
+/// ```
+///
+/// `reachable_with_extras` activates:
+/// - `app` → `requests`, `pytest` (the latter because `test` is global)
+/// - `requests` → `certifi`, `chardet` (the latter because `app` requested `security`)
+/// - `pytest` → `iniconfig`
+///
+/// Note that `app`'s `[package.dev-dependencies.test]` edges fire (global), but
+/// `app` doesn't get `security`-gated edges of its own from declaring `requests[security]`.
 pub fn reachable_with_extras(
     graph: &DepGraph,
     roots: &[NodeId],

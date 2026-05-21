@@ -30,6 +30,15 @@ pub fn marker_env(platform: &Platform, python: PythonVersion) -> MarkerEnvironme
     .expect("constructed MarkerEnvironment values are valid")
 }
 
+/// Evaluate a PEP 508 marker against a target environment.
+///
+/// This is the canonical helper for *non-edge* marker checks — e.g. checking
+/// `requires-python` constraints, or evaluating markers that don't come from a
+/// dependency edge. For the common case of "should we follow this dep edge?",
+/// use `graph::edge_applies()` instead, which composes `marker_matches` with
+/// extras-aware logic specific to dep edges.
+///
+/// Returns `true` if the marker is absent (universal applicability).
 pub fn marker_matches(marker: Option<&MarkerTree>, env: &MarkerEnvironment) -> bool {
     match marker {
         None => true,
