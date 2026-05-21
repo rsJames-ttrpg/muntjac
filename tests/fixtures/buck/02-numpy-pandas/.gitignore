@@ -1,0 +1,9 @@
+# muntjac-generated; reproduced by `cargo run -- buckify`
+third-party/
+
+# buck2 build outputs (local + CI)
+buck-out/
+.buckd/
+
+# uv's venv if developer creates one
+.venv/
