@@ -822,7 +822,9 @@ mod tests {
         // Wheel hits both cells; deps agree (empty) -> Uniform.
         assert_eq!(pkg.wheels.len(), 2);
         match &pkg.deps {
-            EmitDeps::Uniform(v) => assert!(v.is_empty(), "expected empty uniform deps, got {:?}", v),
+            EmitDeps::Uniform(v) => {
+                assert!(v.is_empty(), "expected empty uniform deps, got {:?}", v)
+            }
             EmitDeps::PerCell(m) => panic!("expected Uniform, got PerCell({:?})", m),
         }
     }
