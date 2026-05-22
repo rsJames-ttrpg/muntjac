@@ -4,7 +4,7 @@
 
 **Goal:** Promote the S3 single-platform BUCK emitter to a multi-platform (3 platforms × 2 pythons) emitter that produces working `buck2 build`+`run` against a real numpy demo on three CI runners.
 
-**Architecture:** Extends `src/buck/emit.rs` with an `EmitDeps` enum (Uniform | PerCell) so cell-varying deps render as `deps = select({...})` instead of erroring. Generated `PACKAGE` gains `set_cfg_modifiers` wiring for host OS+CPU; python version is documented as a user-side `modifiers = [...]` attr. CI installs `buck2`, regenerates the `02-numpy-pandas` fixture, and runs an in-fixture `python_binary` that imports numpy. Folds in three tech-debt items: `LockfileError::BadUrl`, iterative Tarjan SCC, and a design-spec edit lifting the free-threaded Python non-goal.
+**Architecture:** Extends `src/buck/emit.rs` with an `EmitDeps` enum (Uniform | PerCell) so cell-varying deps render as `deps = select({...})` instead of erroring. Emitter writes a new `<third_party_dir>/wiring.bzl` exporting `setup_muntjac()` (registers `set_cfg_constructor` + binds host OS+CPU via `set_cfg_modifiers`); users invoke it once from their root PACKAGE. Python version stays user-side (per-binary `modifiers = [...]` attr). The S3 `<third_party_dir>/PACKAGE` is no longer emitted (PACKAGE modifiers don't propagate to deps — validated by the spike). CI installs cp312 + `buck2`, regenerates the `02-numpy-pandas` fixture, and runs an in-fixture `python_binary` that imports numpy. Folds in three tech-debt items: `LockfileError::BadUrl`, iterative Tarjan SCC, and a design-spec edit lifting the free-threaded Python non-goal.
 
 **Tech Stack:** Rust 2024 (existing), `anyhow` for handler errors, `insta` for snapshot tests, `tempfile` + `assert_cmd` for integration tests. Buck2 (binary install) for CI smoke. GitHub Actions matrix on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`.
 
@@ -23,25 +23,31 @@
 | `tests/fixtures/buck/02-numpy-pandas/tests/smoke/BUCK` | Hand-written `python_binary` with `modifiers = ["//third-party/python/config:py312"]`. |
 | `tests/fixtures/buck/02-numpy-pandas/tests/smoke/demo.py` | `import numpy as np; arr=np.zeros(3); print(arr); assert arr.shape==(3,)`. |
 | `tests/fixtures/buck/02-numpy-pandas/expected/BUCK` | Golden output (one `pypi_package` per resolved package). |
-| `tests/fixtures/buck/02-numpy-pandas/expected/muntjac.bzl` | Golden with 6-cell `_CONFIGS` + python-axis wiring header. |
-| `tests/fixtures/buck/02-numpy-pandas/expected/PACKAGE` | Golden with host-axis `set_cfg_modifiers`. |
-| `tests/fixtures/buck/02-numpy-pandas/expected/config/BUCK` | Golden with 5 constraint_values + 6 config_settings. |
+| `tests/fixtures/buck/02-numpy-pandas/expected/muntjac.bzl` | Golden: header documenting setup_muntjac contract + `_CONFIGS` (6 cells) + macro body using `native.<rule>` + `if/fail` form. |
+| `tests/fixtures/buck/02-numpy-pandas/expected/wiring.bzl` | Golden: `setup_muntjac()` registering cfg_constructor + host-axis `set_cfg_modifiers` with `_type` discriminators + fully-qualified `root//.../prelude//...` targets. |
+| `tests/fixtures/buck/02-numpy-pandas/expected/config/BUCK` | Golden: 2 py + 3 platform constraint_values + 6 config_settings, all `visibility = ["PUBLIC"]`. |
+| `tests/fixtures/buck/02-numpy-pandas/PACKAGE` | Hand-written fixture root PACKAGE: `load(...); setup_muntjac()`. Worked example. |
+| `tests/fixtures/buck/02-numpy-pandas/toolchains/BUCK` | Hand-written: `system_python_bootstrap_toolchain` + `system_python_toolchain` + `system_cxx_toolchain`. |
 | `tests/fixtures/buck/03-musllinux/muntjac.toml` | 1-platform (`linux-x86_64-musl`) × 1-python (3.12) config. |
 | `tests/fixtures/buck/03-musllinux/pyproject.toml` | Workspace root with one dep that publishes musllinux wheels. |
 | `tests/fixtures/buck/03-musllinux/uv.lock` | Frozen. |
-| `tests/fixtures/buck/03-musllinux/expected/*` | Golden output asserting `*musllinux*` in wheel URL. |
+| `tests/fixtures/buck/03-musllinux/expected/*` | Golden output asserting `*musllinux*` in wheel URL; wiring.bzl has empty host-axis dict (musl has no first-class prelude OS constraint). |
 
 **Modified files:**
 
 | Path | Change |
 |---|---|
 | `src/buck/emit.rs` | Add `EmitDeps` enum; change `EmitPackage::deps` type; replace `bail!()` at L184 with collapse-uniform logic; update unit tests. |
-| `src/buck/string_writer.rs` | Render `deps = select({...})` for `PerCell`; render `deps = [...]` for `Uniform`; extend muntjac.bzl with python-axis wiring header; render real PACKAGE with `set_cfg_modifiers`; extend config/BUCK for multi-platform. |
+| `src/buck/emit.rs` | Rename `EmitOutput::package_file` → `wiring_bzl`. (Plus EmitDeps enum + bail!() drop noted above.) |
+| `src/buck/string_writer.rs` | Render `deps = select({...})` for `PerCell`; render `deps = [...]` for `Uniform`; rewrite muntjac.bzl (header + native.* + if/fail); render wiring.bzl with setup_muntjac(); extend config/BUCK for multi-platform with PUBLIC visibility. |
+| `src/buck/write.rs` | Write `<third_party_dir>/wiring.bzl` instead of `<third_party_dir>/PACKAGE`. |
 | `src/error.rs` | New `LockfileError::BadUrl` variant. |
 | `src/lock/parser.rs` | Migrate sdist/wheel/git URL parse failures from `BadVersion` → `BadUrl`. Update tests. |
 | `src/lock/graph.rs` | Convert `strongconnect` from recursive to iterative. |
-| `tests/fixtures/buck/01-pure-python/expected/PACKAGE` | Regenerate for new auto-wiring shape. |
-| `tests/fixtures/buck/01-pure-python/expected/config/BUCK` | Regenerate if host-axis constraint_values are added. |
+| `tests/fixtures/buck/01-pure-python/expected/PACKAGE` | Delete (no longer emitted). |
+| `tests/fixtures/buck/01-pure-python/expected/wiring.bzl` | New: single-platform setup_muntjac. |
+| `tests/fixtures/buck/01-pure-python/expected/muntjac.bzl` | Regenerate: header + native.* + if/fail. |
+| `tests/fixtures/buck/01-pure-python/expected/config/BUCK` | Regenerate: visibility=PUBLIC + new constraint_values if not previously declared. |
 | `tests/buckify.rs` | Add `fixture_02_numpy_pandas_golden` + `fixture_03_musllinux_golden` integration tests. |
 | `tests/fixtures/buck/README.md` | Append paragraph on multi-cell fixture convention. |
 | `.github/workflows/ci.yml` | Add buck2 install step + muntjac buckify + buck2 run smoke step on all three matrix runners. |
@@ -1393,19 +1399,33 @@ tests cover both Uniform and PerCell rendering."
 
 ---
 
-### Task 11: Render python-axis wiring header in `muntjac.bzl`
+### Task 11: Update `muntjac.bzl` — header + native.* fix + replace expect()
 
 **Files:**
 - Modify: `src/buck/string_writer.rs`
 
-The header is a comment block above the existing `_CONFIGS` declaration. It needs to dynamically reflect the tree's `python_versions` (e.g. "Available muntjac python constraints: py311, py312").
+Three changes to the emitted `muntjac.bzl`:
 
-- [ ] **Step 1: Write a failing snapshot test**
+1. **Header comment block** documenting the wiring contract (`setup_muntjac()` + per-binary `modifiers`).
+2. **`native.<rule>` form** for the native rules in the macro body (`native.http_file`, `native.prebuilt_python_library`, `native.alias`). The S3 emitter used bare names + phantom `load()` lines that wouldn't have loaded under buck2 — the spike caught this.
+3. **Replace `expect(set(wheels.keys()).issubset(set(_CONFIGS)))`** with `if unknown: fail(...)`. The `expect()` helper from `@prelude//utils:expect.bzl` takes a `bool`, and the set/issubset comparison in Starlark is awkward; the explicit check is clearer and what the spike validated.
+
+The exact validated shape is at `docs/superpowers/scratch-s4-spike.md` (§"Validated `muntjac.bzl`"). Read that before writing code.
+
+- [ ] **Step 1: Read the validated macro body**
+
+```bash
+grep -A 50 "^## Validated \`muntjac.bzl\`" docs/superpowers/scratch-s4-spike.md
+```
+
+Use this as the target shape (modulo the `<third_party_dir>` substitution and dynamic constraint list rendering).
+
+- [ ] **Step 2: Write a failing snapshot test**
 
 ```rust
 #[test]
-fn muntjac_bzl_has_python_axis_wiring_header() {
-    use crate::buck::emit::{EmitDeps, EmitInput, ConfigName};
+fn muntjac_bzl_emits_full_macro_with_header() {
+    use crate::buck::emit::{EmitInput, ConfigName};
 
     let input = EmitInput {
         tree: "default".into(),
@@ -1418,120 +1438,247 @@ fn muntjac_bzl_has_python_axis_wiring_header() {
     };
 
     let out = StringTemplateEmitter.emit(&input);
-    insta::assert_snapshot!("muntjac_bzl_with_header", out.muntjac_bzl);
+    insta::assert_snapshot!("muntjac_bzl_with_header_and_native", out.muntjac_bzl);
 }
 ```
 
-- [ ] **Step 2: Run — verify (snapshot will not exist)**
+(Replace any earlier muntjac.bzl snapshot test with this one; we're combining concerns to keep a single canonical snapshot.)
+
+- [ ] **Step 3: Run — verify fails**
 
 ```bash
-cargo test --lib buck::string_writer::tests::muntjac_bzl_has_python_axis_wiring_header 2>&1 | tail -5
+cargo test --lib buck::string_writer::tests::muntjac_bzl_emits_full_macro_with_header 2>&1 | tail -5
 ```
 
-Expected: FAIL with snapshot missing.
+Expected: FAIL — snapshot missing OR doesn't match.
 
-- [ ] **Step 3: Implement the header rendering**
+- [ ] **Step 4: Rewrite the muntjac.bzl writer**
 
-In the function that produces `muntjac.bzl` (search `string_writer.rs` for `_CONFIGS` or `muntjac_bzl`), prepend a header block before the existing body:
+Find the existing `write_muntjac_bzl` (or equivalent). Replace its body with the new shape covering all three concerns:
 
 ```rust
 fn write_muntjac_bzl(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Error> {
+    let tpd = &input.third_party_dir;
+
+    // Header
     writeln!(buf, "##")?;
     writeln!(buf, "## @generated by muntjac")?;
     writeln!(buf, "##")?;
     writeln!(buf, "## Wiring contract for consumers:")?;
     writeln!(buf, "##")?;
-    writeln!(buf, "##   Host OS + CPU is auto-wired in <third_party_dir>/PACKAGE. To pick a")?;
-    writeln!(buf, "##   python version, set a per-binary modifier or a root-PACKAGE default:")?;
+    writeln!(buf, "##   One-time project setup — add to your root PACKAGE:")?;
+    writeln!(buf, "##")?;
+    writeln!(buf, "##     load(\"//{}:wiring.bzl\", \"setup_muntjac\")", tpd)?;
+    writeln!(buf, "##     setup_muntjac()")?;
+    writeln!(buf, "##")?;
+    writeln!(buf, "##   This registers buck2's cfg_constructor and auto-routes the host")?;
+    writeln!(buf, "##   OS+CPU to the matching muntjac platform constraint.")?;
+    writeln!(buf, "##")?;
+    writeln!(buf, "##   To pick a python version, set a per-binary modifier or a")?;
+    writeln!(buf, "##   root-PACKAGE default:")?;
     writeln!(buf, "##")?;
     writeln!(buf, "##     # per-binary")?;
     writeln!(buf, "##     python_binary(")?;
     writeln!(buf, "##         name = \"service\",")?;
-    writeln!(buf, "##         modifiers = [\"//{}/config:py312\"],", input.third_party_dir)?;
-    writeln!(buf, "##         deps = [\"//{}:numpy\"],", input.third_party_dir)?;
+    writeln!(buf, "##         modifiers = [\"//{}/config:py312\"],", tpd)?;
+    writeln!(buf, "##         deps = [\"//{}:numpy\"],", tpd)?;
     writeln!(buf, "##         main = \"main.py\",")?;
     writeln!(buf, "##     )")?;
     writeln!(buf, "##")?;
     writeln!(buf, "##     # root PACKAGE default")?;
     writeln!(buf, "##     load(\"@prelude//cfg/modifier:set_cfg_modifiers.bzl\", \"set_cfg_modifiers\")")?;
-    writeln!(buf, "##     set_cfg_modifiers([\"//{}/config:py312\"])", input.third_party_dir)?;
+    writeln!(buf, "##     set_cfg_modifiers([\"//{}/config:py312\"])", tpd)?;
     writeln!(buf, "##")?;
 
-    // Available python constraints (dynamically derived from configs):
+    // Available python constraints (sorted) derived from configs
     let py_constraints: BTreeSet<String> = input.configs.iter()
-        .map(|c| {
-            // ConfigName is "py3XX-<platform>"; extract the "py3XX" prefix
-            c.as_str().split('-').next().unwrap_or("").to_string()
-        })
+        .filter_map(|c| c.as_str().split('-').next().map(|s| s.to_string()))
         .filter(|s| s.starts_with("py"))
         .collect();
-    let py_list: Vec<&String> = py_constraints.iter().collect();
-    writeln!(buf, "## Available muntjac python constraints: {}", py_list.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))?;
+    let py_list: Vec<&str> = py_constraints.iter().map(|s| s.as_str()).collect();
+    writeln!(buf, "## Available muntjac python constraints: {}", py_list.join(", "))?;
     writeln!(buf, "##")?;
-    writeln!(buf)?;  // blank line before the body
+    writeln!(buf)?;
 
-    // ... existing body: load() calls, _CONFIGS, def pypi_package ...
+    // _CONFIGS list, sorted lex (matches BTreeMap iteration in EmitInput.configs)
+    writeln!(buf, "_CONFIGS = [")?;
+    for cfg in &input.configs {
+        writeln!(buf, "    \"{}\",", cfg)?;
+    }
+    writeln!(buf, "]")?;
+    writeln!(buf)?;
+
+    // pypi_package macro — uses native.<rule> for http_file, prebuilt_python_library, alias.
+    // Replaces expect(...) with explicit if/fail for clarity.
+    // sha256 stripping handled inside the macro to match uv.lock's "sha256:" prefix convention.
+    writeln!(buf, "def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):")?;
+    writeln!(buf, "    unknown = [cfg for cfg in wheels.keys() if cfg not in _CONFIGS]")?;
+    writeln!(buf, "    if unknown:")?;
+    writeln!(buf, "        fail(\"unknown config(s) in {{}}: {{}}\".format(name, unknown))")?;
+    writeln!(buf)?;
+    writeln!(buf, "    for cfg, wheel in wheels.items():")?;
+    writeln!(buf, "        url, sha = wheel")?;
+    writeln!(buf, "        if sha.startswith(\"sha256:\"):")?;
+    writeln!(buf, "            sha = sha[len(\"sha256:\"):]")?;
+    writeln!(buf, "        wheel_name = \"{{}}-{{}}-{{}}-wheel\".format(name, version, cfg)")?;
+    writeln!(buf, "        native.http_file(")?;
+    writeln!(buf, "            name = wheel_name,")?;
+    writeln!(buf, "            sha256 = sha,")?;
+    writeln!(buf, "            urls = [url],")?;
+    writeln!(buf, "            visibility = [],")?;
+    writeln!(buf, "        )")?;
+    writeln!(buf, "        native.prebuilt_python_library(")?;
+    writeln!(buf, "            name = \"{{}}-{{}}__{{}}\".format(name, version, cfg),")?;
+    writeln!(buf, "            binary_src = \":\" + wheel_name,")?;
+    writeln!(buf, "            deps = deps,")?;
+    writeln!(buf, "            visibility = [],")?;
+    writeln!(buf, "        )")?;
+    writeln!(buf)?;
+    writeln!(buf, "    native.alias(")?;
+    writeln!(buf, "        name = \"{{}}-{{}}\".format(name, version),")?;
+    writeln!(buf, "        actual = select({{")?;
+    writeln!(buf, "            \"//{}/config:\" + cfg: \":{{}}-{{}}__{{}}\".format(name, version, cfg)", tpd)?;
+    writeln!(buf, "            for cfg in wheels.keys()")?;
+    writeln!(buf, "        }}),")?;
+    writeln!(buf, "        visibility = [],")?;
+    writeln!(buf, "    )")?;
+    writeln!(buf, "    native.alias(")?;
+    writeln!(buf, "        name = name,")?;
+    writeln!(buf, "        actual = \":{{}}-{{}}\".format(name, version),")?;
+    writeln!(buf, "        visibility = visibility if visibility != None else [\"PUBLIC\"],")?;
+    writeln!(buf, "    )")?;
+
+    Ok(())
 }
 ```
 
-(If your `BTreeSet` import isn't there: `use std::collections::BTreeSet;` near other imports.)
+Important Rust-side notes:
+- The `{{` / `}}` in Starlark `.format(...)` calls inside writeln! need doubling to escape — Rust's format string treats `{` and `}` as special. Verify by inspecting the generated snapshot.
+- Remove any existing `load()` lines for `prebuilt_python_library`, `http_file`, `expect`, etc. — none of those are loadable symbols in the open-source prelude.
+- If `BTreeSet` isn't imported: `use std::collections::BTreeSet;`.
 
-- [ ] **Step 4: Accept the new snapshot**
-
-```bash
-cargo test --lib buck::string_writer::tests::muntjac_bzl_has_python_axis_wiring_header 2>&1 | tail -10
-cat src/buck/snapshots/buck__string_writer__tests__muntjac_bzl_with_header.snap.new
-```
-
-Visually verify: header is present, python constraints list reflects the input cells, `third_party_dir` substituted correctly.
+- [ ] **Step 5: Delete the old muntjac.bzl snapshot tests** (if any from S3 or T6-10 stubs)
 
 ```bash
-INSTA_UPDATE=always cargo test --lib buck::string_writer::tests::muntjac_bzl_has_python_axis_wiring_header
-cargo test --lib buck::string_writer::tests::muntjac_bzl_has_python_axis_wiring_header 2>&1 | tail -5
+ls src/buck/snapshots/ | grep -i "muntjac_bzl\|muntjac__bzl" | head
 ```
 
-Expected after accept: PASS.
+Delete any that test an outdated shape (bare-name native rules, no header). `git rm` for tracked, `rm` for `.new`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Accept the new snapshot**
+
+```bash
+cargo test --lib buck::string_writer::tests::muntjac_bzl_emits_full_macro_with_header 2>&1 | tail -10
+cat src/buck/snapshots/buck__string_writer__tests__muntjac_bzl_with_header_and_native.snap.new
+```
+
+Visually verify:
+- Header has both wiring blocks (setup_muntjac + per-binary modifiers).
+- Available python constraints line lists py311, py312.
+- `_CONFIGS = [...]` contains the input cells, sorted lex.
+- `pypi_package(...)` body uses `native.http_file`, `native.prebuilt_python_library`, `native.alias`.
+- No bare `http_file(...)`, no `expect(...)`, no `load(...)` for python rules.
+- The strip-`sha256:` logic is in the macro body.
+
+```bash
+INSTA_UPDATE=always cargo test --lib buck::string_writer::tests::muntjac_bzl_emits_full_macro_with_header
+cargo test --lib buck::string_writer::tests::muntjac_bzl_emits_full_macro_with_header 2>&1 | tail -5
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Sanity-check against the spike**
+
+```bash
+diff <(grep -v '^#' src/buck/snapshots/buck__string_writer__tests__muntjac_bzl_with_header_and_native.snap | grep -v '^---' | grep -v '^snapshot') \
+     <(awk '/^## Validated `muntjac\.bzl`/{flag=1;next} /^## /{if(flag)flag=0} flag' docs/superpowers/scratch-s4-spike.md | grep -v '^```')
+```
+
+(Crude — expect some noise from header/whitespace. The point is to eyeball that the macro body shape matches.)
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/buck/string_writer.rs src/buck/snapshots/
-git commit -m "feat(s4): emit python-axis wiring header in muntjac.bzl
+# Also git rm any old snapshots that were tracked.
+git status | grep "deleted:" | grep snapshot
+git commit -m "feat(s4): rewrite muntjac.bzl emit — header + native.* + explicit fail()
 
-Generated muntjac.bzl now opens with a comment block documenting the
-per-binary modifier snippet and root-PACKAGE default snippet for
-picking a python version. Available python constraints are derived
-dynamically from EmitInput.configs."
+Three changes to the generated muntjac.bzl:
+1. New header documenting setup_muntjac() and per-binary modifiers
+   contract. Available python constraints derived from EmitInput.configs.
+2. Native rules (http_file, prebuilt_python_library, alias) called
+   via native.<rule> in the .bzl context. S3's bare-name + phantom
+   load() form was a latent bug — none of those symbols are loadable
+   in the open-source prelude.
+3. Replace expect(set(...).issubset(...)) with if unknown: fail(...).
+   The Starlark expect() helper expects a bool; the comparison is
+   clearer as an explicit check."
 ```
 
 ---
 
-### Task 12: Render real `PACKAGE` with `set_cfg_modifiers` host-axis wiring
+### Task 12: Render `<third_party_dir>/wiring.bzl` exporting `setup_muntjac()`
 
 **Files:**
-- Modify: `src/buck/string_writer.rs`
+- Modify: `src/buck/emit.rs` (rename `EmitOutput.package_file: String` → `EmitOutput.wiring_bzl: String`)
+- Modify: `src/buck/string_writer.rs` (replace PACKAGE writer with wiring.bzl writer)
+- Modify: `src/buck/write.rs` (write `<third_party_dir>/wiring.bzl` instead of `<third_party_dir>/PACKAGE`)
+- Modify: `src/buck/snapshots/` (rename / delete old PACKAGE snapshots; new wiring.bzl snapshots accepted)
 
-The S3 PACKAGE was a placeholder. S4 emits a real `set_cfg_modifiers` call with the host OS+CPU wiring. **Use the cell prefix validated by the Phase 1 spike** — the snippet below uses `config//` but adjust to match `scratch-s4-spike.md`.
+**Critical context.** The Phase-1 spike (commit `6452bc2`, scratch notes at `docs/superpowers/scratch-s4-spike.md`) found that `<third_party_dir>/PACKAGE` is the **wrong place** for `set_cfg_modifiers` — PACKAGE-level modifiers don't propagate to deps from sibling packages. The validated shape moves the wiring into a `<third_party_dir>/wiring.bzl` exporting a `setup_muntjac()` function that the user invokes from their **root** PACKAGE. The spec was revised in commit `d1953d3`.
 
-- [ ] **Step 1: Re-read the validated PACKAGE shape from spike notes**
+Read `docs/superpowers/scratch-s4-spike.md` (§"Validated set_cfg_modifiers shape" and §"set_cfg_constructor registration") before writing code.
 
-```bash
-grep -A 20 "Validated set_cfg_modifiers" docs/superpowers/scratch-s4-spike.md
+- [ ] **Step 1: Rename `EmitOutput.package_file` to `EmitOutput.wiring_bzl`**
+
+In `src/buck/emit.rs`, locate the `EmitOutput` struct and rename:
+
+```rust
+pub struct EmitOutput {
+    pub buck: String,
+    pub muntjac_bzl: String,
+    pub config_buck: String,
+    pub wiring_bzl: String,   // was: package_file
+}
 ```
 
-Use those exact load paths and constraint keys in the implementation below.
+Compile to surface all callers; expect failures in `string_writer.rs`, `write.rs`, and tests. Update each call site to use the new field name. We'll fill in the actual content of `wiring_bzl` in the next steps.
 
-- [ ] **Step 2: Write a failing snapshot test**
+- [ ] **Step 2: Update `write.rs` to write `wiring.bzl` instead of `PACKAGE`**
+
+Find the file-writing code in `src/buck/write.rs`. It probably has a line like `write_atomic(&dir.join("PACKAGE"), &output.package_file)?;`. Change to:
+
+```rust
+write_atomic(&dir.join("wiring.bzl"), &output.wiring_bzl)?;
+```
+
+Make sure no `PACKAGE` filename remains in `write.rs` — `<third_party_dir>/PACKAGE` is no longer emitted at all.
+
+- [ ] **Step 3: Delete old PACKAGE-related snapshots**
+
+```bash
+ls src/buck/snapshots/ | grep -i "package" | head -10
+```
+
+Any `*package*.snap` from S3 (e.g. `buck__string_writer__tests__renders_package*.snap`) should be deleted — they're testing a file we no longer emit. Use `git rm` for tracked ones; plain `rm` for `.new` files.
+
+- [ ] **Step 4: Write a failing snapshot test for wiring.bzl rendering**
+
+In `src/buck/string_writer.rs::tests`, add:
 
 ```rust
 #[test]
-fn package_file_wires_host_axis() {
+fn wiring_bzl_emits_setup_muntjac_with_host_axis() {
     use crate::buck::emit::{EmitInput, ConfigName};
 
     let input = EmitInput {
         tree: "default".into(),
         third_party_dir: "third-party/python".into(),
         configs: vec![
+            ConfigName::new("3.11", "linux-aarch64-gnu"),
+            ConfigName::new("3.11", "linux-x86_64-gnu"),
+            ConfigName::new("3.11", "macos-arm64"),
             ConfigName::new("3.12", "linux-aarch64-gnu"),
             ConfigName::new("3.12", "linux-x86_64-gnu"),
             ConfigName::new("3.12", "macos-arm64"),
@@ -1540,30 +1687,71 @@ fn package_file_wires_host_axis() {
     };
 
     let out = StringTemplateEmitter.emit(&input);
-    insta::assert_snapshot!("package_three_platforms", out.package_file);
+    insta::assert_snapshot!("wiring_bzl_three_platforms", out.wiring_bzl);
 }
 ```
 
-- [ ] **Step 3: Implement PACKAGE rendering**
-
-Find the existing PACKAGE writer (likely `write_package_file` returning the `package_file` field). Replace its body with:
+Also add a single-platform test that the 01-pure-python fixture's regen relies on:
 
 ```rust
-fn write_package_file(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Error> {
+#[test]
+fn wiring_bzl_emits_setup_muntjac_single_platform() {
+    use crate::buck::emit::{EmitInput, ConfigName};
+
+    let input = EmitInput {
+        tree: "default".into(),
+        third_party_dir: "third-party/python".into(),
+        configs: vec![
+            ConfigName::new("3.11", "linux-x86_64-gnu"),
+            ConfigName::new("3.12", "linux-x86_64-gnu"),
+        ],
+        packages: vec![],
+    };
+
+    let out = StringTemplateEmitter.emit(&input);
+    insta::assert_snapshot!("wiring_bzl_single_platform", out.wiring_bzl);
+}
+```
+
+- [ ] **Step 5: Run — verify both fail (snapshots missing)**
+
+```bash
+cargo test --lib buck::string_writer::tests::wiring_bzl_emits_setup_muntjac_with_host_axis 2>&1 | tail -5
+```
+
+Expected: FAIL with snapshot missing.
+
+- [ ] **Step 6: Implement wiring.bzl rendering**
+
+Find or rename the writer function (previously `write_package_file`; rename to `write_wiring_bzl`). Replace its body with:
+
+```rust
+fn write_wiring_bzl(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Error> {
     writeln!(buf, "##")?;
     writeln!(buf, "## @generated by muntjac")?;
     writeln!(buf, "## Do not edit by hand.")?;
     writeln!(buf, "##")?;
     writeln!(buf)?;
+    writeln!(buf, "load(")?;
+    writeln!(buf, "    \"@prelude//cfg/modifier:cfg_constructor.bzl\",")?;
+    writeln!(buf, "    \"cfg_constructor_post_constraint_analysis\",")?;
+    writeln!(buf, "    \"cfg_constructor_pre_constraint_analysis\",")?;
+    writeln!(buf, ")")?;
+    writeln!(buf, "load(\"@prelude//cfg/modifier:common.bzl\", \"MODIFIER_METADATA_KEY\")")?;
     writeln!(buf, "load(\"@prelude//cfg/modifier:set_cfg_modifiers.bzl\", \"set_cfg_modifiers\")")?;
     writeln!(buf)?;
-    writeln!(buf, "# Bind the build's host OS+CPU to muntjac's platform constraint.")?;
-    writeln!(buf, "# Python version is picked by the user via a per-binary `modifiers` attr")?;
-    writeln!(buf, "# or a root PACKAGE default; see muntjac.bzl header for the snippet.")?;
-    writeln!(buf)?;
+    writeln!(buf, "def setup_muntjac():")?;
+    writeln!(buf, "    \"\"\"Register buck2's cfg_constructor and bind host OS+CPU to muntjac's")?;
+    writeln!(buf, "    per-cell platform constraint. Call this once from the root PACKAGE.\"\"\"")?;
+    writeln!(buf, "    set_cfg_constructor(")?;
+    writeln!(buf, "        stage0 = cfg_constructor_pre_constraint_analysis,")?;
+    writeln!(buf, "        stage1 = cfg_constructor_post_constraint_analysis,")?;
+    writeln!(buf, "        key = MODIFIER_METADATA_KEY,")?;
+    writeln!(buf, "        aliases = struct(),")?;
+    writeln!(buf, "        extra_data = struct(),")?;
+    writeln!(buf, "    )")?;
 
     // Derive platforms from configs (strip "py3XX-" prefix).
-    // E.g. "py312-linux-x86_64-gnu" -> "linux-x86_64-gnu".
     let mut platforms: BTreeSet<&str> = BTreeSet::new();
     for cfg in &input.configs {
         if let Some(plat) = cfg.as_str().splitn(2, '-').nth(1) {
@@ -1572,85 +1760,119 @@ fn write_package_file(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Er
     }
 
     // Group platforms by OS family for nested ModifiersMatch.
-    // <os> => Vec<(cpu, full_platform_name)>
+    // Keys: "linux"/"macos"; values: Vec<(cpu, full_platform_name)>.
+    // The "linux-x86_64-gnu" platform name parses as os="linux", cpu="x86_64";
+    // "macos-arm64" parses as os="macos", cpu="arm64". The "linux-x86_64-musl"
+    // (musllinux) case has no corresponding prelude OS constraint, so the
+    // emitter SKIPS such platforms — they require user-side --modifier
+    // selection rather than auto-routing.
     let mut by_os: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
     for p in &platforms {
         let parts: Vec<&str> = p.split('-').collect();
-        // expected shape: "linux-x86_64-gnu" -> os="linux", cpu="x86_64"
-        //                 "linux-aarch64-gnu" -> os="linux", cpu="aarch64"  
-        //                 "macos-arm64" -> os="macos", cpu="arm64"
-        if parts.len() >= 2 {
-            by_os.entry(parts[0]).or_default().push((parts[1], p));
+        if parts.len() < 2 {
+            continue;
         }
+        let os = parts[0];
+        let cpu = parts[1];
+        // Skip musllinux platforms — the open-source prelude has no
+        // `musl` OS constraint, so they can't be auto-routed by host detection.
+        if p.ends_with("-musl") {
+            continue;
+        }
+        by_os.entry(os).or_default().push((cpu, p));
     }
 
-    writeln!(buf, "set_cfg_modifiers(")?;
-    writeln!(buf, "    cfg_modifiers = [")?;
-    writeln!(buf, "        {{")?;  // outer ModifiersMatch
-    for (os, cpus) in &by_os {
-        let os_key = format!("<spike-validated-prefix>//os/constraints:{}", os);  // CHECK SCRATCH NOTES
-        writeln!(buf, "            \"{}\": {{", os_key)?;
-        for (cpu, plat_name) in cpus {
-            let cpu_key = format!("<spike-validated-prefix>//cpu/constraints:{}", cpu);  // CHECK SCRATCH NOTES
-            let target = format!("//{}/config:{}", input.third_party_dir, plat_name);
-            writeln!(buf, "                \"{}\": \"{}\",", cpu_key, target)?;
-        }
-        writeln!(buf, "            }},")?;
+    let total_branches: usize = by_os.values().map(|v| v.len()).sum();
+    if total_branches == 0 {
+        // All platforms are musllinux (e.g. the 03-musllinux fixture);
+        // emit a set_cfg_modifiers with an empty list so setup_muntjac()
+        // still calls the cfg_constructor.
+        writeln!(buf, "    set_cfg_modifiers(cfg_modifiers = [])")?;
+        return Ok(());
     }
-    writeln!(buf, "        }},")?;
-    writeln!(buf, "    ],")?;
-    writeln!(buf, ")")?;
+
+    writeln!(buf, "    set_cfg_modifiers(")?;
+    writeln!(buf, "        cfg_modifiers = [")?;
+    writeln!(buf, "            {{")?;
+    writeln!(buf, "                \"_type\": \"ModifiersMatch\",")?;
+    for (os, cpus) in &by_os {
+        let os_key = format!("prelude//os/constraints:{}", os);
+        writeln!(buf, "                \"{}\": {{", os_key)?;
+        writeln!(buf, "                    \"_type\": \"ModifiersMatch\",")?;
+        let mut cpus_sorted: Vec<&(&str, &str)> = cpus.iter().collect();
+        cpus_sorted.sort();
+        for (cpu, plat_name) in cpus_sorted {
+            let cpu_key = format!("prelude//cpu/constraints:{}", cpu);
+            let target = format!("root//{}/config:{}", input.third_party_dir, plat_name);
+            writeln!(buf, "                    \"{}\": \"{}\",", cpu_key, target)?;
+        }
+        writeln!(buf, "                }},")?;
+    }
+    writeln!(buf, "            }},")?;
+    writeln!(buf, "        ],")?;
+    writeln!(buf, "    )")?;
     Ok(())
 }
 ```
 
-**Critical:** Replace `<spike-validated-prefix>` with the actual cell prefix from `scratch-s4-spike.md`. If the spike found that OS+CPU keys belong in a flat (non-nested) dict instead, restructure accordingly. The general principle: emit whatever shape the spike validated.
+Make sure `BTreeSet` + `BTreeMap` are imported. Make sure the function is called from the `emit()` impl producing `EmitOutput`.
 
-- [ ] **Step 4: Accept the snapshot**
+- [ ] **Step 7: Accept the snapshots**
 
 ```bash
-cargo test --lib buck::string_writer::tests::package_file_wires_host_axis 2>&1 | tail -10
-cat src/buck/snapshots/buck__string_writer__tests__package_three_platforms.snap.new
+cargo test --lib buck::string_writer::tests::wiring_bzl_emits_setup_muntjac_with_host_axis 2>&1 | tail -10
+cat src/buck/snapshots/buck__string_writer__tests__wiring_bzl_three_platforms.snap.new
 ```
 
-Visually confirm: load() path correct; OS dict has linux + macos; linux dict has x86_64 + aarch64; macos dict has arm64; targets reference `//third-party/python/config:<platform>`.
+Visually verify the output matches the spec's §5 wiring.bzl snippet:
+- Two `load()` blocks for the cfg_constructor helpers + MODIFIER_METADATA_KEY + set_cfg_modifiers.
+- A `def setup_muntjac():` function.
+- Body has `set_cfg_constructor(...)` followed by `set_cfg_modifiers(cfg_modifiers=[{...}])`.
+- Outer dict has `"_type": "ModifiersMatch"` plus `prelude//os/constraints:linux` + `prelude//os/constraints:macos` branches.
+- Inner dicts have `"_type": "ModifiersMatch"` plus `prelude//cpu/constraints:<cpu>` keys mapping to `root//third-party/python/config:<platform>` targets.
 
 ```bash
-INSTA_UPDATE=always cargo test --lib buck::string_writer::tests::package_file_wires_host_axis
-cargo test --lib buck::string_writer::tests::package_file_wires_host_axis 2>&1 | tail -5
+INSTA_UPDATE=always cargo test --lib buck::string_writer::tests::wiring_bzl_emits_setup_muntjac
+cargo test --lib buck::string_writer::tests::wiring_bzl_emits_setup_muntjac 2>&1 | tail -10
 ```
 
-Expected: PASS.
+Expected: PASS for both.
 
-- [ ] **Step 5: Verify the rendered PACKAGE actually compiles under buck2**
+- [ ] **Step 8: Verify against the spike-validated hand-written wiring**
 
-Compare the rendered PACKAGE byte-for-byte against the hand-written PACKAGE that worked in the Phase 1 spike. They should match (modulo whitespace). If they don't, **run `buck2 run //tests/smoke:numpy_demo`** from the fixture with the *rendered* PACKAGE (write it out manually for now, or via the next task's pipeline). If buck2 errors, fix the renderer.
+The spike committed a hand-written root `PACKAGE` at `tests/fixtures/buck/02-numpy-pandas/PACKAGE`. It inlined the cfg_constructor + set_cfg_modifiers logic (since wiring.bzl didn't exist yet). Now that the emitter produces `wiring.bzl`, the inline blob in the fixture's root PACKAGE can be replaced with `load("//third-party/python:wiring.bzl", "setup_muntjac"); setup_muntjac()`.
 
-This is critical — getting the rendering wrong here is what the §10 spike was supposed to prevent.
+We make that swap in Task 14 (golden generation) once the emitter writes wiring.bzl into `third-party/python/`. For now, just sanity-check the emitter output against the spike's hand-written cfg_constructor + set_cfg_modifiers blob:
 
 ```bash
-# Copy rendered PACKAGE into the fixture's generated dir, run buck2:
-cd tests/fixtures/buck/02-numpy-pandas
-# (manual copy from snapshot or programmatic)
-buck2 clean
-buck2 run //tests/smoke:numpy_demo 2>&1 | tail -5
+grep -A 30 "set_cfg_constructor\|set_cfg_modifiers" tests/fixtures/buck/02-numpy-pandas/PACKAGE
 ```
 
-Expected: `[0. 0. 0.]` printed.
+The structure (function-body modulo indentation) should match what the emitter produces inside `setup_muntjac()`. Differences are red flags.
 
-If the buck2 run fails, **read the error**, adjust the renderer in Step 3 to produce the shape buck2 actually wants, re-accept the snapshot (`INSTA_UPDATE=always`), and re-test.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/buck/string_writer.rs src/buck/snapshots/
-git commit -m "feat(s4): emit real PACKAGE with set_cfg_modifiers host-axis wiring
+git add src/buck/emit.rs src/buck/string_writer.rs src/buck/write.rs src/buck/snapshots/
+# Also git rm any old PACKAGE-related snapshots that were tracked.
+git status | grep "deleted:" | grep snapshot
+# If any, run: git rm <each>
+git commit -m "feat(s4): emit <third_party_dir>/wiring.bzl with setup_muntjac()
 
-S3's placeholder PACKAGE is replaced with a real set_cfg_modifiers
-call. Nested ModifiersMatch dict binds host OS+CPU -> muntjac's
-platform constraint. Cell prefix from the Phase 1 spike validation.
-Python axis stays user-side (per-binary modifiers attr; see muntjac.bzl
-header)."
+Renames EmitOutput.package_file -> EmitOutput.wiring_bzl. The emitter
+writes <third_party_dir>/wiring.bzl exporting setup_muntjac(): registers
+set_cfg_constructor (the open-source prelude doesn't do this by default)
+and binds host OS+CPU via set_cfg_modifiers with a nested ModifiersMatch
+dict (_type discriminator + fully-qualified root//.../prelude//... targets).
+
+PACKAGE auto-emit is dropped entirely — PACKAGE-level modifiers don't
+propagate to deps from sibling packages, validated by the Phase-1 spike.
+Users invoke setup_muntjac() from their root PACKAGE.
+
+musllinux platforms are skipped from the host-axis dict since the
+open-source prelude has no musl OS constraint; if every platform is
+musllinux, the dict is empty (setup_muntjac still registers the
+cfg_constructor)."
 ```
 
 ---
@@ -1728,21 +1950,24 @@ fn write_config_buck(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Err
         }
     }
 
-    // python_version axis
+    // python_version axis — constraint_values get visibility = ["PUBLIC"] because they
+    // are referenced from the root PACKAGE via a different cell-relative path.
     writeln!(buf, "constraint_setting(name = \"python_version\")")?;
     for py in &pythons {
-        writeln!(buf, "constraint_value(name = \"{}\", constraint_setting = \":python_version\")", py)?;
+        writeln!(buf, "constraint_value(name = \"{}\", constraint_setting = \":python_version\", visibility = [\"PUBLIC\"])", py)?;
     }
     writeln!(buf)?;
 
-    // platform axis
+    // platform axis — same visibility note.
     writeln!(buf, "constraint_setting(name = \"platform\")")?;
     for plat in &platforms {
-        writeln!(buf, "constraint_value(name = \"{}\", constraint_setting = \":platform\")", plat)?;
+        writeln!(buf, "constraint_value(name = \"{}\", constraint_setting = \":platform\", visibility = [\"PUBLIC\"])", plat)?;
     }
     writeln!(buf)?;
 
-    // config_settings — one per cell (= one per ConfigName in input.configs)
+    // config_settings — one per cell (= one per ConfigName in input.configs).
+    // Also PUBLIC since wiring.bzl's setup_muntjac() select keys + per-binary
+    // modifiers reference these targets.
     for cell in &input.configs {
         let s = cell.as_str();
         let dash = s.find('-').expect("ConfigName format py<X>-<platform>");
@@ -1760,6 +1985,7 @@ fn write_config_buck(input: &EmitInput, buf: &mut String) -> Result<(), fmt::Err
             writeln!(buf, "        \":{}\",", cv)?;
         }
         writeln!(buf, "    ],")?;
+        writeln!(buf, "    visibility = [\"PUBLIC\"],")?;
         writeln!(buf, ")")?;
     }
 
@@ -1775,9 +2001,10 @@ cat src/buck/snapshots/buck__string_writer__tests__config_buck_six_cells.snap.ne
 ```
 
 Visually verify:
-- `constraint_setting(name = "python_version")` followed by `py311, py312` alphabetic.
-- `constraint_setting(name = "platform")` followed by `linux-aarch64-gnu, linux-x86_64-gnu, macos-arm64` alphabetic.
-- 6 config_settings, sorted by name lex.
+- `constraint_setting(name = "python_version")` followed by `py311, py312` alphabetic, each with `visibility = ["PUBLIC"]`.
+- `constraint_setting(name = "platform")` followed by `linux-aarch64-gnu, linux-x86_64-gnu, macos-arm64` alphabetic, each with `visibility = ["PUBLIC"]`.
+- 6 config_settings, sorted by name lex, each with `visibility = ["PUBLIC"]`.
+- `constraint_setting` itself does NOT need a visibility attr (only referenced from same package).
 - Each config_setting's `constraint_values` lists platform first, then python (alphabetic).
 
 ```bash
@@ -1796,6 +2023,8 @@ git commit -m "feat(s4): emit per-axis constraint_values + per-cell config_setti
 config/BUCK now emits two constraint_settings (python_version,
 platform), one constraint_value per python and per platform, and
 one config_setting per cell in EmitInput.configs. All sorted lex.
+constraint_values + config_settings carry visibility=[\"PUBLIC\"]
+(referenced from root PACKAGE via different cell-relative path).
 Snapshot covers the 6-cell case (3 platforms x 2 pythons)."
 ```
 
@@ -1803,87 +2032,126 @@ Snapshot covers the 6-cell case (3 platforms x 2 pythons)."
 
 ## Phase 4 — Fixtures: goldens + integration tests
 
-### Task 14: Generate `02-numpy-pandas/expected/` goldens
+### Task 14: Generate `02-numpy-pandas/expected/` goldens + swap fixture root PACKAGE to load setup_muntjac
 
 **Files:**
 - Create: `tests/fixtures/buck/02-numpy-pandas/expected/BUCK`
 - Create: `tests/fixtures/buck/02-numpy-pandas/expected/muntjac.bzl`
-- Create: `tests/fixtures/buck/02-numpy-pandas/expected/PACKAGE`
+- Create: `tests/fixtures/buck/02-numpy-pandas/expected/wiring.bzl`
 - Create: `tests/fixtures/buck/02-numpy-pandas/expected/config/BUCK`
+- Modify: `tests/fixtures/buck/02-numpy-pandas/PACKAGE` (the fixture's hand-written root PACKAGE — swap inline wiring for `setup_muntjac()` load)
 
-The goldens are generated by running buckify against the fixture, then committing the output to `expected/`.
+The goldens are generated by running buckify against the fixture; the fixture's root PACKAGE shifts from the spike's inline blob to a tidy `load + setup_muntjac()` call.
 
 - [ ] **Step 1: Run buckify against the fixture**
 
 ```bash
 cd tests/fixtures/buck/02-numpy-pandas
-cargo run --release -- buckify 2>&1 | tail -10
+rm -rf third-party/python/
+cargo run --release --manifest-path ../../../../Cargo.toml -- buckify 2>&1 | tail -10
 ls -la third-party/python/
 ```
 
-Expected: four files in `third-party/python/` — `BUCK`, `muntjac.bzl`, `PACKAGE`, `config/BUCK`.
+Expected: four files in `third-party/python/` — `BUCK`, `muntjac.bzl`, `wiring.bzl`, `config/BUCK`. **No `PACKAGE` file in the third-party dir** — that's intentional (see T12).
 
-- [ ] **Step 2: Verify the generated PACKAGE works under buck2**
+- [ ] **Step 2: Swap the fixture's root PACKAGE to load setup_muntjac**
+
+The spike-committed root PACKAGE at `tests/fixtures/buck/02-numpy-pandas/PACKAGE` contains the inline `set_cfg_constructor` + `set_cfg_modifiers` blob. Now that `wiring.bzl` exists, replace the inline blob with a load + call:
+
+```python
+load("//third-party/python:wiring.bzl", "setup_muntjac")
+setup_muntjac()
+```
+
+Edit the file directly:
 
 ```bash
+cat > tests/fixtures/buck/02-numpy-pandas/PACKAGE <<'EOF'
+load("//third-party/python:wiring.bzl", "setup_muntjac")
+
+setup_muntjac()
+EOF
+```
+
+(Verify byte-for-byte with `cat` — trailing newlines etc.)
+
+- [ ] **Step 3: Verify buck2 still runs cleanly with the new wiring**
+
+```bash
+cd tests/fixtures/buck/02-numpy-pandas
 buck2 clean
 buck2 run //tests/smoke:numpy_demo 2>&1 | tail -5
 ```
 
 Expected: `[0. 0. 0.]` printed.
 
-If it fails: the emitter is producing a different PACKAGE shape than the hand-written one from Phase 1. **Fix the emitter** (Task 12 / Task 13 may need adjustments), don't fix the goldens.
+If it fails: the emitter is producing a different wiring.bzl shape than the spike's working setup. **Fix the emitter (T12)**, don't fix the goldens. Read the buck2 error carefully — common cause is a missing `_type` discriminator or unqualified constraint target.
 
-- [ ] **Step 3: Copy the generated files into expected/**
+- [ ] **Step 4: Copy the generated files into expected/**
 
 ```bash
 cd /home/jackm/repos/muntjac/tests/fixtures/buck/02-numpy-pandas
 mkdir -p expected/config
 cp third-party/python/BUCK expected/BUCK
 cp third-party/python/muntjac.bzl expected/muntjac.bzl
-cp third-party/python/PACKAGE expected/PACKAGE
+cp third-party/python/wiring.bzl expected/wiring.bzl
 cp third-party/python/config/BUCK expected/config/BUCK
 ```
 
-- [ ] **Step 4: Eyeball the goldens**
+- [ ] **Step 5: Eyeball the goldens**
 
 ```bash
 ls -la expected/ expected/config/
-wc -l expected/BUCK expected/muntjac.bzl expected/PACKAGE expected/config/BUCK
+wc -l expected/BUCK expected/muntjac.bzl expected/wiring.bzl expected/config/BUCK
 head -30 expected/BUCK
-head -30 expected/muntjac.bzl
-cat expected/PACKAGE
-head -30 expected/config/BUCK
+head -50 expected/muntjac.bzl
+cat expected/wiring.bzl
+head -40 expected/config/BUCK
 ```
 
 Confirm:
 - `expected/BUCK` has one `pypi_package(name = "numpy", ...)` call with 6 wheel entries.
-- `expected/muntjac.bzl` has the python-axis wiring header + `_CONFIGS` with 6 entries.
-- `expected/PACKAGE` has the host-axis `set_cfg_modifiers` call.
-- `expected/config/BUCK` has 2 python constraint_values + 3 platform constraint_values + 6 config_settings.
+- `expected/muntjac.bzl` has the wiring contract header + `_CONFIGS` with 6 entries + `native.<rule>` form throughout the macro body + `if unknown: fail(...)` (no `expect(...)`).
+- `expected/wiring.bzl` has the `setup_muntjac()` function with `set_cfg_constructor` + `set_cfg_modifiers` calls, including `_type` discriminators and fully-qualified `root//.../prelude//...` targets.
+- `expected/config/BUCK` has 2 python constraint_values + 3 platform constraint_values + 6 config_settings, all with `visibility = ["PUBLIC"]`.
+- **NO `expected/PACKAGE`** — that's by design.
 
 Each file ends with a newline (POSIX text file convention). If not, append one before committing.
 
-- [ ] **Step 5: Re-run buckify; verify determinism**
+- [ ] **Step 6: Re-run buckify; verify determinism**
 
 ```bash
 rm -rf third-party/python/
-cargo run --release -- buckify 2>&1 | tail -3
+cargo run --release --manifest-path ../../../../Cargo.toml -- buckify 2>&1 | tail -3
 diff -r third-party/python/ expected/
 ```
 
 Expected: no diff. Confirms the emitter is byte-stable.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Sanity-check end-to-end one more time**
 
 ```bash
-git add tests/fixtures/buck/02-numpy-pandas/expected/
-git commit -m "test(s4): commit 02-numpy-pandas golden expected/ files
+buck2 clean
+buck2 run //tests/smoke:numpy_demo 2>&1 | tail -5
+```
 
-Generated by cargo run --release -- buckify on the frozen uv.lock.
-Six cells (3 platforms x 2 pythons); numpy 2.1.<patch>; no transitive
-runtime deps. Goldens validated by running buck2 run //tests/smoke:numpy_demo
-against the generated files."
+Expected: `[0. 0. 0.]`.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add tests/fixtures/buck/02-numpy-pandas/PACKAGE tests/fixtures/buck/02-numpy-pandas/expected/
+git commit -m "test(s4): commit 02-numpy-pandas goldens + swap root PACKAGE to load setup_muntjac
+
+Goldens generated by cargo run --release -- buckify on the frozen
+uv.lock. Six cells (3 platforms x 2 pythons); numpy 2.1.<patch>;
+no transitive runtime deps. Expected file set: BUCK, muntjac.bzl,
+wiring.bzl, config/BUCK (no PACKAGE — wiring.bzl exports
+setup_muntjac which the user invokes from their root PACKAGE).
+
+Fixture's root PACKAGE replaces the spike's inline set_cfg_constructor
++ set_cfg_modifiers blob with a clean load + setup_muntjac() call,
+demonstrating the user-side setup contract."
 ```
 
 ---
@@ -1920,7 +2188,7 @@ fn fixture_02_numpy_pandas_golden() {
     run_buckify(tmp.path()).expect("buckify succeeds");
 
     let third_party = tmp.path().join("third-party/python");
-    for rel in ["BUCK", "muntjac.bzl", "PACKAGE", "config/BUCK"] {
+    for rel in ["BUCK", "muntjac.bzl", "wiring.bzl", "config/BUCK"] {
         let actual = std::fs::read(third_party.join(rel))
             .unwrap_or_else(|_| panic!("missing generated file: {}", rel));
         let expected = std::fs::read(fixture.join("expected").join(rel))
@@ -1932,6 +2200,8 @@ fn fixture_02_numpy_pandas_golden() {
             rel
         );
     }
+    // Negative assertion: NO PACKAGE in the third-party dir.
+    assert!(!third_party.join("PACKAGE").exists(), "third-party/python/PACKAGE should not be emitted");
 }
 ```
 
@@ -1971,7 +2241,7 @@ exercising the multi-platform emitter."
 **Files:**
 - Create: `tests/fixtures/buck/03-musllinux/expected/BUCK`
 - Create: `tests/fixtures/buck/03-musllinux/expected/muntjac.bzl`
-- Create: `tests/fixtures/buck/03-musllinux/expected/PACKAGE`
+- Create: `tests/fixtures/buck/03-musllinux/expected/wiring.bzl`
 - Create: `tests/fixtures/buck/03-musllinux/expected/config/BUCK`
 - Modify: `tests/buckify.rs`
 
@@ -1979,11 +2249,11 @@ exercising the multi-platform emitter."
 
 ```bash
 cd tests/fixtures/buck/03-musllinux
-cargo run --release -- -C $(pwd) buckify 2>&1 | tail -5
+cargo run --release --manifest-path ../../../../Cargo.toml -- buckify 2>&1 | tail -5
 ls third-party/python/
 ```
 
-Expected: four generated files.
+Expected: four generated files — `BUCK`, `muntjac.bzl`, `wiring.bzl`, `config/BUCK`. **No `PACKAGE`**.
 
 - [ ] **Step 2: Verify musllinux wheel was picked**
 
@@ -1993,17 +2263,27 @@ grep -E "musllinux|whl" third-party/python/BUCK | head -5
 
 Expected: at least one URL field contains `musllinux_1_2_x86_64`. If you see only `manylinux` or sdist refs, something's wrong — go back to Task 2 and reconsider the package choice.
 
-- [ ] **Step 3: Copy generated files to expected/**
+- [ ] **Step 3: Verify wiring.bzl behavior for musllinux-only platform**
+
+```bash
+cat third-party/python/wiring.bzl
+```
+
+Expected: the file still defines `setup_muntjac()`, but the `set_cfg_modifiers(cfg_modifiers=...)` call has an EMPTY list (because the single platform is `linux-x86_64-musl` — musl is not a first-class OS constraint in the prelude, so the emitter SKIPS it from the host-axis dict). The `set_cfg_constructor` call still happens, so per-binary `modifiers` attrs would still work if a consumer set one.
+
+This is the "musllinux is user-modifier-only" behavior baked into Task 12 §"Step 6: Implement wiring.bzl rendering" — the empty-dict branch.
+
+- [ ] **Step 4: Copy generated files to expected/**
 
 ```bash
 mkdir -p expected/config
 cp third-party/python/BUCK expected/BUCK
 cp third-party/python/muntjac.bzl expected/muntjac.bzl
-cp third-party/python/PACKAGE expected/PACKAGE
+cp third-party/python/wiring.bzl expected/wiring.bzl
 cp third-party/python/config/BUCK expected/config/BUCK
 ```
 
-- [ ] **Step 4: Add integration test `fixture_03_musllinux_golden`**
+- [ ] **Step 5: Add integration test `fixture_03_musllinux_golden`**
 
 In `tests/buckify.rs`, add:
 
@@ -2021,7 +2301,7 @@ fn fixture_03_musllinux_golden() {
     run_buckify(tmp.path()).expect("buckify succeeds");
 
     let third_party = tmp.path().join("third-party/python");
-    for rel in ["BUCK", "muntjac.bzl", "PACKAGE", "config/BUCK"] {
+    for rel in ["BUCK", "muntjac.bzl", "wiring.bzl", "config/BUCK"] {
         let actual = std::fs::read(third_party.join(rel)).unwrap();
         let expected = std::fs::read(fixture.join("expected").join(rel)).unwrap();
         assert_eq!(
@@ -2062,45 +2342,66 @@ linux-x86_64-musl cell. Emit-only verification — no buck2 build
 
 ---
 
-### Task 17: Regenerate `01-pure-python/expected/` goldens for new PACKAGE shape
+### Task 17: Regenerate `01-pure-python/expected/` goldens for the new file set
 
 **Files:**
-- Modify: `tests/fixtures/buck/01-pure-python/expected/PACKAGE`
-- Modify (maybe): `tests/fixtures/buck/01-pure-python/expected/muntjac.bzl` (header changes)
-- Modify (maybe): `tests/fixtures/buck/01-pure-python/expected/config/BUCK` (constraint_values shape)
+- Delete: `tests/fixtures/buck/01-pure-python/expected/PACKAGE` (no longer emitted)
+- Create: `tests/fixtures/buck/01-pure-python/expected/wiring.bzl`
+- Modify: `tests/fixtures/buck/01-pure-python/expected/muntjac.bzl` (header + native.* + fail() form)
+- Modify: `tests/fixtures/buck/01-pure-python/expected/config/BUCK` (visibility=PUBLIC + maybe new constraint_values)
+- Modify (possibly): `tests/fixtures/buck/01-pure-python/expected/BUCK` (likely unchanged)
 
-The S3 fixture's expected files reflected the placeholder PACKAGE and single-platform config/BUCK. S4 changes both. The other files (BUCK) should be unchanged.
+The S3 01-pure-python fixture's expected files reflected the placeholder PACKAGE, bare-name native rules, and no PUBLIC visibility. S4 corrects all three (the bare-name macro form was a latent bug that wouldn't have loaded under buck2 — the spike caught this). Outputs shift accordingly.
 
 - [ ] **Step 1: Run buckify against 01-pure-python and capture the diff**
 
 ```bash
 cd tests/fixtures/buck/01-pure-python
 rm -rf third-party/python/  # or whatever the third_party_dir is
-cargo run --release -- -C $(pwd) buckify 2>&1 | tail -3
-diff -r third-party/python/ expected/ | head -40
+cargo run --release --manifest-path ../../../../Cargo.toml -- buckify 2>&1 | tail -3
+diff -r third-party/python/ expected/ | head -60
 ```
 
 - [ ] **Step 2: Inspect each diff**
 
 For each file that diffs, confirm the diff is *expected* per S4 changes:
-- `PACKAGE`: should diff substantially (placeholder → real `set_cfg_modifiers`).
-- `muntjac.bzl`: should gain the python-axis wiring header (Task 11).
-- `config/BUCK`: should gain a `platform` constraint_setting + the host-platform constraint_value if the 01 fixture wasn't already declaring it.
-- `BUCK`: should NOT diff (Uniform deps; existing rendering).
+- `PACKAGE`: should NOT exist in generated dir (we no longer emit it); the diff shows `expected/PACKAGE` as missing from the generated side. We'll delete it from expected/.
+- `wiring.bzl`: NEW file. Single-platform fixture means the host-axis dict has one or two branches (depending on which platform the 01 fixture uses).
+- `muntjac.bzl`: SIGNIFICANT diff — new header block; `native.<rule>` form throughout the macro body; `if unknown: fail(...)` instead of `expect(...)`.
+- `config/BUCK`: every constraint_value + config_setting gains `visibility = ["PUBLIC"]`.
+- `BUCK`: should NOT diff (Uniform deps; existing pypi_package rendering).
 
 If `BUCK` diffs unexpectedly, something else changed — investigate before proceeding.
 
 - [ ] **Step 3: Update the expected/ files**
 
 ```bash
-cp third-party/python/PACKAGE expected/PACKAGE
+cd /home/jackm/repos/muntjac/tests/fixtures/buck/01-pure-python
+# Delete the old PACKAGE — no longer emitted.
+git rm -f expected/PACKAGE
+# Copy the new file set.
+cp third-party/python/wiring.bzl expected/wiring.bzl
 cp third-party/python/muntjac.bzl expected/muntjac.bzl
 cp third-party/python/config/BUCK expected/config/BUCK
 # BUCK only if it diffed (it shouldn't, but to be safe):
 diff third-party/python/BUCK expected/BUCK || cp third-party/python/BUCK expected/BUCK
 ```
 
-- [ ] **Step 4: Re-run 01-pure-python integration test**
+- [ ] **Step 4: Update the 01-pure-python integration test if needed**
+
+The S3 `fixture_01_pure_python_golden` test in `tests/buckify.rs` likely iterates `for rel in ["BUCK", "muntjac.bzl", "PACKAGE", "config/BUCK"]`. Update to:
+
+```rust
+for rel in ["BUCK", "muntjac.bzl", "wiring.bzl", "config/BUCK"] {
+```
+
+And add the negative assertion:
+
+```rust
+assert!(!third_party.join("PACKAGE").exists(), "third-party/python/PACKAGE should not be emitted");
+```
+
+- [ ] **Step 5: Re-run 01-pure-python integration test**
 
 ```bash
 cd /home/jackm/repos/muntjac
@@ -2109,7 +2410,7 @@ cargo test --test buckify fixture_01_pure_python 2>&1 | tail -5
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the full test suite**
+- [ ] **Step 6: Run the full test suite**
 
 ```bash
 cargo test 2>&1 | tail -10
@@ -2117,15 +2418,16 @@ cargo test 2>&1 | tail -10
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add tests/fixtures/buck/01-pure-python/expected/
-git commit -m "test(s4): regenerate 01-pure-python goldens for new PACKAGE shape
+git add tests/fixtures/buck/01-pure-python/expected/ tests/buckify.rs
+git commit -m "test(s4): regenerate 01-pure-python goldens for new file set
 
-S4's PACKAGE auto-wiring and multi-axis config/BUCK shift bytes
-even on single-platform fixtures. Generated by cargo run buckify
-on the unchanged inputs; BUCK contents unchanged."
+PACKAGE auto-emit dropped; wiring.bzl added; muntjac.bzl rewritten
+with native.* form + if/fail; config/BUCK gains visibility=PUBLIC.
+BUCK contents unchanged. fixture_01_pure_python_golden updated to
+iterate the new file list."
 ```
 
 ---
@@ -2152,10 +2454,27 @@ Note the current job structure: matrix over `runner`, steps in order (checkout, 
 After the `cargo test` step, add:
 
 ```yaml
+      - name: install cp312 python
+        run: |
+          set -euo pipefail
+          # Install uv (used to fetch a known-good cp312).
+          if ! command -v uv >/dev/null 2>&1; then
+            python3 -m pip install --user uv || pipx install uv
+          fi
+          uv python install 3.12
+          UV_PY_BIN="$(uv python find 3.12)"
+          # Symlink so prelude's system_python_toolchain finds `python3.12`.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          else
+            sudo ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          fi
+          python3.12 --version
+
       - name: install buck2
         run: |
           set -euo pipefail
-          BUCK2_RELEASE="<pinned-tag-from-Task-3>"
+          BUCK2_RELEASE="2026-05-18"
           case "${{ matrix.runner }}" in
             ubuntu-latest)       ASSET="buck2-x86_64-unknown-linux-gnu.zst"   ;;
             ubuntu-24.04-arm)    ASSET="buck2-aarch64-unknown-linux-gnu.zst"  ;;
@@ -2167,7 +2486,7 @@ After the `cargo test` step, add:
               -o /tmp/buck2.zst
           # zstd may not be pre-installed on macOS GH runners; install if needed
           if ! command -v zstd >/dev/null 2>&1; then
-            if [ "${{ matrix.runner }}" = "macos-latest" ]; then
+            if [ "${{ runner.os }}" = "macOS" ]; then
               brew install zstd
             else
               sudo apt-get update && sudo apt-get install -y zstd
@@ -2179,7 +2498,9 @@ After the `cargo test` step, add:
           "$HOME/.local/bin/buck2" --version
 ```
 
-Replace `<pinned-tag-from-Task-3>` with the actual tag you used in Task 3.
+Also ensure the existing `actions/checkout@v4` step at the top of the job has `with: submodules: recursive` so the prelude submodule fetches.
+
+Buck2 version pinned to `2026-05-18` (matches the spike-validated version).
 
 If the asset name conventions are different from what I drafted (e.g. macOS asset has a different triple), use what the release page actually shows. Verify against `gh release view <tag> --repo facebook/buck2 --json assets`.
 
@@ -2210,14 +2531,15 @@ After the buck2 install step, add steps to run buckify and execute the numpy dem
       - name: muntjac buckify (02-numpy-pandas fixture)
         run: |
           cd tests/fixtures/buck/02-numpy-pandas
-          # Initialize prelude submodule if not already done by checkout.
+          # Initialize prelude submodule in case checkout step didn't.
           git submodule update --init --recursive --depth 1
           cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
-          # Verify the four files exist.
+          # Verify the four files exist (no PACKAGE — wiring.bzl replaces it).
           test -f third-party/python/BUCK
           test -f third-party/python/muntjac.bzl
-          test -f third-party/python/PACKAGE
+          test -f third-party/python/wiring.bzl
           test -f third-party/python/config/BUCK
+          test ! -e third-party/python/PACKAGE
 
       - name: buck2 build + run numpy demo
         run: |
