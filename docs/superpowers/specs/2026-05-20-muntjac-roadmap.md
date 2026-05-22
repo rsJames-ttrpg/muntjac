@@ -232,8 +232,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S1 | [2026-05-20-muntjac-s1-lockfile-design.md](./2026-05-20-muntjac-s1-lockfile-design.md) | [2026-05-20-muntjac-s1-lockfile.md](../plans/2026-05-20-muntjac-s1-lockfile.md) | ✅ shipped (tag `s1-complete`, 19 commits, 68 tests) |
 | S2 | [2026-05-20-muntjac-s2-wheel-selector-design.md](./2026-05-20-muntjac-s2-wheel-selector-design.md) | [2026-05-20-muntjac-s2-wheel-selector.md](../plans/2026-05-20-muntjac-s2-wheel-selector.md) | ✅ shipped (tag `s2-complete`, 26 commits, 118 tests) |
 | S3 | [2026-05-21-muntjac-s3-buck-emitter-design.md](./2026-05-21-muntjac-s3-buck-emitter-design.md) | [2026-05-21-muntjac-s3-buck-emitter.md](../plans/2026-05-21-muntjac-s3-buck-emitter.md) | ✅ shipped (tag `s3-complete`, 21 commits, 145 tests) |
-| S4 | (not yet written) | (not yet written) | ⬜ next |
-| S5 | (not yet written) | (not yet written) | ⬜ blocked on S4 |
+| S4 | [2026-05-21-muntjac-s4-multiplatform-design.md](./2026-05-21-muntjac-s4-multiplatform-design.md) | [2026-05-21-muntjac-s4-multiplatform.md](../plans/2026-05-21-muntjac-s4-multiplatform.md) | ✅ shipped (tag `s4-complete`, 31 commits, 158 tests) |
+| S5 | (not yet written) | (not yet written) | ⬜ next |
 | S6 | (not yet written) | (not yet written) | ⬜ blocked on S5 |
 | S7 | (not yet written) | (not yet written) | ⬜ blocked on S6 |
 | S8 | (not yet written) | (not yet written) | ⬜ blocked on S7 |
