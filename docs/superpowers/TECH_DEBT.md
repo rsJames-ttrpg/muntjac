@@ -21,14 +21,6 @@ similar issue surfaces.
 
 ### From S1 final stage review (2026-05-20, `s1-complete`)
 
-#### `BadVersion` error variant overloaded for URL parse failures
-- **Source:** S1 final code-quality review
-- **Severity:** Polish
-- **What:** `src/lock/parser.rs` reuses `LockfileError::BadVersion` for sdist/wheel/git URL parse failures (with `reason: "wheel URL: ..."`). The error name implies a Python version string failed to parse.
-- **Why it matters:** Confusing in logs — "BadVersion" for a malformed URL doesn't match user mental model.
-- **Fix:** Add a `LockfileError::BadUrl { package: String, field: &'static str, url: String, reason: String }` variant. Migrate the URL parse failures to use it.
-- **Target:** S4 (when wheel-URL handling surfaces during BUCK emission); originally targeted S2 but the wheel selector parses filenames not URLs, so the change can wait until URLs are more prominent.
-
 ### From S1 implementer self-reports
 
 #### `BadGroupName` regex `[a-z][a-z0-9-]*` may be too restrictive
@@ -39,14 +31,6 @@ similar issue surfaces.
 - **Fix:** Cross-check the actual uv lockfile output against group names containing `_` / uppercase. Loosen the regex if real-world usage requires it.
 - **Target:** S6 (when fixup engine starts consuming group config).
 
-#### Tarjan SCC is recursive — could stack-overflow on adversarial input
-- **Source:** S1 Task 9 implementer concern
-- **Severity:** Polish
-- **What:** `src/lock/graph.rs::strongconnect` is recursive. uv.lock files are typically <500 nodes, but a hand-crafted adversarial input or a future Bazel-style monorepo with >10k packages could overflow the stack.
-- **Why it matters:** Not a security issue for v1; muntjac trusts uv.lock to be well-formed. But the failure mode would be panic, not error.
-- **Fix:** Convert to iterative form with an explicit stack. Standard Tarjan iterative algorithm.
-- **Target:** S4 or later, only if a real input triggers it.
-
 ### From S2 final stage review (2026-05-21, `s2-complete`)
 
 #### `cp313t` free-threaded ABI not first-class
@@ -55,7 +39,7 @@ similar issue surfaces.
 - **What:** Wheel filenames with `cp313t` (Python 3.13+ free-threaded ABI) currently parse as `AbiTag::Other("cp313t")`, which is correct for distinguishing from regular `cp313` but loses the structural info.
 - **Why it matters:** Free-threaded wheels are becoming common (numpy, ML libraries ship them). The `Other` routing keeps them visibly distinct, but the wheel selector can't *prefer* a free-threaded wheel on a free-threaded interpreter — they all lose to compatible-list entries.
 - **Fix:** Add a `free_threaded` boolean (or a `Threading` enum) to `AbiTag::CPython`. Extend `Config::Platform` and `PythonVersion` to carry a free-threading flag. Update the compatible-list builder.
-- **Target:** S4+ once Python 3.13 free-threading stabilizes (`PEP 703` finalized).
+- **Target:** S5 or later. The free-threaded Python non-goal in the main design spec was lifted in S4 (commit ab21bbe), so this item is no longer constrained by project posture. Implementation deferred until PEP 703 has more real-world signal or a user requests it.
 
 ---
 
@@ -104,3 +88,11 @@ similar issue surfaces.
 ### `RawConfig::platforms` has no `#[serde(default)]`
 - **Resolved:** S3, commit `08c42a6`
 - **Summary:** Added `#[serde(default)]` to `RawConfig::platforms` and an explicit `is_empty()` check in `Config::from_raw` that returns `ConfigError::MissingField("platforms")`. A `muntjac.toml` with zero `[platforms.*]` tables now fails with the clearer error rather than a generic Parse error.
+
+### `BadVersion` error variant overloaded for URL parse failures
+- **Resolved:** S4, commit `1f8d1bf`
+- **Summary:** Added `LockfileError::BadUrl { package, field: &'static str, url, reason }`. `src/lock/parser.rs` migrated four URL parse sites (sdist, wheel, registry, git) off `BadVersion`. New unit test asserts the variant on malformed wheel URLs.
+
+### Tarjan SCC is recursive — could stack-overflow on adversarial input
+- **Resolved:** S4, commit `cfabbd4`
+- **Summary:** Converted `tarjan_scc` in `src/lock/graph.rs` to iterative form using an explicit `Vec<(node, edge_cursor)>` work stack. The recursive form actually overflowed at 5000 nodes on cargo's default 2MB test-thread stack — verified, this was a real bug, not just hardening. Algorithm output unchanged; existing graph tests pass. New stress test asserts a 5000-node linear chain processes without stack overflow.
