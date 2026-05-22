@@ -106,10 +106,21 @@ pub fn build_emit_input(
     config: &Config,
     tree: &Tree,
     lockfile: &Lockfile,
+    manifest: Option<&crate::sdist::Manifest>,
 ) -> anyhow::Result<EmitInput> {
     let graph = crate::lock::graph::build(lockfile)?;
     crate::lock::graph::detect_cycles(&graph)?;
     let view = crate::lock::resolved::project(&graph, config, tree);
+
+    // Closure that looks up a (package, version) in the prebake manifest.
+    let manifest_entry = |name: &str, ver: &str| -> Option<crate::sdist::ManifestEntry> {
+        manifest.and_then(|m| {
+            m.entries
+                .iter()
+                .find(|e| e.package == name && e.version == ver)
+                .cloned()
+        })
+    };
 
     // (name, version) -> &[Wheel] index from the lockfile. ResolvedPackage
     // carries no wheel data, so we cross-reference into the Lockfile here.
@@ -149,12 +160,77 @@ pub fn build_emit_input(
         for pkg in &resolved_cfg.packages {
             let key: PkgKey = (pkg.name.clone(), pkg.version.clone());
             let wheels = wheel_index.get(&key).copied().unwrap_or(&[]);
+
+            // ---- Sdist-only path: consult the prebake manifest. ----
             if wheels.is_empty() {
-                // First-party packages have no wheels; sdist-only registry
-                // packages are out of scope until S5. Skip silently here so
-                // happy path keeps working; S5 will revisit.
-                continue;
+                // Find the lockfile package to see whether there's an sdist.
+                let lock_pkg = lockfile.packages.iter().find(|p| {
+                    p.name.as_ref() == pkg.name && p.version.to_string() == pkg.version
+                });
+                let sdist = lock_pkg.and_then(|p| p.sdist.clone());
+
+                let Some(sdist) = sdist else {
+                    // First-party (virtual/editable/directory) packages have
+                    // no wheels and no sdist — skip silently as before.
+                    continue;
+                };
+                let lockfile_sdist_sha = sdist.hash.trim_start_matches("sha256:").to_string();
+
+                let Some(entry) = manifest_entry(&pkg.name, &pkg.version) else {
+                    anyhow::bail!(
+                        "pure-python sdist {} {} not prebaked. Run `muntjac vendor` first.",
+                        pkg.name,
+                        pkg.version
+                    );
+                };
+
+                if entry.sdist_sha256 != lockfile_sdist_sha {
+                    anyhow::bail!(
+                        "prebake of {} {} is stale (sdist sha changed in uv.lock). Run `muntjac vendor`.",
+                        pkg.name,
+                        pkg.version
+                    );
+                }
+
+                match entry.classification {
+                    crate::sdist::ManifestClassification::PurePython {
+                        wheel_filename,
+                        wheel_sha256,
+                        ..
+                    } => {
+                        // Pure-python wheel: same source covers every cfg.
+                        pkg_wheels.entry(key.clone()).or_default().insert(
+                            cfg_name.clone(),
+                            EmitWheel {
+                                url: format!("prebake:{}", wheel_filename),
+                                hash: format!("sha256:{}", wheel_sha256),
+                            },
+                        );
+                        pkg_deps_per_cell
+                            .entry(key)
+                            .or_default()
+                            .insert(cfg_name.clone(), pkg.deps.clone());
+                        continue;
+                    }
+                    crate::sdist::ManifestClassification::Native { .. } => {
+                        // Canonical §6 error message; one per affected cell.
+                        anyhow::bail!(
+                            "{} {} has no wheel for ({}, {}) and is a native sdist.\n       \
+                             add a fixup at third-party/python/fixups/{}/fixups.toml — see\n       \
+                             `muntjac fixups show {}` for the current community fixup, or use\n       \
+                             `replace_deps` to point at a hand-rolled Buck target.",
+                            pkg.name,
+                            pkg.version,
+                            cfg_name.as_str().split('-').next().unwrap_or(cfg_name.as_str()),
+                            cfg_name.as_str().split_once('-').map(|x| x.1).unwrap_or(""),
+                            pkg.name,
+                            pkg.name,
+                        );
+                    }
+                }
             }
+
+            // ---- Wheels-present path: pick the best wheel. ----
             match pick_wheel(wheels, &compat) {
                 PickResult::Picked { wheel, .. } => {
                     pkg_wheels.entry(key.clone()).or_default().insert(
@@ -170,10 +246,12 @@ pub fn build_emit_input(
                         .insert(cfg_name.clone(), pkg.deps.clone());
                 }
                 PickResult::NoWheel => {
+                    // Lockfile says this package has wheels but none matched
+                    // the cfg's compat tags. Distinct from sdist-only.
                     anyhow::bail!(
-                        "package '{}-{}' has no wheel for cell ({}, {}) and S3 does \
-                         not yet handle native sdists. Restrict the affected \
-                         python_versions or platforms in muntjac.toml until S5 lands.",
+                        "package '{}-{}' has no compatible wheel for cell ({}, {}) — \
+                         no wheels matched the (platform, python) tags. Consider \
+                         restricting muntjac.toml platforms.",
                         pkg.name,
                         pkg.version,
                         resolved_cfg.python_version,
@@ -360,7 +438,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile).expect("build_emit_input succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None).expect("build_emit_input succeeds");
 
         assert_eq!(input.tree, "default");
         assert_eq!(input.third_party_dir, "third-party/python");
@@ -461,7 +539,7 @@ mod tests {
             packages: vec![app, ancient],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile).expect_err("should fail on NoWheel");
+        let err = build_emit_input(&config, &tree, &lockfile, None).expect_err("should fail on NoWheel");
         let msg = format!("{:#}", err);
         assert!(
             msg.contains("ancient-pkg"),
@@ -478,7 +556,19 @@ mod tests {
             "error must name the platform: {}",
             msg
         );
-        assert!(msg.contains("S5"), "error must point at S5: {}", msg);
+        // S5 changed the error wording — the message now describes the
+        // wheels-present-but-incompatible path. Verify it does not blame an
+        // sdist (the new fork) and does suggest restricting platforms.
+        assert!(
+            msg.contains("no compatible wheel") || msg.contains("no wheels matched"),
+            "error must describe the no-compat-wheel condition: {}",
+            msg
+        );
+        assert!(
+            msg.contains("muntjac.toml") || msg.contains("restricting"),
+            "error must hint at muntjac.toml restriction: {}",
+            msg
+        );
     }
 
     #[test]
@@ -581,7 +671,7 @@ mod tests {
             packages: vec![app, parent, child],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
         let parent_pkg = input
             .packages
             .iter()
@@ -711,7 +801,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
 
         let rich = input
             .packages
@@ -813,7 +903,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
         let pkg = input
             .packages
             .iter()
@@ -866,5 +956,169 @@ mod tests {
             EmitDeps::PerCell(m) => assert_eq!(m.len(), 2),
             EmitDeps::Uniform(_) => panic!("expected PerCell"),
         }
+    }
+
+    #[test]
+    fn build_emit_input_errors_when_sdist_missing_from_manifest() {
+        // Build a synthetic lockfile with one sdist-only package and
+        // confirm that passing `manifest = None` causes build_emit_input to
+        // fail with the "not prebaked" error.
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Sdist, Source};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let config_toml = r#"
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target  = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+"#;
+        let config = crate::config::Config::from_str(config_toml).unwrap();
+        let tree = config.trees[0].clone();
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 1,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("root").unwrap(),
+                    version: Version::from_str("0.0.0").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("tomli").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("tomli").unwrap(),
+                    version: Version::from_str("2.0.1").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: Some(Sdist {
+                        url: Url::parse("https://example.com/tomli-2.0.1.tar.gz").unwrap(),
+                        hash: "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f".into(),
+                        size: None,
+                    }),
+                    wheels: vec![],
+                    metadata: None,
+                },
+            ],
+        };
+
+        // No manifest provided → NotPrebaked error.
+        let err = build_emit_input(&config, &tree, &lockfile, None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not prebaked"),
+            "expected 'not prebaked' error, got: {msg}"
+        );
+        assert!(
+            msg.contains("muntjac vendor"),
+            "expected hint to mention `muntjac vendor`, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn build_emit_input_errors_when_manifest_sdist_sha_mismatch() {
+        // Same lockfile as above but with a manifest whose sdist_sha256
+        // disagrees → StalePrebake error.
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Sdist, Source};
+        use crate::sdist::{
+            AllowlistedBackend, Manifest, ManifestClassification, ManifestEntry,
+        };
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let config_toml = r#"
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target  = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+"#;
+        let config = crate::config::Config::from_str(config_toml).unwrap();
+        let tree = config.trees[0].clone();
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 1,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("root").unwrap(),
+                    version: Version::from_str("0.0.0").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("tomli").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("tomli").unwrap(),
+                    version: Version::from_str("2.0.1").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: Some(Sdist {
+                        url: Url::parse("https://example.com/tomli-2.0.1.tar.gz").unwrap(),
+                        hash: "sha256:newsha".into(),
+                        size: None,
+                    }),
+                    wheels: vec![],
+                    metadata: None,
+                },
+            ],
+        };
+
+        // Manifest points at the OLD sdist hash → stale.
+        let manifest = Manifest {
+            version: 1,
+            entries: vec![ManifestEntry {
+                package: "tomli".into(),
+                version: "2.0.1".into(),
+                sdist_sha256: "oldsha".into(),
+                classification: ManifestClassification::PurePython {
+                    backend: AllowlistedBackend::FlitCore,
+                    wheel_filename: "tomli-2.0.1-py3-none-any.whl".into(),
+                    wheel_sha256: "0".into(),
+                },
+            }],
+        };
+
+        let err = build_emit_input(&config, &tree, &lockfile, Some(&manifest)).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("stale"),
+            "expected 'stale' error, got: {msg}"
+        );
+        assert!(
+            msg.contains("muntjac vendor"),
+            "expected hint to mention `muntjac vendor`, got: {msg}"
+        );
     }
 }

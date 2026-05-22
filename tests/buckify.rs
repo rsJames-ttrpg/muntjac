@@ -17,8 +17,18 @@ fn copy_fixture_to(src: &Path, dst: &Path) {
             let path = entry.path();
             let name = entry.file_name();
             if path.is_dir() {
-                // Skip `expected/` and `third-party/` — they're test outputs.
-                if name == "expected" || name == "third-party" {
+                // Skip `expected/` always. Skip `third-party/` *unless* it
+                // contains a `prebake/` subtree (committed for fixtures that
+                // start the buckify run with a pre-existing manifest).
+                if name == "expected" {
+                    continue;
+                }
+                if name == "third-party" {
+                    let prebake_src = path.join("python/prebake");
+                    if prebake_src.is_dir() {
+                        let prebake_dst = dst.join("third-party/python/prebake");
+                        copy_dir(&prebake_src, &prebake_dst);
+                    }
                     continue;
                 }
                 copy_dir(&path, &dst.join(&name));
@@ -125,6 +135,23 @@ fn fixture_03_musllinux_golden() {
     assert!(
         buck.contains("musllinux"),
         "expected at least one musllinux wheel URL in generated BUCK"
+    );
+}
+
+#[test]
+fn fixture_04_pure_python_sdist_golden() {
+    let fix = fixture("04-pure-python-sdist");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
     );
 }
 

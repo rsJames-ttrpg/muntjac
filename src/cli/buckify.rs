@@ -37,10 +37,17 @@ pub fn run(globals: &Globals) -> Result<()> {
         let lockfile = lock::parser::parse(&lock_bytes)
             .with_context(|| format!("parsing {}", lockfile_path.display()))?;
 
-        let input = build_emit_input(&config, tree, &lockfile)?;
+        let third_party_dir = cwd.join(&tree.third_party_dir);
+        let manifest_path = third_party_dir.join("prebake/.manifest.toml");
+        let manifest = if manifest_path.is_file() {
+            Some(crate::sdist::Manifest::load(&manifest_path)?)
+        } else {
+            None
+        };
+
+        let input = build_emit_input(&config, tree, &lockfile, manifest.as_ref())?;
         let output = emitter.emit(&input);
 
-        let third_party_dir = cwd.join(&tree.third_party_dir);
         write_outputs(&output, &third_party_dir)?;
     }
     Ok(())
