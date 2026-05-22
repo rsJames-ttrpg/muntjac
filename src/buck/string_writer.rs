@@ -156,28 +156,66 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     )
     .unwrap();
     writeln!(s).unwrap();
-    writeln!(s, "    for cfg, wheel in wheels.items():").unwrap();
-    writeln!(s, "        url, sha = wheel").unwrap();
-    writeln!(s, "        if sha.startswith(\"sha256:\"):").unwrap();
-    writeln!(s, "            sha = sha[len(\"sha256:\"):]").unwrap();
     writeln!(
         s,
-        "        wheel_name = \"{{}}-{{}}-{{}}-wheel\".format(name, version, cfg)"
+        "    # Dedup source-target rules by (src, sha): pure-python wheels often span"
     )
     .unwrap();
-    writeln!(s, "        native.http_file(").unwrap();
-    writeln!(s, "            name = wheel_name,").unwrap();
-    writeln!(s, "            sha256 = sha,").unwrap();
-    writeln!(s, "            urls = [url],").unwrap();
-    writeln!(s, "            visibility = [],").unwrap();
-    writeln!(s, "        )").unwrap();
+    writeln!(
+        s,
+        "    # all cfgs with the same content. Emit one rule per unique tuple, then"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    # N library variants referencing it. Source-target index assignment is"
+    )
+    .unwrap();
+    writeln!(s, "    # deterministic (sorted cfg iteration).").unwrap();
+    writeln!(s, "    seen_sources = {{}}").unwrap();
+    writeln!(s, "    src_targets = {{}}").unwrap();
+    writeln!(s, "    for cfg in sorted(wheels.keys()):").unwrap();
+    writeln!(s, "        src, sha256 = wheels[cfg]").unwrap();
+    writeln!(s, "        sha = sha256.removeprefix(\"sha256:\")").unwrap();
+    writeln!(s, "        key = (src, sha)").unwrap();
+    writeln!(s, "        if key in seen_sources:").unwrap();
+    writeln!(s, "            src_targets[cfg] = seen_sources[key]").unwrap();
+    writeln!(s, "            continue").unwrap();
+    writeln!(
+        s,
+        "        target = \"{{}}-{{}}-src-{{}}\".format(name, version, len(seen_sources))"
+    )
+    .unwrap();
+    writeln!(s, "        seen_sources[key] = target").unwrap();
+    writeln!(s, "        src_targets[cfg] = target").unwrap();
+    writeln!(s).unwrap();
+    writeln!(s, "        if src.startswith(\"prebake:\"):").unwrap();
+    writeln!(s, "            rel = src[len(\"prebake:\"):]").unwrap();
+    writeln!(s, "            native.export_file(").unwrap();
+    writeln!(s, "                name = target,").unwrap();
+    writeln!(s, "                src = \"prebake/{{}}\".format(rel),").unwrap();
+    writeln!(s, "                visibility = [],").unwrap();
+    writeln!(s, "            )").unwrap();
+    writeln!(s, "        else:").unwrap();
+    writeln!(s, "            native.http_file(").unwrap();
+    writeln!(s, "                name = target,").unwrap();
+    writeln!(s, "                sha256 = sha,").unwrap();
+    writeln!(s, "                urls = [src],").unwrap();
+    writeln!(s, "                visibility = [],").unwrap();
+    writeln!(s, "            )").unwrap();
+    writeln!(s).unwrap();
+    writeln!(s, "    for cfg in sorted(wheels.keys()):").unwrap();
     writeln!(s, "        native.prebuilt_python_library(").unwrap();
     writeln!(
         s,
         "            name = \"{{}}-{{}}__{{}}\".format(name, version, cfg),"
     )
     .unwrap();
-    writeln!(s, "            binary_src = \":\" + wheel_name,").unwrap();
+    writeln!(
+        s,
+        "            binary_src = \":{{}}\".format(src_targets[cfg]),"
+    )
+    .unwrap();
     writeln!(s, "            deps = deps,").unwrap();
     writeln!(s, "            visibility = [],").unwrap();
     writeln!(s, "        )").unwrap();
@@ -187,7 +225,7 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "        actual = select({{").unwrap();
     writeln!(
         s,
-        "            \"//{}/config:\" + cfg: \":{{}}-{{}}__{{}}\".format(name, version, cfg)",
+        "            \"//{}/config:{{}}\".format(cfg): \":{{}}-{{}}__{{}}\".format(name, version, cfg)",
         tpd
     )
     .unwrap();
@@ -198,11 +236,7 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "    native.alias(").unwrap();
     writeln!(s, "        name = name,").unwrap();
     writeln!(s, "        actual = \":{{}}-{{}}\".format(name, version),").unwrap();
-    writeln!(
-        s,
-        "        visibility = visibility if visibility != None else [\"PUBLIC\"],"
-    )
-    .unwrap();
+    writeln!(s, "        visibility = visibility or [\"PUBLIC\"],").unwrap();
     writeln!(s, "    )").unwrap();
     s
 }

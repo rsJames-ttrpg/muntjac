@@ -1,5 +1,6 @@
 ---
 source: src/buck/string_writer.rs
+assertion_line: 828
 expression: StringTemplateEmitter.emit(&empty_input()).muntjac_bzl
 ---
 ##
@@ -45,20 +46,42 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
     if unknown:
         fail("unknown config(s) in {}: {}".format(name, unknown))
 
-    for cfg, wheel in wheels.items():
-        url, sha = wheel
-        if sha.startswith("sha256:"):
-            sha = sha[len("sha256:"):]
-        wheel_name = "{}-{}-{}-wheel".format(name, version, cfg)
-        native.http_file(
-            name = wheel_name,
-            sha256 = sha,
-            urls = [url],
-            visibility = [],
-        )
+    # Dedup source-target rules by (src, sha): pure-python wheels often span
+    # all cfgs with the same content. Emit one rule per unique tuple, then
+    # N library variants referencing it. Source-target index assignment is
+    # deterministic (sorted cfg iteration).
+    seen_sources = {}
+    src_targets = {}
+    for cfg in sorted(wheels.keys()):
+        src, sha256 = wheels[cfg]
+        sha = sha256.removeprefix("sha256:")
+        key = (src, sha)
+        if key in seen_sources:
+            src_targets[cfg] = seen_sources[key]
+            continue
+        target = "{}-{}-src-{}".format(name, version, len(seen_sources))
+        seen_sources[key] = target
+        src_targets[cfg] = target
+
+        if src.startswith("prebake:"):
+            rel = src[len("prebake:"):]
+            native.export_file(
+                name = target,
+                src = "prebake/{}".format(rel),
+                visibility = [],
+            )
+        else:
+            native.http_file(
+                name = target,
+                sha256 = sha,
+                urls = [src],
+                visibility = [],
+            )
+
+    for cfg in sorted(wheels.keys()):
         native.prebuilt_python_library(
             name = "{}-{}__{}".format(name, version, cfg),
-            binary_src = ":" + wheel_name,
+            binary_src = ":{}".format(src_targets[cfg]),
             deps = deps,
             visibility = [],
         )
@@ -66,7 +89,7 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
     native.alias(
         name = "{}-{}".format(name, version),
         actual = select({
-            "//third-party/python/config:" + cfg: ":{}-{}__{}".format(name, version, cfg)
+            "//third-party/python/config:{}".format(cfg): ":{}-{}__{}".format(name, version, cfg)
             for cfg in wheels.keys()
         }),
         visibility = [],
@@ -74,5 +97,5 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
     native.alias(
         name = name,
         actual = ":{}-{}".format(name, version),
-        visibility = visibility if visibility != None else ["PUBLIC"],
+        visibility = visibility or ["PUBLIC"],
     )
