@@ -173,8 +173,23 @@ S4 also adds a header comment documenting the python-axis wiring contract and th
 ##
 ##   One-time project setup — add to your root PACKAGE:
 ##
-##     load("//<third_party_dir>:wiring.bzl", "setup_muntjac")
-##     setup_muntjac()
+##     load(
+##         "@prelude//cfg/modifier:cfg_constructor.bzl",
+##         "cfg_constructor_post_constraint_analysis",
+##         "cfg_constructor_pre_constraint_analysis",
+##     )
+##     load("@prelude//cfg/modifier:common.bzl", "MODIFIER_METADATA_KEY")
+##     load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
+##     load("//<third_party_dir>:wiring.bzl", "MUNTJAC_HOST_MODIFIERS")
+##
+##     set_cfg_constructor(
+##         stage0 = cfg_constructor_pre_constraint_analysis,
+##         stage1 = cfg_constructor_post_constraint_analysis,
+##         key = MODIFIER_METADATA_KEY,
+##         aliases = struct(),
+##         extra_data = struct(),
+##     )
+##     set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)
 ##
 ##   This registers buck2's cfg_constructor and auto-routes the host
 ##   OS+CPU to the matching muntjac platform constraint.
@@ -370,14 +385,16 @@ tests/fixtures/buck/02-numpy-pandas/
 ├── .gitmodules           (root-level; prelude submodule pointer lives here)
 ├── prelude/              git submodule (gitignored ./prelude/ content but the pointer
 │                         lives in .gitmodules at repo root)
-├── PACKAGE               hand-written root PACKAGE; loads + calls setup_muntjac()
+├── PACKAGE               hand-written root PACKAGE; loads MUNTJAC_HOST_MODIFIERS
+│                         + calls set_cfg_constructor + set_cfg_modifiers directly
 │                         (worked example of muntjac's user-side setup)
 ├── toolchains/
 │   └── BUCK              hand-written system_python + system_cxx toolchains
 ├── expected/
 │   ├── BUCK              one pypi_package call per resolved package
 │   ├── muntjac.bzl       6-cell _CONFIGS + native.* rules + python-axis header
-│   ├── wiring.bzl        setup_muntjac() with cfg_constructor + host-axis modifiers
+│   ├── wiring.bzl        top-level MUNTJAC_HOST_MODIFIERS constant + header
+│   │                     documenting the user-side cfg_constructor + set_cfg_modifiers snippet
 │   └── config/BUCK       2 py-axis + 3 plat-axis constraint_values, 6 config_settings,
 │                         all visibility = ["PUBLIC"]
 └── tests/smoke/
@@ -635,9 +652,9 @@ S4 ships when all of the following hold green on CI's three matrix runners (`ubu
 - `EmitDeps::PerCell` rendered as `deps = select({...})` when cells diverge; uniform cells continue to render plain lists.
 - Generated `<third_party_dir>/wiring.bzl` exports a top-level constant `MUNTJAC_HOST_MODIFIERS` (a list of nested `ModifiersMatch` dicts with `"_type"` discriminators + fully-qualified `root//...` constraint targets). Users `load` it from their root PACKAGE and pass to `set_cfg_modifiers` directly (the prelude blocks wrapping the call in a `.bzl` function).
 - Generated `<third_party_dir>/PACKAGE` is **not** in the emitted file set.
-- Generated `<third_party_dir>/muntjac.bzl` uses `native.<rule>` for the native rules (`http_file`, `prebuilt_python_library`, `alias`) and contains the python-axis wiring header pointing at both the per-binary `modifiers = [...]` snippet and the `setup_muntjac()` invocation.
+- Generated `<third_party_dir>/muntjac.bzl` uses `native.<rule>` for the native rules (`http_file`, `prebuilt_python_library`, `alias`) and contains the python-axis wiring header pointing at both the per-binary `modifiers = [...]` snippet and the `MUNTJAC_HOST_MODIFIERS` root-PACKAGE invocation snippet.
 - Generated `<third_party_dir>/config/BUCK` declares `visibility = ["PUBLIC"]` on every `constraint_value` and `config_setting`.
-- `tests/smoke/BUCK` + `tests/smoke/demo.py` committed inside the `02-numpy-pandas` fixture as the canonical worked example. The fixture also commits a hand-written root `PACKAGE` (loading `setup_muntjac`) and `toolchains/BUCK` (system python + cxx) to demonstrate the user-side setup.
+- `tests/smoke/BUCK` + `tests/smoke/demo.py` committed inside the `02-numpy-pandas` fixture as the canonical worked example. The fixture also commits a hand-written root `PACKAGE` (loading `MUNTJAC_HOST_MODIFIERS` + calling `set_cfg_constructor` and `set_cfg_modifiers` inline) and `toolchains/BUCK` (system python + cxx) to demonstrate the user-side setup.
 
 ### Folded-in tech debt (all moved to `TECH_DEBT.md ## Resolved`)
 
@@ -657,7 +674,7 @@ S4 ships when all of the following hold green on CI's three matrix runners (`ubu
 
 - **buck2 install action stability in CI.** No officially-maintained GitHub Action for buck2 install exists. Mitigation: pin buck2 version, install via `curl + zstd` from the release artifact. Step is required (no silent skip). If the binary release moves, the install step errors and CI is red until the URL is fixed.
 
-- **Open-source prelude's `set_cfg_constructor` isn't registered by default.** Without explicit registration, `set_cfg_modifiers` and per-target `modifiers` attrs are silently no-ops. The spike caught this and the emitter's `wiring.bzl::setup_muntjac()` registers the constructor explicitly. New users following the wiring contract get it for free; users who skip `setup_muntjac()` get a silent miss. Mitigated by clear docs in `muntjac.bzl` header + the fixture root PACKAGE as a worked example.
+- **Open-source prelude's `set_cfg_constructor` isn't registered by default.** Without explicit registration, `set_cfg_modifiers` and per-target `modifiers` attrs are silently no-ops. The spike caught this; the documented root-PACKAGE snippet (in `wiring.bzl`'s header and the muntjac.bzl wiring contract) calls `set_cfg_constructor` directly. The prelude blocks wrapping `set_cfg_modifiers` in a `.bzl` helper, so muntjac can't make this fully automatic — users following the documented snippet get it right; users who skip the snippet get a silent miss. Mitigated by clear docs in `muntjac.bzl` header + the fixture root PACKAGE as a worked example.
 
 - **musllinux fixture package-availability drift.** `psycopg2-binary`'s musllinux variants may change in future releases. Mitigation: uv.lock is frozen in the fixture; golden BUCK references the frozen URL. If the package becomes impractical (e.g. all native deps), planner picks an alternative — the fixture's purpose is the *selector exercise*, not the specific package.
 
