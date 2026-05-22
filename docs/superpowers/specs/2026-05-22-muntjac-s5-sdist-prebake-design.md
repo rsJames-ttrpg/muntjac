@@ -187,18 +187,22 @@ wheel_filename = "tomli-2.0.1-py3-none-any.whl"
 wheel_sha256 = "cafef00d..."
 ```
 
-### WheelSource (in `src/buck/emit.rs`)
+### Wheel source convention (on `EmitWheel.url`)
 
-```rust
-pub enum WheelSource {
-    Remote { url: String, sha256: String },
-    Prebake { rel_path: String, sha256: String },  // path relative to `<third_party_dir>/prebake/`
-}
-```
+The existing `EmitWheel { url: String, hash: String }` struct continues to carry the URL slot; the discriminator between PyPI-fetched and locally-prebaked sources is the URL **prefix**:
 
-The wheel-matrix solver gains a new outcome path: when a package has no wheels in `uv.lock` and the manifest entry is `pure-python`, every cell of the matrix resolves to the same `WheelSource::Prebake` referencing the manifest's `wheel_filename` and `wheel_sha256`. Pure-python wheels are universal across `(platform, python_version)` cells.
+- `https://...` (or any other PyPI-style scheme) → renders as `http_file` via the muntjac.bzl macro.
+- `prebake:<filename>` → renders as `native.export_file` referencing `prebake/<filename>` (relative to the BUCK file directory).
 
-When the manifest entry is `native`, the matrix solver returns a new `PickResult::NativeSdist` variant per affected cell. The emitter's existing `NoWheel` branch in `build_emit_input` now becomes "`NoWheel` OR `NativeSdist`" and dispatches to the right error message (see §6).
+This keeps the Rust type surface minimal (one shared `EmitWheel` carrying the same fields it always has) while making the convention testable byte-for-byte in the rendered output. The macro-side dispatch on `src.startswith("prebake:")` is the canonical contract (§6); the Rust side simply produces the right string.
+
+`build_emit_input` (rather than `pick_wheel`) is the natural site for manifest consumption — `pick_wheel` operates on wheel slices and has no manifest context. When a registry package has `sdist.is_some()` and `wheels.is_empty()`, `build_emit_input` looks up the manifest entry:
+- Missing entry → `NotPrebaked` error.
+- `sdist_sha256` mismatch with the lockfile's sdist hash → `StalePrebake` error.
+- `PurePython` entry → synthesize `EmitWheel { url: "prebake:<wheel_filename>", hash: "sha256:<wheel_sha256>" }` for every cell (pure-python wheels are universal across `(platform, python_version)` cells).
+- `Native` entry → emit the canonical §6 error per affected cell.
+
+When a registry package has wheels but none match the cfg's compatible tags, the existing `PickResult::NoWheel` branch fires with its own distinct "no compatible wheel" message — separate from the sdist-only path.
 
 ### SdistError
 
