@@ -76,9 +76,9 @@ impl Manifest {
 
         for entry in &sorted {
             writeln!(out, "[[entries]]").unwrap();
-            writeln!(out, "package = {:?}", entry.package).unwrap();
-            writeln!(out, "version = {:?}", entry.version).unwrap();
-            writeln!(out, "sdist_sha256 = {:?}", entry.sdist_sha256).unwrap();
+            writeln!(out, "package = {}", toml_str(&entry.package)).unwrap();
+            writeln!(out, "version = {}", toml_str(&entry.version)).unwrap();
+            writeln!(out, "sdist_sha256 = {}", toml_str(&entry.sdist_sha256)).unwrap();
             match &entry.classification {
                 ManifestClassification::PurePython {
                     backend,
@@ -86,13 +86,13 @@ impl Manifest {
                     wheel_sha256,
                 } => {
                     writeln!(out, "classification = \"pure-python\"").unwrap();
-                    writeln!(out, "backend = {:?}", backend.as_str()).unwrap();
-                    writeln!(out, "wheel_filename = {:?}", wheel_filename).unwrap();
-                    writeln!(out, "wheel_sha256 = {:?}", wheel_sha256).unwrap();
+                    writeln!(out, "backend = {}", toml_str(backend.as_str())).unwrap();
+                    writeln!(out, "wheel_filename = {}", toml_str(wheel_filename)).unwrap();
+                    writeln!(out, "wheel_sha256 = {}", toml_str(wheel_sha256)).unwrap();
                 }
                 ManifestClassification::Native { reason } => {
                     writeln!(out, "classification = \"native\"").unwrap();
-                    writeln!(out, "native_reason = {:?}", reason).unwrap();
+                    writeln!(out, "native_reason = {}", toml_str(reason)).unwrap();
                 }
             }
             writeln!(out).unwrap();
@@ -135,10 +135,24 @@ impl Manifest {
                             r.backend.as_deref().unwrap_or("")
                         )),
                     })?;
+                    let wheel_filename = r.wheel_filename.ok_or_else(|| SdistError::ManifestParse {
+                        path: path.to_path_buf(),
+                        source: toml::de::Error::custom(format!(
+                            "entry `{}`: pure-python classification requires `wheel_filename`",
+                            r.package
+                        )),
+                    })?;
+                    let wheel_sha256 = r.wheel_sha256.ok_or_else(|| SdistError::ManifestParse {
+                        path: path.to_path_buf(),
+                        source: toml::de::Error::custom(format!(
+                            "entry `{}`: pure-python classification requires `wheel_sha256`",
+                            r.package
+                        )),
+                    })?;
                     ManifestClassification::PurePython {
                         backend,
-                        wheel_filename: r.wheel_filename.unwrap_or_default(),
-                        wheel_sha256: r.wheel_sha256.unwrap_or_default(),
+                        wheel_filename,
+                        wheel_sha256,
                     }
                 }
                 "native" => ManifestClassification::Native {
@@ -185,6 +199,10 @@ struct RawEntry {
     wheel_filename: Option<String>,
     wheel_sha256: Option<String>,
     native_reason: Option<String>,
+}
+
+fn toml_str(s: &str) -> String {
+    toml::Value::String(s.to_string()).to_string()
 }
 
 #[cfg(test)]
@@ -293,5 +311,62 @@ mod tests {
         m.save(&path).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("backend = \"poetry-core\""));
+    }
+
+    #[test]
+    fn pure_python_missing_wheel_filename_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("m.toml");
+        std::fs::write(
+            &path,
+            r#"version = 1
+
+[[entries]]
+package = "x"
+version = "1.0"
+sdist_sha256 = "0"
+classification = "pure-python"
+backend = "flit-core"
+wheel_sha256 = "0"
+"#,
+        )
+        .unwrap();
+        let err = Manifest::load(&path).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("wheel_filename"),
+            "error message should name the missing field: {msg}"
+        );
+    }
+
+    #[test]
+    fn toml_string_escape_handles_control_chars() {
+        // Verifies the TOML-safe escape path works for a string containing a
+        // non-ASCII codepoint that Rust's Debug would render with `\u{...}`
+        // braces (invalid TOML).
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("m.toml");
+        let m = Manifest {
+            version: 1,
+            entries: vec![ManifestEntry {
+                package: "x".into(),
+                version: "1.0".into(),
+                sdist_sha256: "0".into(),
+                classification: ManifestClassification::Native {
+                    // U+200B (zero-width space) — would be rendered as `\u{200b}`
+                    // by Debug, which is not valid TOML.
+                    reason: "weird\u{200b}backend".into(),
+                },
+            }],
+        };
+        m.save(&path).unwrap();
+        let reloaded = Manifest::load(&path).unwrap();
+        assert_eq!(reloaded.entries.len(), 1);
+        match &reloaded.entries[0].classification {
+            ManifestClassification::Native { reason } => {
+                assert_eq!(reason, "weird\u{200b}backend");
+            }
+            other => panic!("expected Native, got {other:?}"),
+        }
     }
 }
