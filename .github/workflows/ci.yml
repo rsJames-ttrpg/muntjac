@@ -15,6 +15,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -33,3 +35,46 @@ jobs:
 
       - name: cargo test
         run: cargo test --locked
+
+      - name: install cp312 python
+        run: |
+          set -euo pipefail
+          # uv ships a known-good cp312 across runners.
+          if ! command -v uv >/dev/null 2>&1; then
+            python3 -m pip install --user uv || pipx install uv
+          fi
+          uv python install 3.12
+          UV_PY_BIN="$(uv python find 3.12)"
+          # Symlink so the prelude's system_python_toolchain finds `python3.12`.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          else
+            sudo ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          fi
+          python3.12 --version
+
+      - name: install buck2
+        run: |
+          set -euo pipefail
+          BUCK2_RELEASE="2026-05-18"
+          case "${{ matrix.runner }}" in
+            ubuntu-latest)       ASSET="buck2-x86_64-unknown-linux-gnu.zst"   ;;
+            ubuntu-24.04-arm)    ASSET="buck2-aarch64-unknown-linux-gnu.zst"  ;;
+            macos-latest)        ASSET="buck2-aarch64-apple-darwin.zst"       ;;
+            *) echo "unknown runner ${{ matrix.runner }}"; exit 1 ;;
+          esac
+          mkdir -p "$HOME/.local/bin"
+          curl -L "https://github.com/facebook/buck2/releases/download/${BUCK2_RELEASE}/${ASSET}" \
+              -o /tmp/buck2.zst
+          # zstd may not be pre-installed on macOS GH runners; install if needed
+          if ! command -v zstd >/dev/null 2>&1; then
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              brew install zstd
+            else
+              sudo apt-get update && sudo apt-get install -y zstd
+            fi
+          fi
+          zstd -d /tmp/buck2.zst -o "$HOME/.local/bin/buck2"
+          chmod +x "$HOME/.local/bin/buck2"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buck2" --version
