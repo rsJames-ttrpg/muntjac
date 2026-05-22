@@ -1,0 +1,7 @@
+[build-system]
+requires = ["setuptools>=61", "cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synth"
+version = "0.0.0"

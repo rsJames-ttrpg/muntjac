@@ -1,0 +1,7 @@
+[build-system]
+requires = ["scikit-build-core>=0.5"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "synth"
+version = "0.0.0"

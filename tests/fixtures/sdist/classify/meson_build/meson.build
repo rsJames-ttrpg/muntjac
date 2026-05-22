@@ -1,0 +1,1 @@
+project('synth', 'c')
