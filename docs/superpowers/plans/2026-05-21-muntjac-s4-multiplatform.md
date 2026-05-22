@@ -4,7 +4,7 @@
 
 **Goal:** Promote the S3 single-platform BUCK emitter to a multi-platform (3 platforms × 2 pythons) emitter that produces working `buck2 build`+`run` against a real numpy demo on three CI runners.
 
-**Architecture:** Extends `src/buck/emit.rs` with an `EmitDeps` enum (Uniform | PerCell) so cell-varying deps render as `deps = select({...})` instead of erroring. Emitter writes a new `<third_party_dir>/wiring.bzl` exporting `setup_muntjac()` (registers `set_cfg_constructor` + binds host OS+CPU via `set_cfg_modifiers`); users invoke it once from their root PACKAGE. Python version stays user-side (per-binary `modifiers = [...]` attr). The S3 `<third_party_dir>/PACKAGE` is no longer emitted (PACKAGE modifiers don't propagate to deps — validated by the spike). CI installs cp312 + `buck2`, regenerates the `02-numpy-pandas` fixture, and runs an in-fixture `python_binary` that imports numpy. Folds in three tech-debt items: `LockfileError::BadUrl`, iterative Tarjan SCC, and a design-spec edit lifting the free-threaded Python non-goal.
+**Architecture:** Extends `src/buck/emit.rs` with an `EmitDeps` enum (Uniform | PerCell) so cell-varying deps render as `deps = select({...})` instead of erroring. Emitter writes a new `<third_party_dir>/wiring.bzl` exporting a top-level constant `MUNTJAC_HOST_MODIFIERS` (host OS+CPU → muntjac platform constraint, as a list of nested `ModifiersMatch` dicts); users `load` it from their root PACKAGE and pass to `set_cfg_modifiers` directly (the prelude blocks wrapping that call in a `.bzl` function). Python version stays user-side (per-binary `modifiers = [...]` attr). The S3 `<third_party_dir>/PACKAGE` is no longer emitted (PACKAGE modifiers don't propagate to deps — validated by the spike). CI installs cp312 + `buck2`, regenerates the `02-numpy-pandas` fixture, and runs an in-fixture `python_binary` that imports numpy. Folds in three tech-debt items: `LockfileError::BadUrl`, iterative Tarjan SCC, and a design-spec edit lifting the free-threaded Python non-goal.
 
 **Tech Stack:** Rust 2024 (existing), `anyhow` for handler errors, `insta` for snapshot tests, `tempfile` + `assert_cmd` for integration tests. Buck2 (binary install) for CI smoke. GitHub Actions matrix on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`.
 
@@ -23,10 +23,10 @@
 | `tests/fixtures/buck/02-numpy-pandas/tests/smoke/BUCK` | Hand-written `python_binary` with `modifiers = ["//third-party/python/config:py312"]`. |
 | `tests/fixtures/buck/02-numpy-pandas/tests/smoke/demo.py` | `import numpy as np; arr=np.zeros(3); print(arr); assert arr.shape==(3,)`. |
 | `tests/fixtures/buck/02-numpy-pandas/expected/BUCK` | Golden output (one `pypi_package` per resolved package). |
-| `tests/fixtures/buck/02-numpy-pandas/expected/muntjac.bzl` | Golden: header documenting setup_muntjac contract + `_CONFIGS` (6 cells) + macro body using `native.<rule>` + `if/fail` form. |
-| `tests/fixtures/buck/02-numpy-pandas/expected/wiring.bzl` | Golden: `setup_muntjac()` registering cfg_constructor + host-axis `set_cfg_modifiers` with `_type` discriminators + fully-qualified `root//.../prelude//...` targets. |
+| `tests/fixtures/buck/02-numpy-pandas/expected/muntjac.bzl` | Golden: header documenting the user-side `MUNTJAC_HOST_MODIFIERS` wiring + `_CONFIGS` (6 cells) + macro body using `native.<rule>` + `if/fail` form. |
+| `tests/fixtures/buck/02-numpy-pandas/expected/wiring.bzl` | Golden: top-level constant `MUNTJAC_HOST_MODIFIERS = [...]` with `_type` discriminators + fully-qualified `root//.../prelude//...` targets. Header documents the user-side `set_cfg_constructor` + `set_cfg_modifiers` snippet. |
 | `tests/fixtures/buck/02-numpy-pandas/expected/config/BUCK` | Golden: 2 py + 3 platform constraint_values + 6 config_settings, all `visibility = ["PUBLIC"]`. |
-| `tests/fixtures/buck/02-numpy-pandas/PACKAGE` | Hand-written fixture root PACKAGE: `load(...); setup_muntjac()`. Worked example. |
+| `tests/fixtures/buck/02-numpy-pandas/PACKAGE` | Hand-written fixture root PACKAGE: loads cfg_constructor helpers + `MUNTJAC_HOST_MODIFIERS`, calls `set_cfg_constructor(...)` + `set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)`. Worked example. |
 | `tests/fixtures/buck/02-numpy-pandas/toolchains/BUCK` | Hand-written: `system_python_bootstrap_toolchain` + `system_python_toolchain` + `system_cxx_toolchain`. |
 | `tests/fixtures/buck/03-musllinux/muntjac.toml` | 1-platform (`linux-x86_64-musl`) × 1-python (3.12) config. |
 | `tests/fixtures/buck/03-musllinux/pyproject.toml` | Workspace root with one dep that publishes musllinux wheels. |
@@ -39,13 +39,13 @@
 |---|---|
 | `src/buck/emit.rs` | Add `EmitDeps` enum; change `EmitPackage::deps` type; replace `bail!()` at L184 with collapse-uniform logic; update unit tests. |
 | `src/buck/emit.rs` | Rename `EmitOutput::package_file` → `wiring_bzl`. (Plus EmitDeps enum + bail!() drop noted above.) |
-| `src/buck/string_writer.rs` | Render `deps = select({...})` for `PerCell`; render `deps = [...]` for `Uniform`; rewrite muntjac.bzl (header + native.* + if/fail); render wiring.bzl with setup_muntjac(); extend config/BUCK for multi-platform with PUBLIC visibility. |
+| `src/buck/string_writer.rs` | Render `deps = select({...})` for `PerCell`; render `deps = [...]` for `Uniform`; rewrite muntjac.bzl (header + native.* + if/fail); render wiring.bzl exporting `MUNTJAC_HOST_MODIFIERS` constant; extend config/BUCK for multi-platform with PUBLIC visibility. |
 | `src/buck/write.rs` | Write `<third_party_dir>/wiring.bzl` instead of `<third_party_dir>/PACKAGE`. |
 | `src/error.rs` | New `LockfileError::BadUrl` variant. |
 | `src/lock/parser.rs` | Migrate sdist/wheel/git URL parse failures from `BadVersion` → `BadUrl`. Update tests. |
 | `src/lock/graph.rs` | Convert `strongconnect` from recursive to iterative. |
 | `tests/fixtures/buck/01-pure-python/expected/PACKAGE` | Delete (no longer emitted). |
-| `tests/fixtures/buck/01-pure-python/expected/wiring.bzl` | New: single-platform setup_muntjac. |
+| `tests/fixtures/buck/01-pure-python/expected/wiring.bzl` | New: single-platform `MUNTJAC_HOST_MODIFIERS`. |
 | `tests/fixtures/buck/01-pure-python/expected/muntjac.bzl` | Regenerate: header + native.* + if/fail. |
 | `tests/fixtures/buck/01-pure-python/expected/config/BUCK` | Regenerate: visibility=PUBLIC + new constraint_values if not previously declared. |
 | `tests/buckify.rs` | Add `fixture_02_numpy_pandas_golden` + `fixture_03_musllinux_golden` integration tests. |
@@ -2054,26 +2054,35 @@ ls -la third-party/python/
 
 Expected: four files in `third-party/python/` — `BUCK`, `muntjac.bzl`, `wiring.bzl`, `config/BUCK`. **No `PACKAGE` file in the third-party dir** — that's intentional (see T12).
 
-- [ ] **Step 2: Swap the fixture's root PACKAGE to load setup_muntjac**
+- [ ] **Step 2: Swap the fixture's root PACKAGE to load MUNTJAC_HOST_MODIFIERS**
 
-The spike-committed root PACKAGE at `tests/fixtures/buck/02-numpy-pandas/PACKAGE` contains the inline `set_cfg_constructor` + `set_cfg_modifiers` blob. Now that `wiring.bzl` exists, replace the inline blob with a load + call:
+The spike-committed root PACKAGE at `tests/fixtures/buck/02-numpy-pandas/PACKAGE` contains the inline `set_cfg_constructor` + `set_cfg_modifiers` blob. Now that `wiring.bzl` exports `MUNTJAC_HOST_MODIFIERS`, replace the inline modifier literal with a load of the generated constant (the `set_cfg_constructor` + `set_cfg_modifiers` calls stay in the PACKAGE because the prelude blocks them from being wrapped in a `.bzl` function — see T12's design pivot in the spec §5).
 
-```python
-load("//third-party/python:wiring.bzl", "setup_muntjac")
-setup_muntjac()
-```
-
-Edit the file directly:
+Edit the file:
 
 ```bash
 cat > tests/fixtures/buck/02-numpy-pandas/PACKAGE <<'EOF'
-load("//third-party/python:wiring.bzl", "setup_muntjac")
+load(
+    "@prelude//cfg/modifier:cfg_constructor.bzl",
+    "cfg_constructor_post_constraint_analysis",
+    "cfg_constructor_pre_constraint_analysis",
+)
+load("@prelude//cfg/modifier:common.bzl", "MODIFIER_METADATA_KEY")
+load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
+load("//third-party/python:wiring.bzl", "MUNTJAC_HOST_MODIFIERS")
 
-setup_muntjac()
+set_cfg_constructor(
+    stage0 = cfg_constructor_pre_constraint_analysis,
+    stage1 = cfg_constructor_post_constraint_analysis,
+    key = MODIFIER_METADATA_KEY,
+    aliases = struct(),
+    extra_data = struct(),
+)
+set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)
 EOF
 ```
 
-(Verify byte-for-byte with `cat` — trailing newlines etc.)
+(Verify byte-for-byte with `cat` — trailing newlines etc. The exact snippet is also documented in the header of the emitted `wiring.bzl`, so copying from there is fine too.)
 
 - [ ] **Step 3: Verify buck2 still runs cleanly with the new wiring**
 

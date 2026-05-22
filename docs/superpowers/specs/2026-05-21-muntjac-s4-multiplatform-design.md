@@ -15,7 +15,7 @@ S4 promotes the S3 emitter from a single-platform × N-pythons matrix to **M-pla
 **In scope**
 
 - **Emitter extension:** S3's cross-cell dep-set mismatch error is dropped; the emitter now renders `deps = select({...})` when uv.lock reports cell-varying deps. Uniform cells continue to render plain lists.
-- **Wiring helper:** generated `<third_party_dir>/wiring.bzl` exports `setup_muntjac()` which registers `set_cfg_constructor` and binds host OS+CPU → muntjac's `linux-x86_64-gnu` / `linux-aarch64-gnu` / `macos-arm64` constraint values via `set_cfg_modifiers`. Users load + invoke it once from their **root** PACKAGE. Python version remains a user-side modifier (per-binary `modifiers = [...]` attr or a root-PACKAGE default), documented in the generated `muntjac.bzl` header. Muntjac does NOT emit a `<third_party_dir>/PACKAGE` (PACKAGE modifiers don't propagate to deps from a sibling package, so emitting one there would be misleading dead weight — validated by the Phase-1 spike).
+- **Wiring helper:** generated `<third_party_dir>/wiring.bzl` exports a top-level constant `MUNTJAC_HOST_MODIFIERS` (a list of nested `ModifiersMatch` dicts) binding host OS+CPU → muntjac's `linux-x86_64-gnu` / `linux-aarch64-gnu` / `macos-arm64` constraint values. Users load the constant from their **root** PACKAGE and pass it to `set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)`; users also call `set_cfg_constructor(...)` directly. (The prelude blocks `set_cfg_modifiers` from being called inside any `.bzl` file via a `call_stack_frame` check in `set_cfg_modifiers.bzl` — so muntjac can't wrap the calls in a `setup_muntjac()` function.) Python version remains a user-side modifier (per-binary `modifiers = [...]` attr or a root-PACKAGE default), documented in the generated `muntjac.bzl` header. Muntjac does NOT emit a `<third_party_dir>/PACKAGE` (PACKAGE modifiers don't propagate to deps from a sibling package, so emitting one there would be misleading dead weight — validated by the Phase-1 spike).
 - **Fixtures:** new `02-numpy-pandas` (numpy + transitive deps, 3 platforms × 2 pythons = 6 cells; roadmap-fixed name) and `03-musllinux` (emit-only golden compare of a musllinux-only wheel pick). `01-pure-python` gets its goldens regenerated for the new file set (PACKAGE dropped, wiring.bzl added, visibility=PUBLIC added, native.* form for native rules).
 - **CI e2e smoke:** new `tests/fixtures/buck/02-numpy-pandas/tests/smoke/` directory with a hand-written `BUCK` + `demo.py` running `import numpy as np; print(np.zeros(3))`. CI installs buck2 and runs `buck2 run //tests/smoke:numpy_demo` on `ubuntu-latest`, `ubuntu-24.04-arm`, and `macos-latest`.
 - **Folded-in tech debt:** `LockfileError::BadUrl` variant + URL-parse-failure migration; iterative Tarjan SCC in `src/lock/graph.rs::strongconnect`; main design spec §1 edit dropping the free-threaded Python non-goal (no code; TECH_DEBT entry retargeted to S5+).
@@ -36,7 +36,7 @@ S4 promotes the S3 emitter from a single-platform × N-pythons matrix to **M-pla
 
 The S3 emitter pipeline already produces a `BTreeMap<ConfigName, EmitWheel>` per package; S4 generalizes the **deps** side of `EmitPackage` from `Vec<String>` to an enum that can express either uniform-across-cells deps or per-cell deps. The emitter at render time chooses between `deps = [...]` and `deps = select({...})` based on the variant.
 
-Host-platform-axis wiring is exported from a generated `<third_party_dir>/wiring.bzl` (a `setup_muntjac()` function calling `set_cfg_constructor` + `set_cfg_modifiers` with a nested `ModifiersMatch` dict). Users invoke it from their root PACKAGE once during setup. Python-version-axis wiring stays user-side (per-binary `modifiers = [...]` attribute or a root-PACKAGE default) — matching reindeer's convention for the rust-toolchain axis and respecting mainline buck2's absence of a per-target `python_version` attribute on `python_binary`.
+Host-platform-axis wiring is exported from a generated `<third_party_dir>/wiring.bzl` as a top-level constant `MUNTJAC_HOST_MODIFIERS = [<nested ModifiersMatch dict>]`. Users load the constant from their root PACKAGE and call `set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)` directly (plus a one-time `set_cfg_constructor(...)` registration). The prelude blocks wrapping `set_cfg_modifiers` in a `.bzl` function, so the user owns the actual call site. Python-version-axis wiring stays user-side (per-binary `modifiers = [...]` attribute or a root-PACKAGE default) — matching reindeer's convention for the rust-toolchain axis and respecting mainline buck2's absence of a per-target `python_version` attribute on `python_binary`.
 
 Muntjac models reindeer's split: it owns the third-party dep rules and their wiring helper, but **does not** generate `.buckconfig`, prelude submodule references, `toolchains/BUCK`, or the user's root PACKAGE. Those are project scaffolding the user provides once. (A future `muntjac init` may scaffold templates, but that's S8+ work, not S4.)
 
@@ -248,48 +248,54 @@ The available-constraints list in the header reflects the tree's actual `python_
 
 ### `<third_party_dir>/wiring.bzl` (NEW in S4)
 
-Exports a `setup_muntjac()` function the user calls from their **root** PACKAGE. Two side-effects: register buck2's cfg_constructor (the open-source prelude doesn't do this by default), and call `set_cfg_modifiers` with a nested `ModifiersMatch` dict binding host OS+CPU to muntjac's platform constraint.
+Exports a top-level constant `MUNTJAC_HOST_MODIFIERS` — a list of nested `ModifiersMatch` dicts. The user loads it from their **root** PACKAGE and calls `set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)` directly. The user also registers buck2's `cfg_constructor` (the open-source prelude doesn't do this by default).
 
 ```python
 ##
 ## @generated by muntjac
 ## Do not edit by hand.
 ##
+## Host-axis modifiers for muntjac's per-cell platform constraints.
+##
+## The user's root PACKAGE loads MUNTJAC_HOST_MODIFIERS and passes it
+## to set_cfg_modifiers() directly. set_cfg_modifiers() cannot be wrapped
+## in a helper function — the prelude enforces that it be called from
+## a PACKAGE/BUCK_TREE file, not a .bzl file.
+##
+## Wiring contract for consumers — add to your root PACKAGE:
+##
+##   load(
+##       "@prelude//cfg/modifier:cfg_constructor.bzl",
+##       "cfg_constructor_post_constraint_analysis",
+##       "cfg_constructor_pre_constraint_analysis",
+##   )
+##   load("@prelude//cfg/modifier:common.bzl", "MODIFIER_METADATA_KEY")
+##   load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
+##   load("//<third_party_dir>:wiring.bzl", "MUNTJAC_HOST_MODIFIERS")
+##
+##   set_cfg_constructor(
+##       stage0 = cfg_constructor_pre_constraint_analysis,
+##       stage1 = cfg_constructor_post_constraint_analysis,
+##       key = MODIFIER_METADATA_KEY,
+##       aliases = struct(),
+##       extra_data = struct(),
+##   )
+##   set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)
 
-load(
-    "@prelude//cfg/modifier:cfg_constructor.bzl",
-    "cfg_constructor_post_constraint_analysis",
-    "cfg_constructor_pre_constraint_analysis",
-)
-load("@prelude//cfg/modifier:common.bzl", "MODIFIER_METADATA_KEY")
-load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
-
-def setup_muntjac():
-    """Register buck2's cfg_constructor and bind host OS+CPU to muntjac's
-    per-cell platform constraint. Call this once from the root PACKAGE."""
-    set_cfg_constructor(
-        stage0 = cfg_constructor_pre_constraint_analysis,
-        stage1 = cfg_constructor_post_constraint_analysis,
-        key = MODIFIER_METADATA_KEY,
-        aliases = struct(),
-        extra_data = struct(),
-    )
-    set_cfg_modifiers(
-        cfg_modifiers = [
-            {
-                "_type": "ModifiersMatch",
-                "prelude//os/constraints:linux": {
-                    "_type": "ModifiersMatch",
-                    "prelude//cpu/constraints:x86_64": "root//<third_party_dir>/config:linux-x86_64-gnu",
-                    "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:linux-aarch64-gnu",
-                },
-                "prelude//os/constraints:macos": {
-                    "_type": "ModifiersMatch",
-                    "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:macos-arm64",
-                },
-            },
-        ],
-    )
+MUNTJAC_HOST_MODIFIERS = [
+    {
+        "_type": "ModifiersMatch",
+        "prelude//os/constraints:linux": {
+            "_type": "ModifiersMatch",
+            "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:linux-aarch64-gnu",
+            "prelude//cpu/constraints:x86_64": "root//<third_party_dir>/config:linux-x86_64-gnu",
+        },
+        "prelude//os/constraints:macos": {
+            "_type": "ModifiersMatch",
+            "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:macos-arm64",
+        },
+    },
+]
 ```
 
 Validated against buck2 `2026-05-18` + prelude SHA `b4e55417b...` by the Phase-1 spike. Key shape constraints (all enforced by the prelude's `verify_normalized_modifier` / `is_modifiers_match` checks):
@@ -297,9 +303,11 @@ Validated against buck2 `2026-05-18` + prelude SHA `b4e55417b...` by the Phase-1
 - The `ModifiersMatch` dict requires an explicit `"_type": "ModifiersMatch"` discriminator key.
 - All target labels must be **fully qualified** (`root//...`, `prelude//...`) — bare `//path:name` is rejected.
 - OS/CPU constraint setting targets are `prelude//os/constraints:os` and `prelude//cpu/constraints:cpu`; constraint values live under the same package as the setting.
+- The prelude lacks an `aarch64` CPU constraint — `aarch64` linux maps to `prelude//cpu/constraints:arm64` (same target macOS arm64 uses).
 - Nested `ModifiersMatch` dicts are supported.
+- `set_cfg_modifiers` is a PACKAGE-only primitive: it checks `call_stack_frame(1).module_path` and `fail()`s if the caller isn't a PACKAGE/BUCK_TREE file. Wrapping it in a `.bzl` function is rejected — so muntjac exports the data (a constant), not the call.
 
-The `<third_party_dir>` placeholder is replaced at emit time with the actual configured directory. Inner-dict keys + values reflect only the platforms declared in the user's `muntjac.toml` (musllinux platforms don't get a host-axis branch since the open-source prelude has no `musl` OS constraint; users targeting musl pick a cell explicitly via `--modifier` or a config_setting).
+The `<third_party_dir>` placeholder is replaced at emit time with the actual configured directory. Inner-dict keys + values reflect only the platforms declared in the user's `muntjac.toml` (musllinux platforms don't get a host-axis branch since the open-source prelude has no `musl` OS constraint; users targeting musl pick a cell explicitly via `--modifier` or a config_setting). When EVERY platform is musllinux, `MUNTJAC_HOST_MODIFIERS = []` (an empty list).
 
 ### `<third_party_dir>/PACKAGE` — NOT EMITTED
 
@@ -625,7 +633,7 @@ S4 ships when all of the following hold green on CI's three matrix runners (`ubu
 ### S4-specific additions
 
 - `EmitDeps::PerCell` rendered as `deps = select({...})` when cells diverge; uniform cells continue to render plain lists.
-- Generated `<third_party_dir>/wiring.bzl` exports a `setup_muntjac()` function that registers `set_cfg_constructor` and binds host OS+CPU via `set_cfg_modifiers` (nested `ModifiersMatch` dict with `"_type"` discriminators + fully-qualified `root//...` constraint targets).
+- Generated `<third_party_dir>/wiring.bzl` exports a top-level constant `MUNTJAC_HOST_MODIFIERS` (a list of nested `ModifiersMatch` dicts with `"_type"` discriminators + fully-qualified `root//...` constraint targets). Users `load` it from their root PACKAGE and pass to `set_cfg_modifiers` directly (the prelude blocks wrapping the call in a `.bzl` function).
 - Generated `<third_party_dir>/PACKAGE` is **not** in the emitted file set.
 - Generated `<third_party_dir>/muntjac.bzl` uses `native.<rule>` for the native rules (`http_file`, `prebuilt_python_library`, `alias`) and contains the python-axis wiring header pointing at both the per-binary `modifiers = [...]` snippet and the `setup_muntjac()` invocation.
 - Generated `<third_party_dir>/config/BUCK` declares `visibility = ["PUBLIC"]` on every `constraint_value` and `config_setting`.
