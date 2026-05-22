@@ -95,11 +95,13 @@ pub trait BuckEmitter {
 /// are pre-sorted, wheels live in a BTreeMap, and packages are sorted
 /// by (name, version).
 ///
+/// Per-cell deps are merged into `EmitDeps::Uniform` when every cell
+/// agrees, else kept as `EmitDeps::PerCell` for `select()`-driven
+/// rendering in the writer.
+///
 /// Errors:
 /// - `PickResult::NoWheel` for any (package, cell) — native sdists are
 ///   not handled until S5.
-/// - Cross-cell dep-set mismatches for the same (name, version) —
-///   per-cell `select()`-driven deps are deferred to S4.
 pub fn build_emit_input(
     config: &Config,
     tree: &Tree,
@@ -182,43 +184,46 @@ pub fn build_emit_input(
         }
     }
 
-    // Cross-cell dep equality check + build EmitPackage list.
+    // Build per-cell dep lists, then collapse to Uniform if every cell agrees.
+    // ResolvedPackage.deps entries are formatted "name@version" — extract the
+    // bare package name for the BUCK target reference (":<name>").
+    let format_cell_deps = |raw: &Vec<String>| -> Vec<String> {
+        let mut v: Vec<String> = raw
+            .iter()
+            .map(|d| format!(":{}", d.split('@').next().unwrap_or(d)))
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+
     let mut packages: Vec<EmitPackage> = Vec::new();
     for (key, wheel_map) in pkg_wheels {
         let cells_deps = &pkg_deps_per_cell[&key];
-        let mut iter = cells_deps.iter();
-        let (first_cell, first_deps) = iter
-            .next()
-            .expect("at least one cell recorded a wheel for this package");
-        for (cell, deps) in iter {
-            if deps != first_deps {
-                anyhow::bail!(
-                    "package '{}-{}' has different deps across cells:\n  {} -> {:?}\n  {} -> {:?}\n\
-                     Per-cell select()-driven deps are deferred to S4.",
-                    key.0,
-                    key.1,
-                    first_cell,
-                    first_deps,
-                    cell,
-                    deps
-                );
-            }
+
+        let mut per_cell_formatted: BTreeMap<ConfigName, Vec<String>> = BTreeMap::new();
+        for (cell, raw) in cells_deps {
+            per_cell_formatted.insert(cell.clone(), format_cell_deps(raw));
         }
-        // ResolvedPackage.deps entries are formatted "name@version" — extract
-        // the bare package name for the BUCK target reference (":<name>").
-        let mut deps: Vec<String> = first_deps
-            .iter()
-            .map(|d| {
-                let name = d.split('@').next().unwrap_or(d);
-                format!(":{}", name)
-            })
-            .collect();
-        deps.sort();
-        deps.dedup();
+
+        // Collapse: if every cell produces the same Vec<String>, render Uniform.
+        let mut values_iter = per_cell_formatted.values();
+        let first = values_iter
+            .next()
+            .expect("at least one cell recorded a wheel for this package")
+            .clone();
+        let uniform = values_iter.all(|v| v == &first);
+
+        let deps = if uniform {
+            EmitDeps::Uniform(first)
+        } else {
+            EmitDeps::PerCell(per_cell_formatted)
+        };
+
         packages.push(EmitPackage {
             name: key.0,
             version: key.1,
-            deps: EmitDeps::Uniform(deps),
+            deps,
             wheels: wheel_map,
         });
     }
@@ -477,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn build_emit_input_errors_on_dep_mismatch() {
+    fn build_emit_input_yields_per_cell_for_cross_cell_dep_diff() {
         use crate::config::{Config, Platform, PythonVersion, Tree};
         use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
         use pep440_rs::Version;
@@ -528,8 +533,8 @@ mod tests {
         };
 
         // `parent` has a marker-gated dep on `child` that fires only for py<3.12.
-        // Result: parent's resolved deps differ across py3.11 vs py3.12 cells,
-        // which the composer's cross-cell equality check must reject.
+        // Result: parent's resolved deps differ across py3.11 vs py3.12 cells.
+        // In S3 the composer bailed; in S4 it preserves the difference via PerCell.
         let parent_marker = MarkerTree::from_str("python_version < '3.12'").expect("parse marker");
         let parent = Package {
             name: PackageName::from_str("parent").unwrap(),
@@ -576,28 +581,250 @@ mod tests {
             packages: vec![app, parent, child],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile)
-            .expect_err("should fail on cross-cell dep mismatch");
-        let msg = format!("{:#}", err);
-        // Error must name the package whose deps differ:
-        assert!(
-            msg.contains("parent"),
-            "error must name the package: {}",
-            msg
+        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+        let parent_pkg = input
+            .packages
+            .iter()
+            .find(|p| p.name == "parent")
+            .expect("parent present");
+        match &parent_pkg.deps {
+            EmitDeps::PerCell(m) => {
+                assert!(
+                    m.len() >= 2,
+                    "expected at least two cells in PerCell map, got {}",
+                    m.len()
+                );
+                let py311 = ConfigName::new("3.11", "linux-x86_64-gnu");
+                let py312 = ConfigName::new("3.12", "linux-x86_64-gnu");
+                assert_eq!(m.get(&py311).unwrap(), &vec![":child".to_string()]);
+                assert_eq!(m.get(&py312).unwrap(), &Vec::<String>::new());
+            }
+            EmitDeps::Uniform(_) => panic!("expected PerCell, got Uniform"),
+        }
+    }
+
+    #[test]
+    fn build_emit_input_produces_per_cell_when_deps_differ() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::{MarkerTree, PackageName};
+        use std::str::FromStr;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 11), PythonVersion(3, 12)],
+        };
+
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
         );
-        // Both cells named:
-        assert!(
-            msg.contains("py311") || msg.contains("3.11"),
-            "error must name py3.11 cell: {}",
-            msg
+
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+
+        // typing-extensions is required on py311 only, dropped on py312.
+        let marker_py311_only: MarkerTree =
+            MarkerTree::from_str("python_version < '3.12'").unwrap();
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.11,<3.13".into(),
+            packages: vec![
+                // first-party root
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("rich").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                // rich: depends on typing-extensions for py311 only
+                Package {
+                    name: PackageName::from_str("rich").unwrap(),
+                    version: Version::from_str("13.0").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("typing-extensions").unwrap(),
+                        extra: vec![],
+                        marker: Some(marker_py311_only),
+                    }],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse(
+                            "https://files.pythonhosted.org/p/rich-13.0-py3-none-any.whl",
+                        )
+                        .unwrap(),
+                        hash: "sha256:rich".into(),
+                        size: None,
+                        filename: "rich-13.0-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+                // typing-extensions
+                Package {
+                    name: PackageName::from_str("typing-extensions").unwrap(),
+                    version: Version::from_str("4.0").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse(
+                            "https://files.pythonhosted.org/p/typing_extensions-4.0-py3-none-any.whl",
+                        )
+                        .unwrap(),
+                        hash: "sha256:te".into(),
+                        size: None,
+                        filename: "typing_extensions-4.0-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+
+        let rich = input
+            .packages
+            .iter()
+            .find(|p| p.name == "rich")
+            .expect("rich present");
+        match &rich.deps {
+            EmitDeps::PerCell(m) => {
+                let py311 = ConfigName::new("3.11", "linux-x86_64-gnu");
+                let py312 = ConfigName::new("3.12", "linux-x86_64-gnu");
+                assert_eq!(
+                    m.get(&py311).unwrap(),
+                    &vec![":typing-extensions".to_string()]
+                );
+                assert_eq!(m.get(&py312).unwrap(), &Vec::<String>::new());
+            }
+            EmitDeps::Uniform(_) => panic!("expected PerCell, got Uniform"),
+        }
+    }
+
+    #[test]
+    fn build_emit_input_collapses_to_uniform_when_cells_agree() {
+        // Multi-cell variant of build_emit_input_from_synthetic_resolved.
+        // certifi has no deps on either cell, so the per-cell map collapses
+        // to EmitDeps::Uniform(empty Vec).
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use std::str::FromStr;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 11), PythonVersion(3, 12)],
+        };
+
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
         );
-        assert!(
-            msg.contains("py312") || msg.contains("3.12"),
-            "error must name py3.12 cell: {}",
-            msg
-        );
-        // S4 reference:
-        assert!(msg.contains("S4"), "error must point at S4: {}", msg);
+
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.11,<3.13".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse(
+                            "https://files.pythonhosted.org/p/certifi-2025.4.26-py3-none-any.whl",
+                        )
+                        .unwrap(),
+                        hash: "sha256:abc".into(),
+                        size: None,
+                        filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let input = build_emit_input(&config, &tree, &lockfile).expect("succeeds");
+        let pkg = input
+            .packages
+            .iter()
+            .find(|p| p.name == "certifi")
+            .expect("certifi present");
+        // Wheel hits both cells; deps agree (empty) -> Uniform.
+        assert_eq!(pkg.wheels.len(), 2);
+        match &pkg.deps {
+            EmitDeps::Uniform(v) => assert!(v.is_empty(), "expected empty uniform deps, got {:?}", v),
+            EmitDeps::PerCell(m) => panic!("expected Uniform, got PerCell({:?})", m),
+        }
     }
 
     #[test]
