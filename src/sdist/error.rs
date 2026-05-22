@@ -30,6 +30,12 @@ pub enum SdistError {
     #[error("`uv` binary not found on PATH; install uv (see https://docs.astral.sh/uv)")]
     UvNotFound,
 
+    #[error("failed to spawn `uv`: {source}")]
+    UvSpawnFailed {
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("`uv build --wheel` failed for {package} {version}:\n--- uv stderr ---\n{stderr}")]
     PrebakeFailed {
         package: String,

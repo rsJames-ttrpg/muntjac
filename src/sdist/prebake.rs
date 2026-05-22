@@ -1,4 +1,6 @@
 //! `uv build`-based pure-python sdist → wheel prebake.
+//!
+//! See `docs/superpowers/specs/2026-05-22-muntjac-s5-sdist-prebake-design.md` §4.
 
 use std::path::{Path, PathBuf};
 
