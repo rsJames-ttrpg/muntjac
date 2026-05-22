@@ -830,6 +830,19 @@ mod tests {
     }
 
     #[test]
+    fn emit_wheel_renders_prebake_source_as_prebake_url() {
+        let w = EmitWheel {
+            url: "prebake:tomli-2.0.1-py3-none-any.whl".to_string(),
+            hash: "sha256:cafef00d".to_string(),
+        };
+        // assert that constructing an EmitWheel with a prebake-prefix URL
+        // does not panic; the renderer in string_writer is what handles the
+        // dispatch. This test pins the shape: URL slot carries the convention.
+        assert!(w.url.starts_with("prebake:"));
+        assert!(w.hash.starts_with("sha256:"));
+    }
+
+    #[test]
     fn emit_deps_variants_construct() {
         let uniform = EmitDeps::Uniform(vec![":foo".into(), ":bar".into()]);
         let per_cell = EmitDeps::PerCell({

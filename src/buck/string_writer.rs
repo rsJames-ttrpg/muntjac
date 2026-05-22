@@ -1020,4 +1020,35 @@ mod tests {
         let out = StringTemplateEmitter.emit(&input);
         insta::assert_snapshot!("config_buck_six_cells", out.config_buck);
     }
+
+    #[test]
+    fn buck_render_emits_prebake_url_verbatim() {
+        let cfg = ConfigName::new("3.12", "linux-x86_64-gnu");
+        let mut wheels = BTreeMap::new();
+        wheels.insert(
+            cfg.clone(),
+            EmitWheel {
+                url: "prebake:tomli-2.0.1-py3-none-any.whl".to_string(),
+                hash: "sha256:cafef00d".to_string(),
+            },
+        );
+        let input = EmitInput {
+            tree: "default".to_string(),
+            third_party_dir: "third-party/python".to_string(),
+            configs: vec![cfg],
+            packages: vec![EmitPackage {
+                name: "tomli".to_string(),
+                version: "2.0.1".to_string(),
+                deps: EmitDeps::Uniform(vec![]),
+                wheels,
+            }],
+        };
+        let writer = StringTemplateEmitter;
+        let out = writer.emit(&input);
+        assert!(
+            out.buck.contains("\"prebake:tomli-2.0.1-py3-none-any.whl\""),
+            "BUCK output should contain prebake URL verbatim:\n{}",
+            out.buck
+        );
+    }
 }
