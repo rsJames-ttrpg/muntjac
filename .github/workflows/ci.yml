@@ -78,3 +78,25 @@ jobs:
           chmod +x "$HOME/.local/bin/buck2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/buck2" --version
+
+      - name: muntjac buckify (02-numpy-pandas fixture)
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/02-numpy-pandas
+          # Initialize prelude submodule in case checkout step didn't.
+          git submodule update --init --recursive --depth 1
+          cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
+          # Verify the four files exist (no PACKAGE — wiring.bzl replaces it).
+          test -f third-party/python/BUCK
+          test -f third-party/python/muntjac.bzl
+          test -f third-party/python/wiring.bzl
+          test -f third-party/python/config/BUCK
+          test ! -e third-party/python/PACKAGE
+
+      - name: buck2 build + run numpy demo
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/02-numpy-pandas
+          buck2 run //tests/smoke:numpy_demo 2>&1 | tee /tmp/numpy-out.txt
+          # Sanity-check the output contains the expected array.
+          grep -F "[0. 0. 0.]" /tmp/numpy-out.txt
