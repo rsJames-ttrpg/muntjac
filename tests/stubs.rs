@@ -5,15 +5,6 @@ use common::muntjac;
 use predicates::str::contains;
 
 #[test]
-fn vendor_says_unimplemented() {
-    muntjac()
-        .arg("vendor")
-        .assert()
-        .failure()
-        .stderr(contains("not implemented yet (planned for S5/S9)"));
-}
-
-#[test]
 fn audit_says_unimplemented() {
     muntjac()
         .arg("audit")
