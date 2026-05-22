@@ -49,8 +49,14 @@ pub fn run(globals: &Globals) -> Result<()> {
     let lockfile_path = manifest_dir.join("uv.lock");
 
     if pyproject.is_file() && lockfile_path.is_file() && !globals.frozen && !globals.no_network {
-        let py_mtime = std::fs::metadata(&pyproject)?.modified()?;
-        let lock_mtime = std::fs::metadata(&lockfile_path)?.modified()?;
+        let py_mtime = std::fs::metadata(&pyproject)
+            .with_context(|| format!("reading metadata of {}", pyproject.display()))?
+            .modified()
+            .with_context(|| format!("reading mtime of {}", pyproject.display()))?;
+        let lock_mtime = std::fs::metadata(&lockfile_path)
+            .with_context(|| format!("reading metadata of {}", lockfile_path.display()))?
+            .modified()
+            .with_context(|| format!("reading mtime of {}", lockfile_path.display()))?;
         if py_mtime > lock_mtime {
             eprintln!("muntjac vendor: pyproject.toml is newer than uv.lock; running `uv lock`");
             let status = crate::uv::uv_lock(&manifest_dir)?;
@@ -90,7 +96,8 @@ pub fn run(globals: &Globals) -> Result<()> {
 
         // Step 4b: extract
         let extract_dir = tmp.path().join("extracted");
-        std::fs::create_dir_all(&extract_dir)?;
+        std::fs::create_dir_all(&extract_dir)
+            .with_context(|| format!("creating {}", extract_dir.display()))?;
         extract_tarball(&tarball_path, &extract_dir, &pkg_name, &pkg_version)?;
         let sdist_root = find_sdist_root(&extract_dir)?;
 
@@ -100,12 +107,14 @@ pub fn run(globals: &Globals) -> Result<()> {
                 eprintln!("muntjac vendor: prebaking {} {} ({})", pkg_name, pkg_version, backend_str(backend));
                 // Step 4d: prebake
                 let staging = tmp.path().join("staging");
-                std::fs::create_dir_all(&staging)?;
+                std::fs::create_dir_all(&staging)
+                    .with_context(|| format!("creating {}", staging.display()))?;
                 let result = crate::sdist::build_wheel(&sdist_root, &staging, &pkg_name, &pkg_version)?;
                 // Step 4e: move into prebake/
                 let final_path = prebake_dir.join(&result.wheel_filename);
                 if final_path.is_file() {
-                    std::fs::remove_file(&final_path)?;
+                    std::fs::remove_file(&final_path)
+                        .with_context(|| format!("removing {}", final_path.display()))?;
                 }
                 std::fs::rename(&result.wheel_path, &final_path)
                     .or_else(|_| {
@@ -227,11 +236,14 @@ fn download(url: &Url, dest: &Path, package: &str, version: &str) -> Result<()> 
 
 fn verify_sha256(path: &Path, expected: &str, package: &str, version: &str) -> Result<()> {
     use crate::sdist::SdistError;
-    let mut f = std::fs::File::open(path)?;
+    let mut f = std::fs::File::open(path)
+        .with_context(|| format!("opening {}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 8192];
     loop {
-        let n = f.read(&mut buf)?;
+        let n = f
+            .read(&mut buf)
+            .with_context(|| format!("reading {}", path.display()))?;
         if n == 0 {
             break;
         }
@@ -255,7 +267,8 @@ fn extract_tarball(tarball: &Path, dest: &Path, package: &str, version: &str) ->
     use flate2::read::GzDecoder;
     use tar::Archive;
 
-    let f = std::fs::File::open(tarball)?;
+    let f = std::fs::File::open(tarball)
+        .with_context(|| format!("opening {}", tarball.display()))?;
     let gz = GzDecoder::new(f);
     let mut archive = Archive::new(gz);
     archive.set_preserve_permissions(false);
@@ -301,7 +314,8 @@ fn extract_tarball(tarball: &Path, dest: &Path, package: &str, version: &str) ->
 
 fn find_sdist_root(extract_dir: &Path) -> Result<std::path::PathBuf> {
     // Most sdists extract to a single top-level directory `<name>-<version>/`.
-    let mut entries: Vec<_> = std::fs::read_dir(extract_dir)?
+    let mut entries: Vec<_> = std::fs::read_dir(extract_dir)
+        .with_context(|| format!("reading {}", extract_dir.display()))?
         .filter_map(|r| r.ok())
         .filter(|e| e.path().is_dir())
         .collect();
