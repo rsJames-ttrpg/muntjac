@@ -21,7 +21,6 @@
 - **pip / poetry / pipenv / requirements.txt.** uv-only. Migration path: `uv pip compile`.
 - **Native sdist Buck-time builds.** When a package has no wheel for a target and is a native sdist, v1 errors with a precise message and an escape-hatch fixup pointing at a hand-rolled Buck rule. The design has hooks for a v2 PEP 517-in-Buck implementation (see §6, §7 `[sdist]`).
 - **Editable installs (PEP 660).** Incompatible with Buck's hermetic builds. Permanent non-goal.
-- **Free-threaded Python (PEP 703).** Tags like `cp3Xt` are handled safely by selector (refused to match), but no explicit support.
 - **Bazel output.** Module structure leaves room for a future emitter under `src/bazel/`; no commitment.
 - **Egg-info packages.** Obsolete; uv doesn't emit them.
 
