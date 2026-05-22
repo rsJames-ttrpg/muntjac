@@ -230,24 +230,24 @@ fn write_pypi_package(s: &mut String, pkg: &EmitPackage) {
     writeln!(s, "pypi_package(").unwrap();
     writeln!(s, "    name = \"{}\",", pkg.name).unwrap();
     writeln!(s, "    version = \"{}\",", pkg.version).unwrap();
-    // Task 9/10 fills in proper rendering for both variants. For now we
-    // preserve existing Uniform-case behavior and emit an empty `deps = []`
-    // for PerCell as a placeholder (no current test exercises PerCell).
-    let deps_iter: Vec<&String> = match &pkg.deps {
-        EmitDeps::Uniform(v) => v.iter().collect(),
+    // Task 9: Render deps for Uniform variant (restored from S3).
+    // Task 10: PerCell variant fills in select() rendering.
+    match &pkg.deps {
+        EmitDeps::Uniform(v) => {
+            if v.is_empty() {
+                writeln!(s, "    deps = [],").unwrap();
+            } else {
+                writeln!(s, "    deps = [").unwrap();
+                for dep in v {
+                    writeln!(s, "        \"{}\",", dep).unwrap();
+                }
+                writeln!(s, "    ],").unwrap();
+            }
+        }
         EmitDeps::PerCell(_) => {
-            // Task 10 replaces this branch with select() rendering.
-            Vec::new()
+            // Task 10 fills this in with select() rendering.
+            unimplemented!("EmitDeps::PerCell rendering — Task 10");
         }
-    };
-    if deps_iter.is_empty() {
-        writeln!(s, "    deps = [],").unwrap();
-    } else {
-        writeln!(s, "    deps = [").unwrap();
-        for dep in &deps_iter {
-            writeln!(s, "        \"{}\",", dep).unwrap();
-        }
-        writeln!(s, "    ],").unwrap();
     }
     writeln!(s, "    wheels = {{").unwrap();
     for (cfg, wheel) in &pkg.wheels {
