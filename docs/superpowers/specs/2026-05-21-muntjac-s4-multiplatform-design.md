@@ -10,13 +10,13 @@
 
 ## 1. Scope
 
-S4 promotes the S3 emitter from a single-platform × N-pythons matrix to **M-platforms × N-pythons**, makes the generated `PACKAGE` file a real artifact (auto-wiring host OS+CPU onto muntjac's per-cell constraints), and gates completion on an end-to-end CI smoke that actually builds and runs a numpy-importing Python binary under `buck2` on three runners.
+S4 promotes the S3 emitter from a single-platform × N-pythons matrix to **M-platforms × N-pythons**, adds a generated `wiring.bzl` helper that wires the host OS+CPU axis into muntjac's per-cell constraints (loaded once from the user's root PACKAGE), and gates completion on an end-to-end CI smoke that actually builds and runs a numpy-importing Python binary under `buck2` on three runners.
 
 **In scope**
 
 - **Emitter extension:** S3's cross-cell dep-set mismatch error is dropped; the emitter now renders `deps = select({...})` when uv.lock reports cell-varying deps. Uniform cells continue to render plain lists.
-- **PACKAGE wiring:** generated `<third_party_dir>/PACKAGE` calls `set_cfg_modifiers` with an inline `ModifiersMatch` dict that binds host OS+CPU → muntjac's `linux-x86_64-gnu` / `linux-aarch64-gnu` / `macos-arm64` constraint values. Python version remains a user-side modifier (per-binary `modifiers = [...]` attr or a root-PACKAGE default), documented in the generated `muntjac.bzl` header.
-- **Fixtures:** new `02-numpy-pandas` (numpy + transitive deps, 3 platforms × 2 pythons = 6 cells; roadmap-fixed name) and `03-musllinux` (emit-only golden compare of a musllinux-only wheel pick). `01-pure-python` gets its goldens regenerated for the new PACKAGE bytes.
+- **Wiring helper:** generated `<third_party_dir>/wiring.bzl` exports `setup_muntjac()` which registers `set_cfg_constructor` and binds host OS+CPU → muntjac's `linux-x86_64-gnu` / `linux-aarch64-gnu` / `macos-arm64` constraint values via `set_cfg_modifiers`. Users load + invoke it once from their **root** PACKAGE. Python version remains a user-side modifier (per-binary `modifiers = [...]` attr or a root-PACKAGE default), documented in the generated `muntjac.bzl` header. Muntjac does NOT emit a `<third_party_dir>/PACKAGE` (PACKAGE modifiers don't propagate to deps from a sibling package, so emitting one there would be misleading dead weight — validated by the Phase-1 spike).
+- **Fixtures:** new `02-numpy-pandas` (numpy + transitive deps, 3 platforms × 2 pythons = 6 cells; roadmap-fixed name) and `03-musllinux` (emit-only golden compare of a musllinux-only wheel pick). `01-pure-python` gets its goldens regenerated for the new file set (PACKAGE dropped, wiring.bzl added, visibility=PUBLIC added, native.* form for native rules).
 - **CI e2e smoke:** new `tests/fixtures/buck/02-numpy-pandas/tests/smoke/` directory with a hand-written `BUCK` + `demo.py` running `import numpy as np; print(np.zeros(3))`. CI installs buck2 and runs `buck2 run //tests/smoke:numpy_demo` on `ubuntu-latest`, `ubuntu-24.04-arm`, and `macos-latest`.
 - **Folded-in tech debt:** `LockfileError::BadUrl` variant + URL-parse-failure migration; iterative Tarjan SCC in `src/lock/graph.rs::strongconnect`; main design spec §1 edit dropping the free-threaded Python non-goal (no code; TECH_DEBT entry retargeted to S5+).
 
@@ -36,9 +36,11 @@ S4 promotes the S3 emitter from a single-platform × N-pythons matrix to **M-pla
 
 The S3 emitter pipeline already produces a `BTreeMap<ConfigName, EmitWheel>` per package; S4 generalizes the **deps** side of `EmitPackage` from `Vec<String>` to an enum that can express either uniform-across-cells deps or per-cell deps. The emitter at render time chooses between `deps = [...]` and `deps = select({...})` based on the variant.
 
-Host-platform-axis wiring is added to the generated PACKAGE via Buck2's `set_cfg_modifiers` machinery (which is real and stable in the prelude). Python-version-axis wiring is documented as a user-side `modifiers = [...]` attribute or a root-PACKAGE default — matching reindeer's convention for the rust-toolchain axis and respecting mainline buck2's absence of a per-target `python_version` attribute on `python_binary`.
+Host-platform-axis wiring is exported from a generated `<third_party_dir>/wiring.bzl` (a `setup_muntjac()` function calling `set_cfg_constructor` + `set_cfg_modifiers` with a nested `ModifiersMatch` dict). Users invoke it from their root PACKAGE once during setup. Python-version-axis wiring stays user-side (per-binary `modifiers = [...]` attribute or a root-PACKAGE default) — matching reindeer's convention for the rust-toolchain axis and respecting mainline buck2's absence of a per-target `python_version` attribute on `python_binary`.
 
-CI gains a buck2 install step + a `buck2 run //tests/smoke:numpy_demo` step on each of three runners. The smoke's `demo.py` does an in-process shape assertion (`assert arr.shape == (3,)`) so a wrong-cell match surfaces as a non-zero exit, not a silent green.
+Muntjac models reindeer's split: it owns the third-party dep rules and their wiring helper, but **does not** generate `.buckconfig`, prelude submodule references, `toolchains/BUCK`, or the user's root PACKAGE. Those are project scaffolding the user provides once. (A future `muntjac init` may scaffold templates, but that's S8+ work, not S4.)
+
+CI gains a buck2 install step + a `buck2 run //tests/smoke:numpy_demo` step on each of three runners. The smoke's `demo.py` does an in-process shape assertion (`assert arr.shape == (3,)`) so a wrong-cell match surfaces as a non-zero exit, not a silent green. CI also installs a cp312 interpreter and ensures `python3.12` is on PATH for the prelude's system_python_toolchain to find.
 
 ---
 
@@ -48,16 +50,25 @@ S4 doesn't add new modules. It extends existing ones:
 
 ```
 src/buck/emit.rs              — EmitDeps enum (new); build_emit_input() bail!() dropped
-src/buck/string_writer.rs     — multi-cell select() rendering for deps; PACKAGE auto-wiring
+src/buck/string_writer.rs     — multi-cell select() rendering for deps; wiring.bzl
+                                rendering; muntjac.bzl uses native.* for native rules;
+                                config/BUCK gains visibility=["PUBLIC"]
+src/buck/write.rs             — writes wiring.bzl instead of PACKAGE
 src/lock/parser.rs            — BadUrl variant migration
 src/lock/graph.rs             — strongconnect rewritten iteratively
-.github/workflows/ci.yml      — buck2 install + smoke steps
-tests/fixtures/buck/02-numpy-pandas/  — new
+.github/workflows/ci.yml      — buck2 install + cp312 install + smoke steps
+tests/fixtures/buck/02-numpy-pandas/  — new (incl. hand-written root PACKAGE +
+                                        toolchains/BUCK consumed by smoke)
 tests/fixtures/buck/03-musllinux/     — new
 tests/fixtures/buck/01-pure-python/expected/  — regenerated goldens
+                                                (drops PACKAGE; adds wiring.bzl;
+                                                adds visibility=PUBLIC; muntjac.bzl
+                                                switches to native.* for native rules)
 docs/superpowers/specs/2026-05-20-muntjac-design.md  — §1 free-threaded non-goal removed
 docs/superpowers/TECH_DEBT.md  — three items moved to Resolved; cp313t retargeted
 ```
+
+The `EmitOutput` type's `package_file: String` field is renamed to `wiring_bzl: String`. The file written to disk is `wiring.bzl`, not `PACKAGE`.
 
 ---
 
@@ -148,9 +159,11 @@ select() branches are sorted by `ConfigName` lex order. The dict has one entry p
 
 ### `<third_party_dir>/muntjac.bzl`
 
-The macro signature stays `pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs)`. Buck handles `select()` values transparently when passed via `deps =` because `prebuilt_python_library` accepts selects. The `expect(set(wheels.keys()).issubset(set(_CONFIGS)))` invariant is unchanged.
+The macro signature stays `pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs)`. Buck handles `select()` values transparently when passed via `deps =` because `prebuilt_python_library` accepts selects.
 
-S4 adds a header comment documenting the python-axis wiring contract:
+**Critical S3-bug fix**: `http_file`, `prebuilt_python_library`, and `alias` are native rules in the buck2 prelude — they have no Starlark `load()` paths. From inside a `.bzl` file they must be invoked as `native.<rule>`. S3's emitter used bare names with phantom `load()` calls, which would have failed under buck2 (S3's emitter was never tested end-to-end with `buck2 build`). S4 corrects this for both the S3 fixture (01-pure-python golden regen) and new fixtures.
+
+S4 also adds a header comment documenting the python-axis wiring contract and the wiring.bzl setup:
 
 ```python
 ##
@@ -158,8 +171,16 @@ S4 adds a header comment documenting the python-axis wiring contract:
 ##
 ## Wiring contract for consumers:
 ##
-##   Host OS + CPU is auto-wired in <third_party_dir>/PACKAGE. To pick a
-##   python version, set a per-binary modifier or a root-PACKAGE default:
+##   One-time project setup — add to your root PACKAGE:
+##
+##     load("//<third_party_dir>:wiring.bzl", "setup_muntjac")
+##     setup_muntjac()
+##
+##   This registers buck2's cfg_constructor and auto-routes the host
+##   OS+CPU to the matching muntjac platform constraint.
+##
+##   To pick a python version, set a per-binary modifier or a
+##   root-PACKAGE default:
 ##
 ##     # per-binary
 ##     python_binary(
@@ -169,15 +190,12 @@ S4 adds a header comment documenting the python-axis wiring contract:
 ##         main = "main.py",
 ##     )
 ##
-##     # root PACKAGE default
+##     # root PACKAGE default (set once for the whole project)
 ##     load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
 ##     set_cfg_modifiers(["//<third_party_dir>/config:py312"])
 ##
 ## Available muntjac python constraints: py311, py312
 ##
-
-load("@prelude//python:python_library.bzl", "prebuilt_python_library")
-load("@prelude//utils:utils.bzl", "expect")
 
 _CONFIGS = [
     "py311-linux-aarch64-gnu",
@@ -189,12 +207,48 @@ _CONFIGS = [
 ]
 
 def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
-    # ... body unchanged from S3
+    unknown = [cfg for cfg in wheels.keys() if cfg not in _CONFIGS]
+    if unknown:
+        fail("unknown config(s) in {}: {}".format(name, unknown))
+
+    for cfg, wheel in wheels.items():
+        url, sha = wheel
+        if sha.startswith("sha256:"):
+            sha = sha[len("sha256:"):]
+        wheel_name = "{}-{}-{}-wheel".format(name, version, cfg)
+        native.http_file(
+            name = wheel_name,
+            sha256 = sha,
+            urls = [url],
+            visibility = [],
+        )
+        native.prebuilt_python_library(
+            name = "{}-{}__{}".format(name, version, cfg),
+            binary_src = ":" + wheel_name,
+            deps = deps,
+            visibility = [],
+        )
+
+    native.alias(
+        name = "{}-{}".format(name, version),
+        actual = select({
+            "//<third_party_dir>/config:" + cfg: ":{}-{}__{}".format(name, version, cfg)
+            for cfg in wheels.keys()
+        }),
+        visibility = [],
+    )
+    native.alias(
+        name = name,
+        actual = ":{}-{}".format(name, version),
+        visibility = visibility if visibility != None else ["PUBLIC"],
+    )
 ```
 
-The available-constraints list in the header reflects the tree's actual `python_versions`. Implementer renders it dynamically.
+The available-constraints list in the header reflects the tree's actual `python_versions`. Implementer renders it dynamically. Note: no `load()` for `http_file`/`prebuilt_python_library`/`alias`/`expect` — none are loadable Starlark symbols in this prelude; the `expect(...)` form is replaced with `if unknown: fail(...)` for clarity.
 
-### `<third_party_dir>/PACKAGE`
+### `<third_party_dir>/wiring.bzl` (NEW in S4)
+
+Exports a `setup_muntjac()` function the user calls from their **root** PACKAGE. Two side-effects: register buck2's cfg_constructor (the open-source prelude doesn't do this by default), and call `set_cfg_modifiers` with a nested `ModifiersMatch` dict binding host OS+CPU to muntjac's platform constraint.
 
 ```python
 ##
@@ -202,34 +256,58 @@ The available-constraints list in the header reflects the tree's actual `python_
 ## Do not edit by hand.
 ##
 
+load(
+    "@prelude//cfg/modifier:cfg_constructor.bzl",
+    "cfg_constructor_post_constraint_analysis",
+    "cfg_constructor_pre_constraint_analysis",
+)
+load("@prelude//cfg/modifier:common.bzl", "MODIFIER_METADATA_KEY")
 load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
 
-# Bind the build's host OS+CPU to muntjac's platform constraint.
-# Python version is picked by the user via a per-binary `modifiers` attr
-# or a root PACKAGE default; see muntjac.bzl header for the snippet.
-
-set_cfg_modifiers(
-    cfg_modifiers = [
-        {
-            "config//os/constraints:linux": {
-                "config//cpu/constraints:x86_64": "//<third_party_dir>/config:linux-x86_64-gnu",
-                "config//cpu/constraints:arm64":  "//<third_party_dir>/config:linux-aarch64-gnu",
+def setup_muntjac():
+    """Register buck2's cfg_constructor and bind host OS+CPU to muntjac's
+    per-cell platform constraint. Call this once from the root PACKAGE."""
+    set_cfg_constructor(
+        stage0 = cfg_constructor_pre_constraint_analysis,
+        stage1 = cfg_constructor_post_constraint_analysis,
+        key = MODIFIER_METADATA_KEY,
+        aliases = struct(),
+        extra_data = struct(),
+    )
+    set_cfg_modifiers(
+        cfg_modifiers = [
+            {
+                "_type": "ModifiersMatch",
+                "prelude//os/constraints:linux": {
+                    "_type": "ModifiersMatch",
+                    "prelude//cpu/constraints:x86_64": "root//<third_party_dir>/config:linux-x86_64-gnu",
+                    "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:linux-aarch64-gnu",
+                },
+                "prelude//os/constraints:macos": {
+                    "_type": "ModifiersMatch",
+                    "prelude//cpu/constraints:arm64":  "root//<third_party_dir>/config:macos-arm64",
+                },
             },
-            "config//os/constraints:macos": {
-                "config//cpu/constraints:arm64":  "//<third_party_dir>/config:macos-arm64",
-            },
-        },
-    ],
-)
+        ],
+    )
 ```
 
-The `config//os/constraints:*` and `config//cpu/constraints:*` references are the open-source-prelude convention. **The exact cell prefix (`config//` vs `prelude//` vs install-dependent) is verified by the implementation spike (§10); the spec commits to the *shape* — a nested `ModifiersMatch` dict that distinguishes the three host triples in our matrix.**
+Validated against buck2 `2026-05-18` + prelude SHA `b4e55417b...` by the Phase-1 spike. Key shape constraints (all enforced by the prelude's `verify_normalized_modifier` / `is_modifiers_match` checks):
 
-Outer dict keys are config_settings matched against the build's current configuration; inner values are constraint_value targets to be set. The S3-era "placeholder PACKAGE" disclaimer is removed.
+- The `ModifiersMatch` dict requires an explicit `"_type": "ModifiersMatch"` discriminator key.
+- All target labels must be **fully qualified** (`root//...`, `prelude//...`) — bare `//path:name` is rejected.
+- OS/CPU constraint setting targets are `prelude//os/constraints:os` and `prelude//cpu/constraints:cpu`; constraint values live under the same package as the setting.
+- Nested `ModifiersMatch` dicts are supported.
+
+The `<third_party_dir>` placeholder is replaced at emit time with the actual configured directory. Inner-dict keys + values reflect only the platforms declared in the user's `muntjac.toml` (musllinux platforms don't get a host-axis branch since the open-source prelude has no `musl` OS constraint; users targeting musl pick a cell explicitly via `--modifier` or a config_setting).
+
+### `<third_party_dir>/PACKAGE` — NOT EMITTED
+
+S4 does not emit a `<third_party_dir>/PACKAGE`. PACKAGE-level modifiers attach to targets *defined* under that PACKAGE; they do not propagate to deps when those deps are configured from a consumer in a sibling package. Emitting `set_cfg_modifiers` there would be misleading dead weight. The wiring.bzl approach (above) puts the modifiers at the root PACKAGE where they actually affect dep resolution.
 
 ### `<third_party_dir>/config/BUCK`
 
-Extended from S3 to declare both axes' constraint_values and all cell config_settings. For the 6-cell case:
+Extended from S3 to declare both axes' constraint_values and all cell config_settings. All constraint_values and config_settings carry `visibility = ["PUBLIC"]` because the root PACKAGE references them via a different cell-relative path (`root//<third_party_dir>/config:foo` from the project root) and resolution fails without PUBLIC visibility. For the 6-cell case:
 
 ```python
 ##
@@ -238,30 +316,33 @@ Extended from S3 to declare both axes' constraint_values and all cell config_set
 ##
 
 constraint_setting(name = "python_version")
-constraint_value(name = "py311", constraint_setting = ":python_version")
-constraint_value(name = "py312", constraint_setting = ":python_version")
+constraint_value(name = "py311", constraint_setting = ":python_version", visibility = ["PUBLIC"])
+constraint_value(name = "py312", constraint_setting = ":python_version", visibility = ["PUBLIC"])
 
 constraint_setting(name = "platform")
-constraint_value(name = "linux-aarch64-gnu", constraint_setting = ":platform")
-constraint_value(name = "linux-x86_64-gnu",  constraint_setting = ":platform")
-constraint_value(name = "macos-arm64",       constraint_setting = ":platform")
+constraint_value(name = "linux-aarch64-gnu", constraint_setting = ":platform", visibility = ["PUBLIC"])
+constraint_value(name = "linux-x86_64-gnu",  constraint_setting = ":platform", visibility = ["PUBLIC"])
+constraint_value(name = "macos-arm64",       constraint_setting = ":platform", visibility = ["PUBLIC"])
 
 config_setting(
     name = "py311-linux-aarch64-gnu",
     constraint_values = [":linux-aarch64-gnu", ":py311"],
+    visibility = ["PUBLIC"],
 )
 config_setting(
     name = "py311-linux-x86_64-gnu",
     constraint_values = [":linux-x86_64-gnu", ":py311"],
+    visibility = ["PUBLIC"],
 )
 config_setting(
     name = "py311-macos-arm64",
     constraint_values = [":macos-arm64", ":py311"],
+    visibility = ["PUBLIC"],
 )
 # ... three more for py312, sorted lex
 ```
 
-constraint_values inside each `config_setting`'s `constraint_values` list are sorted lex (platform before python_version alphabetically). config_settings are sorted lex by name. constraint_values within each axis are sorted lex.
+constraint_values inside each `config_setting`'s `constraint_values` list are sorted lex (platform before python_version alphabetically). config_settings are sorted lex by name. constraint_values within each axis are sorted lex. `constraint_setting` itself doesn't need a `visibility` attr — it's only referenced via `constraint_value(constraint_setting = ...)` from within the same package.
 
 ---
 
@@ -277,18 +358,28 @@ tests/fixtures/buck/02-numpy-pandas/
 │                         python_versions = ["3.11", "3.12"]
 ├── pyproject.toml        single dep: numpy>=2.1,<2.3
 ├── uv.lock               frozen; numpy 2.x ships wheels for all 6 cells
+├── .buckconfig           declares prelude cell + cell aliases
+├── .gitmodules           (root-level; prelude submodule pointer lives here)
+├── prelude/              git submodule (gitignored ./prelude/ content but the pointer
+│                         lives in .gitmodules at repo root)
+├── PACKAGE               hand-written root PACKAGE; loads + calls setup_muntjac()
+│                         (worked example of muntjac's user-side setup)
+├── toolchains/
+│   └── BUCK              hand-written system_python + system_cxx toolchains
 ├── expected/
 │   ├── BUCK              one pypi_package call per resolved package
-│   ├── muntjac.bzl       6-cell _CONFIGS list + python-axis wiring header
-│   ├── PACKAGE           host-axis set_cfg_modifiers wiring
-│   └── config/BUCK       2 py-axis + 3 plat-axis constraint_values, 6 config_settings
-├── tests/smoke/
-│   ├── BUCK              python_binary(name="numpy_demo", modifiers=[...], deps=[":numpy"])
-│   └── demo.py           import numpy as np; arr=np.zeros(3); print(arr); assert arr.shape==(3,)
-└── .buckconfig           declares prelude cell + any required cell aliases (config//, etc.)
+│   ├── muntjac.bzl       6-cell _CONFIGS + native.* rules + python-axis header
+│   ├── wiring.bzl        setup_muntjac() with cfg_constructor + host-axis modifiers
+│   └── config/BUCK       2 py-axis + 3 plat-axis constraint_values, 6 config_settings,
+│                         all visibility = ["PUBLIC"]
+└── tests/smoke/
+    ├── BUCK              python_binary(name="numpy_demo", modifiers=[...], deps=[":numpy"])
+    └── demo.py           import numpy as np; arr=np.zeros(3); print(arr); assert arr.shape==(3,)
 ```
 
-The fixture root is a buck2 cell — `02-numpy-pandas/` carries a `.buckconfig` so `buck2 run //tests/smoke:numpy_demo` resolves correctly. The exact `.buckconfig` contents (prelude path, cell aliases for `config//`, python_toolchain registration) are produced by the §10 spike — they're whatever it takes to make `buck2 run` green against the pinned buck2 version. If the prelude needs to be checked out into the fixture (via git submodule, fetched in CI, or vendored), that's planner choice.
+The fixture root is a buck2 cell. `.buckconfig`, `PACKAGE`, `toolchains/BUCK`, and `tests/smoke/` are hand-written user-side artifacts (committed to demonstrate the setup). `expected/` holds golden output from `muntjac buckify` and gets byte-compared in the integration test. The generated `third-party/python/` directory (containing the live `BUCK` + `muntjac.bzl` + `wiring.bzl` + `config/BUCK`) is gitignored — it's regenerated by buckify and the goldens are the source of truth for snapshots.
+
+Note that the **fixture's** `PACKAGE` (hand-written, committed) is at `02-numpy-pandas/PACKAGE` — the project root. There is intentionally NO `02-numpy-pandas/third-party/python/PACKAGE` in the emitted output set.
 
 Numpy 2.1+ has no runtime dependencies and ships cp311/cp312 wheels for all three target platforms. No NoWheel cell and no marker-gated deps, so this fixture exercises the uniform-deps path. The per-cell `select()`-deps machinery is verified in unit tests, not this fixture.
 
@@ -304,9 +395,11 @@ tests/fixtures/buck/03-musllinux/
 └── expected/
     ├── BUCK              wheel URL contains *musllinux_1_2_x86_64*
     ├── muntjac.bzl
-    ├── config/BUCK
-    └── PACKAGE
+    ├── wiring.bzl
+    └── config/BUCK
 ```
+
+Note: no hand-written `.buckconfig`, root PACKAGE, or `tests/smoke/` for 03 — this fixture is emit-only (no `buck2 build` step in CI; Linux GH runners are glibc, not musl). The `expected/wiring.bzl` for the musl-only platform set contains a `set_cfg_modifiers` call whose host-axis dict has no `prelude//os/constraints:linux` branch matching a musl variant (musl is not a first-class OS constraint in the open-source prelude); musllinux platforms therefore require user-side modifier selection at build time rather than auto-routing.
 
 Initial package candidate: `psycopg2-binary` (publishes both manylinux and musllinux variants; muntjac's `linux-x86_64-musl` cell forces musllinux selection). The planner can substitute a different package if `psycopg2-binary` becomes impractical (uv.lock churn, transitive sdists). The fixture's purpose is the selector exercise, not the specific package.
 
@@ -316,7 +409,9 @@ Continues unchanged. May be re-pointed at `02-numpy-pandas` or remain on `01-pur
 
 ### `tests/fixtures/buck/01-pure-python/` (regenerated goldens)
 
-S4 doesn't change the *inputs* but the *outputs* shift because PACKAGE goes from placeholder to real auto-wiring, and `config/BUCK` may gain the host-axis constraint_values it didn't declare in S3. The regenerated goldens land in the same commit as the emitter change. Reviewer eyeballs the diff on the PR; the determinism test catches any new HashMap iteration sneaking in.
+S4 doesn't change the *inputs* but the *outputs* shift in three ways: (1) the S3 PACKAGE placeholder is dropped from the emitted file set, (2) a new `wiring.bzl` is added (single-platform — the host-axis modifier set has one branch), and (3) `config/BUCK` gains `visibility = ["PUBLIC"]` on every entry plus any platform-axis declarations that weren't in S3. Additionally, `muntjac.bzl` shifts from S3's bare-name native-rule calls to `native.<rule>` form — the spike showed the S3 muntjac.bzl would not have loaded under buck2.
+
+Reviewer eyeballs the diff on the PR; the determinism test catches any new HashMap iteration sneaking in.
 
 ### `tests/fixtures/buck/README.md` addendum
 
@@ -331,27 +426,55 @@ Append a paragraph: fixtures `02-*` and later exercise a (N platforms × M pytho
 Added after the existing `cargo test` step on all three matrix runners:
 
 ```yaml
-- name: install buck2
-  # exact action / install path verified by the spike; one of:
-  #   - dedicated buck2 install action if one is maintained
-  #   - cargo install buck2 (slow but reliable)
-  #   - curl + tar from facebook/buck2's release artifacts
-  # planner picks the most stable option at implementation time.
+- uses: actions/checkout@v4
+  with:
+    submodules: recursive    # fetches the prelude submodule used by the fixture
+
+- name: install cp312 python
+  # Required by the prelude's system_python_toolchain. Both `uv python install`
+  # and apt/brew work; uv is most consistent across runners.
   run: |
-    curl -L https://github.com/facebook/buck2/releases/download/<pinned-version>/buck2-<host-triple>.zst | \
-        zstd -d -o /usr/local/bin/buck2
-    chmod +x /usr/local/bin/buck2
-    buck2 --version
+    pipx install uv || python3 -m pip install --user uv
+    uv python install 3.12
+    # Ensure `python3.12` resolves on PATH (system_python_toolchain looks
+    # up the bare command unless the toolchain target overrides the path).
+    UV_PY_BIN="$(uv python find 3.12)"
+    sudo ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+    python3.12 --version
+
+- name: install buck2 (pinned)
+  run: |
+    BUCK2_RELEASE="2026-05-18"
+    case "${{ matrix.runner }}" in
+      ubuntu-latest)    ASSET="buck2-x86_64-unknown-linux-gnu.zst" ;;
+      ubuntu-24.04-arm) ASSET="buck2-aarch64-unknown-linux-gnu.zst" ;;
+      macos-latest)     ASSET="buck2-aarch64-apple-darwin.zst" ;;
+      *) echo "unknown runner ${{ matrix.runner }}"; exit 1 ;;
+    esac
+    mkdir -p "$HOME/.local/bin"
+    curl -L "https://github.com/facebook/buck2/releases/download/${BUCK2_RELEASE}/${ASSET}" -o /tmp/buck2.zst
+    if ! command -v zstd >/dev/null 2>&1; then
+      if [ "${{ runner.os }}" = "macOS" ]; then brew install zstd; else sudo apt-get update && sudo apt-get install -y zstd; fi
+    fi
+    zstd -d /tmp/buck2.zst -o "$HOME/.local/bin/buck2"
+    chmod +x "$HOME/.local/bin/buck2"
+    echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    "$HOME/.local/bin/buck2" --version
 
 - name: muntjac buckify (02-numpy-pandas fixture)
   run: |
     cd tests/fixtures/buck/02-numpy-pandas
-    cargo run --release -- buckify
+    cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
+    test -f third-party/python/BUCK
+    test -f third-party/python/muntjac.bzl
+    test -f third-party/python/wiring.bzl
+    test -f third-party/python/config/BUCK
 
 - name: buck2 build + run numpy demo
   run: |
     cd tests/fixtures/buck/02-numpy-pandas
-    buck2 run //tests/smoke:numpy_demo
+    buck2 run //tests/smoke:numpy_demo 2>&1 | tee /tmp/numpy-out.txt
+    grep -F "[0. 0. 0.]" /tmp/numpy-out.txt
 ```
 
 `buck2 run` exits non-zero if `demo.py`'s `assert arr.shape == (3,)` fails or if any earlier step errors. Each runner naturally picks its own cell from the alias-with-select:
@@ -460,17 +583,20 @@ The `buck2 run //tests/smoke:numpy_demo` step is the e2e gate. The `assert arr.s
 
 ---
 
-## 10. Implementation order (de-risks cfg-modifier API uncertainty)
+## 10. Implementation order (spike done; results folded into §5)
 
-The exact cfg-modifier API surface — specifically the `config//os/constraints:*` cell prefix, whether nested `ModifiersMatch` dicts work as drawn, the precise constraint-setting targets for OS+CPU — is in churn upstream. The plan reorders tasks to validate against real buck2 BEFORE goldens are frozen:
+The cfg-modifier API spike was completed in the first execution pass and validated against buck2 `2026-05-18` + prelude SHA `b4e55417b4edf582be8fb20f24e1afc5866987ce`. Findings are folded into §5 above (the file-contents section) and into the §6 fixture description. The spike surfaced five contract-affecting deviations from the original draft (PACKAGE wiring location, `set_cfg_constructor` registration, `_type` discriminator, fully-qualified targets, `native.*` for native rules); this spec revision is post-spike.
 
-1. **Spike** (first task): install the pinned buck2 in a scratch checkout, set up `02-numpy-pandas/.buckconfig` (and any prelude bootstrap), write a minimal PACKAGE + config/BUCK + BUCK by hand matching the §5 shapes, run `buck2 run //tests/smoke:numpy_demo`. Iterate until exit-0 and `[0. 0. 0.]` on the configured runner. Output of the spike: a known-good hand-written fixture + a buck2 install procedure that the CI workflow can copy verbatim.
-2. **Emitter implementation**: code the emitter to produce the shape that was just validated by the spike.
-3. **Goldens**: freeze `expected/*` files based on emitter output (which now matches the hand-validated shape).
-4. **Per-cell deps machinery**: independent of the API spike; can land in parallel.
-5. **Tech-debt fold-ins** (BadUrl, iterative Tarjan): independent; parallel.
+Remaining work, in order:
 
-If the spike surfaces a contract-breaking gap (e.g. nested `ModifiersMatch` dicts aren't supported and we have to fall back to multiple flat dicts in `cfg_modifiers = [d1, d2, d3]`), the spec is amended before the plan continues. The CI smoke is the safety net regardless.
+1. **Emitter implementation**: code the emitter to produce the validated §5 shapes.
+2. **Goldens**: freeze `expected/*` files based on emitter output.
+3. **Per-cell deps machinery**: independent; parallel-eligible.
+4. **Tech-debt fold-ins** (BadUrl, iterative Tarjan): independent; parallel-eligible.
+5. **CI workflow**: add the steps from §7.
+6. **Doc edits**: design spec §1 non-goal removal, TECH_DEBT shuffles, roadmap update.
+
+The CI smoke is the forcing function — we cannot ship green CI without the wiring being correct end-to-end.
 
 ---
 
@@ -499,9 +625,11 @@ S4 ships when all of the following hold green on CI's three matrix runners (`ubu
 ### S4-specific additions
 
 - `EmitDeps::PerCell` rendered as `deps = select({...})` when cells diverge; uniform cells continue to render plain lists.
-- Generated `PACKAGE` auto-wires the host OS+CPU axis via `set_cfg_modifiers` with inline `ModifiersMatch` dicts (or equivalent shape if the spike requires variation).
-- Generated `muntjac.bzl` header documents the per-binary `modifiers = [...]` snippet and the root-PACKAGE-default snippet for the python-version axis.
-- `tests/smoke/BUCK` + `tests/smoke/demo.py` committed inside the `02-numpy-pandas` fixture as the canonical worked example.
+- Generated `<third_party_dir>/wiring.bzl` exports a `setup_muntjac()` function that registers `set_cfg_constructor` and binds host OS+CPU via `set_cfg_modifiers` (nested `ModifiersMatch` dict with `"_type"` discriminators + fully-qualified `root//...` constraint targets).
+- Generated `<third_party_dir>/PACKAGE` is **not** in the emitted file set.
+- Generated `<third_party_dir>/muntjac.bzl` uses `native.<rule>` for the native rules (`http_file`, `prebuilt_python_library`, `alias`) and contains the python-axis wiring header pointing at both the per-binary `modifiers = [...]` snippet and the `setup_muntjac()` invocation.
+- Generated `<third_party_dir>/config/BUCK` declares `visibility = ["PUBLIC"]` on every `constraint_value` and `config_setting`.
+- `tests/smoke/BUCK` + `tests/smoke/demo.py` committed inside the `02-numpy-pandas` fixture as the canonical worked example. The fixture also commits a hand-written root `PACKAGE` (loading `setup_muntjac`) and `toolchains/BUCK` (system python + cxx) to demonstrate the user-side setup.
 
 ### Folded-in tech debt (all moved to `TECH_DEBT.md ## Resolved`)
 
@@ -517,9 +645,11 @@ S4 ships when all of the following hold green on CI's three matrix runners (`ubu
 
 ## 13. Risks & mitigations
 
-- **cfg-modifier API churn.** The buck2 prelude's modifier surface (constraint-setting cell prefix, ModifiersMatch nesting) is evolving. Mitigation: spike task in §10 validates against the pinned buck2 BEFORE goldens are frozen; CI smoke is the forcing function — we cannot ship green CI without a working wiring.
+- **cfg-modifier API churn (validated).** Spike validated against buck2 `2026-05-18` + prelude SHA `b4e55417...`. CI pins the same buck2 version so the validated shape stays valid. Future prelude releases may break the wiring; if so, CI smoke surfaces it as a red build and we bump the pin + adjust the emitter together.
 
-- **buck2 install action stability in CI.** No officially-maintained GitHub Action for buck2 install exists as of writing. Mitigation: pin buck2 version, install via `curl + zstd` from the release artifact, falling back to `cargo install buck2` if the binary release moves. Step is required (no silent skip).
+- **buck2 install action stability in CI.** No officially-maintained GitHub Action for buck2 install exists. Mitigation: pin buck2 version, install via `curl + zstd` from the release artifact. Step is required (no silent skip). If the binary release moves, the install step errors and CI is red until the URL is fixed.
+
+- **Open-source prelude's `set_cfg_constructor` isn't registered by default.** Without explicit registration, `set_cfg_modifiers` and per-target `modifiers` attrs are silently no-ops. The spike caught this and the emitter's `wiring.bzl::setup_muntjac()` registers the constructor explicitly. New users following the wiring contract get it for free; users who skip `setup_muntjac()` get a silent miss. Mitigated by clear docs in `muntjac.bzl` header + the fixture root PACKAGE as a worked example.
 
 - **musllinux fixture package-availability drift.** `psycopg2-binary`'s musllinux variants may change in future releases. Mitigation: uv.lock is frozen in the fixture; golden BUCK references the frozen URL. If the package becomes impractical (e.g. all native deps), planner picks an alternative — the fixture's purpose is the *selector exercise*, not the specific package.
 
