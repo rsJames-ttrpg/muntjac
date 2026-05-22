@@ -157,10 +157,11 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
     let sdist = rp
         .sdist
         .map(|rs| -> Result<Sdist, LockfileError> {
-            let url = Url::parse(&rs.url).map_err(|e| LockfileError::BadVersion {
+            let url = Url::parse(&rs.url).map_err(|e| LockfileError::BadUrl {
                 package: rp.name.clone(),
-                value: rs.url.clone(),
-                reason: format!("sdist URL: {e}"),
+                field: "sdist",
+                url: rs.url.clone(),
+                reason: e.to_string(),
             })?;
             Ok(Sdist {
                 url,
@@ -174,10 +175,11 @@ fn package_from_raw(rp: RawPackage) -> Result<Package, LockfileError> {
         .wheels
         .into_iter()
         .map(|rw| -> Result<Wheel, LockfileError> {
-            let url = Url::parse(&rw.url).map_err(|e| LockfileError::BadVersion {
+            let url = Url::parse(&rw.url).map_err(|e| LockfileError::BadUrl {
                 package: rp.name.clone(),
-                value: rw.url.clone(),
-                reason: format!("wheel URL: {e}"),
+                field: "wheel",
+                url: rw.url.clone(),
+                reason: e.to_string(),
             })?;
             let filename = rw.url.rsplit('/').next().unwrap_or("").to_string();
             Ok(Wheel {
@@ -276,18 +278,20 @@ fn source_from_raw(pkg_name: &str, rs: RawSource) -> Result<Source, LockfileErro
         });
     }
     if let Some(url) = rs.registry {
-        let parsed = Url::parse(&url).map_err(|e| LockfileError::BadVersion {
+        let parsed = Url::parse(&url).map_err(|e| LockfileError::BadUrl {
             package: pkg_name.into(),
-            value: url.clone(),
-            reason: format!("registry URL: {e}"),
+            field: "registry",
+            url: url.clone(),
+            reason: e.to_string(),
         })?;
         return Ok(Source::Registry { url: parsed });
     }
     if let Some(url) = rs.git {
-        let parsed = Url::parse(&url).map_err(|e| LockfileError::BadVersion {
+        let parsed = Url::parse(&url).map_err(|e| LockfileError::BadUrl {
             package: pkg_name.into(),
-            value: url.clone(),
-            reason: format!("git URL: {e}"),
+            field: "git",
+            url: url.clone(),
+            reason: e.to_string(),
         })?;
         return Ok(Source::Git {
             url: parsed,
@@ -531,6 +535,39 @@ source = { registry = "https://pypi.org/simple" }
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn url_parse_failures_use_bad_url_variant() {
+        // Malformed wheel URL should produce LockfileError::BadUrl, not BadVersion.
+        let toml_str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "broken-pkg"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package.wheels]]
+url = "::not-a-url::"
+hash = "sha256:abc"
+"#;
+        let err = parse(toml_str).expect_err("malformed URL should error");
+        match err {
+            LockfileError::BadUrl {
+                package,
+                field,
+                url,
+                ..
+            } => {
+                assert_eq!(package, "broken-pkg");
+                assert_eq!(field, "wheel");
+                assert_eq!(url, "::not-a-url::");
+            }
+            other => panic!("expected BadUrl, got {other:?}"),
+        }
     }
 
     #[test]

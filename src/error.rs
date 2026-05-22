@@ -43,6 +43,14 @@ pub enum LockfileError {
         reason: String,
     },
 
+    #[error("package `{package}`: invalid {field} URL `{url}`: {reason}")]
+    BadUrl {
+        package: String,
+        field: &'static str,
+        url: String,
+        reason: String,
+    },
+
     #[error(
         "package `{package}`: source must have exactly one of registry/git/virtual/editable/directory/path; found {found:?}"
     )]
