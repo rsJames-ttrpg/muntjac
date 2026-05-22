@@ -97,6 +97,34 @@ fn fixture_02_numpy_pandas_golden() {
 }
 
 #[test]
+fn fixture_03_musllinux_golden() {
+    let fix = fixture("03-musllinux");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
+    );
+    // Negative assertion: NO PACKAGE in the third-party dir.
+    assert!(
+        !tmp.path().join("third-party/python/PACKAGE").exists(),
+        "third-party/python/PACKAGE should not exist (wiring.bzl replaces it)"
+    );
+    // Sanity: at least one URL in BUCK contains a musllinux substring.
+    let buck = std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
+    assert!(
+        buck.contains("musllinux"),
+        "expected at least one musllinux wheel URL in generated BUCK"
+    );
+}
+
+#[test]
 fn fixture_10_determinism_two_runs_byte_identical() {
     let fix = fixture("01-pure-python");
 
