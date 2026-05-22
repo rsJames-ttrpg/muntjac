@@ -37,7 +37,7 @@ fn emit_buck(input: &EmitInput) -> String {
 
     for pkg in sorted_pkgs {
         writeln!(s).unwrap();
-        write_pypi_package(&mut s, pkg);
+        write_pypi_package(&mut s, pkg, &input.third_party_dir);
     }
     s
 }
@@ -226,7 +226,7 @@ fn split_config(name: &str) -> (&str, &str) {
         .expect("ConfigName has form pyXY-<platform>")
 }
 
-fn write_pypi_package(s: &mut String, pkg: &EmitPackage) {
+fn write_pypi_package(s: &mut String, pkg: &EmitPackage, pkg_third_party_dir: &str) {
     writeln!(s, "pypi_package(").unwrap();
     writeln!(s, "    name = \"{}\",", pkg.name).unwrap();
     writeln!(s, "    version = \"{}\",", pkg.version).unwrap();
@@ -244,9 +244,22 @@ fn write_pypi_package(s: &mut String, pkg: &EmitPackage) {
                 writeln!(s, "    ],").unwrap();
             }
         }
-        EmitDeps::PerCell(_) => {
-            // Task 10 fills this in with select() rendering.
-            unimplemented!("EmitDeps::PerCell rendering — Task 10");
+        EmitDeps::PerCell(per_cell) => {
+            writeln!(s, "    deps = select({{").unwrap();
+            for (cell, deps_v) in per_cell {
+                // select() branch keys are config target labels in the same cell.
+                let key = format!("//{}/config:{}", pkg_third_party_dir, cell);
+                if deps_v.is_empty() {
+                    writeln!(s, "        \"{}\": [],", key).unwrap();
+                } else {
+                    writeln!(s, "        \"{}\": [", key).unwrap();
+                    for d in deps_v {
+                        writeln!(s, "            \"{}\",", d).unwrap();
+                    }
+                    writeln!(s, "        ],").unwrap();
+                }
+            }
+            writeln!(s, "    }}),").unwrap();
         }
     }
     writeln!(s, "    wheels = {{").unwrap();
@@ -600,5 +613,74 @@ mod tests {
                 .emit(&multi_package_input())
                 .config_buck
         );
+    }
+
+    #[test]
+    fn renders_per_cell_deps_as_select() {
+        let cells: Vec<ConfigName> = vec![
+            ConfigName::new("3.11", "linux-x86_64-gnu"),
+            ConfigName::new("3.12", "linux-x86_64-gnu"),
+        ];
+
+        let mut per_cell: BTreeMap<ConfigName, Vec<String>> = BTreeMap::new();
+        per_cell.insert(
+            cells[0].clone(),
+            vec![":foo".into(), ":typing-extensions".into()],
+        );
+        per_cell.insert(cells[1].clone(), vec![":foo".into()]);
+
+        let mut wheels: BTreeMap<ConfigName, EmitWheel> = BTreeMap::new();
+        for cell in &cells {
+            wheels.insert(
+                cell.clone(),
+                EmitWheel {
+                    url: format!("https://example.com/rich-13.0-{}.whl", cell),
+                    hash: "sha256:rich".into(),
+                },
+            );
+        }
+
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            configs: cells,
+            packages: vec![EmitPackage {
+                name: "rich".into(),
+                version: "13.0".into(),
+                deps: EmitDeps::PerCell(per_cell),
+                wheels,
+            }],
+        };
+
+        let out = StringTemplateEmitter.emit(&input);
+        insta::assert_snapshot!("per_cell_deps_select", out.buck);
+    }
+
+    #[test]
+    fn renders_uniform_deps_as_plain_list() {
+        let cell = ConfigName::new("3.12", "linux-x86_64-gnu");
+        let mut wheels: BTreeMap<ConfigName, EmitWheel> = BTreeMap::new();
+        wheels.insert(
+            cell.clone(),
+            EmitWheel {
+                url: "https://example.com/requests-2.32.3-py3-none-any.whl".into(),
+                hash: "sha256:req".into(),
+            },
+        );
+
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            configs: vec![cell],
+            packages: vec![EmitPackage {
+                name: "requests".into(),
+                version: "2.32.3".into(),
+                deps: EmitDeps::Uniform(vec![":certifi".into(), ":idna".into()]),
+                wheels,
+            }],
+        };
+
+        let out = StringTemplateEmitter.emit(&input);
+        insta::assert_snapshot!("uniform_deps_plain_list", out.buck);
     }
 }
