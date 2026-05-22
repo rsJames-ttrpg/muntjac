@@ -15,6 +15,17 @@ pub struct EmitInput {
     pub packages: Vec<EmitPackage>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EmitDeps {
+    /// Every cell has the same dep list. Rendered as `deps = [":foo", ":bar"]`.
+    Uniform(Vec<String>),
+
+    /// Cells differ. Rendered as `deps = select({...})` with one branch per cell.
+    /// Keys are every cell in `EmitInput::configs` (no `default` arm — cell
+    /// coverage is exhaustive by construction in `build_emit_input`).
+    PerCell(BTreeMap<ConfigName, Vec<String>>),
+}
+
 #[derive(Debug, Clone)]
 pub struct EmitPackage {
     pub name: String,
@@ -584,5 +595,31 @@ mod tests {
         );
         // S4 reference:
         assert!(msg.contains("S4"), "error must point at S4: {}", msg);
+    }
+
+    #[test]
+    fn emit_deps_variants_construct() {
+        let uniform = EmitDeps::Uniform(vec![":foo".into(), ":bar".into()]);
+        let per_cell = EmitDeps::PerCell({
+            let mut m = BTreeMap::new();
+            m.insert(
+                ConfigName::new("3.12", "linux-x86_64-gnu"),
+                vec![":foo".into()],
+            );
+            m.insert(
+                ConfigName::new("3.11", "linux-x86_64-gnu"),
+                vec![":foo".into(), ":bar".into()],
+            );
+            m
+        });
+
+        match uniform {
+            EmitDeps::Uniform(v) => assert_eq!(v.len(), 2),
+            EmitDeps::PerCell(_) => panic!("expected Uniform"),
+        }
+        match per_cell {
+            EmitDeps::PerCell(m) => assert_eq!(m.len(), 2),
+            EmitDeps::Uniform(_) => panic!("expected PerCell"),
+        }
     }
 }
