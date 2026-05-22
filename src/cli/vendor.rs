@@ -303,11 +303,53 @@ fn extract_tarball(tarball: &Path, dest: &Path, package: &str, version: &str) ->
             }
         }
         let out = dest.join(&path);
+        // Some sdists (e.g. tomli 2.0.1) ship file entries without preceding
+        // directory entries. `Entry::unpack` does not create parent dirs, so
+        // ensure they exist before unpacking.
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| SdistError::Extract {
+                package: package.into(),
+                version: version.into(),
+                source: e,
+            })?;
+        }
+        // tar-rs only honours the ustar header `mtime` field; many sdists
+        // (built with GNU tar or setuptools) record the real mtime in a
+        // PAX extension with a `0` ustar mtime, which silently becomes
+        // 1970 on disk. Build backends like flit-core then reject the
+        // resulting <1980 ZIP timestamp. Read PAX `mtime` ahead of unpack
+        // so we can restore it explicitly below.
+        let pax_mtime: Option<i64> = match entry.pax_extensions() {
+            Ok(Some(exts)) => {
+                let mut found = None;
+                for ext in exts {
+                    if let Ok(ext) = ext
+                        && let Ok(key) = ext.key()
+                        && key == "mtime"
+                        && let Ok(val) = ext.value()
+                    {
+                        // Value is decimal seconds, optionally fractional.
+                        let secs = val.split('.').next().unwrap_or(val);
+                        if let Ok(s) = secs.parse::<i64>() {
+                            found = Some(s);
+                        }
+                    }
+                }
+                found
+            }
+            _ => None,
+        };
         entry.unpack(&out).map_err(|e| SdistError::Extract {
             package: package.into(),
             version: version.into(),
             source: e,
         })?;
+        if let Some(secs) = pax_mtime {
+            let ft = filetime::FileTime::from_unix_time(secs, 0);
+            // Best-effort: failures here are not fatal — they only affect
+            // build determinism, not correctness of file content.
+            let _ = filetime::set_file_mtime(&out, ft);
+        }
     }
     Ok(())
 }
