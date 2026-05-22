@@ -265,71 +265,86 @@ fn display_string(graph: &DepGraph, id: NodeId) -> String {
 }
 
 fn tarjan_scc(graph: &DepGraph) -> Vec<Vec<NodeId>> {
+    // Iterative Tarjan's SCC. The recursive form risks stack overflow on deep
+    // linear dependency chains; this implementation uses an explicit work
+    // stack of (node, edge-cursor) frames. Algorithm output is identical to
+    // the recursive version: it visits successors in the same order, computes
+    // the same lowlink/index values, and emits SCCs in the same reverse-
+    // topological order.
     let n = graph.nodes.len();
     let mut index = vec![-1i32; n];
     let mut lowlink = vec![0i32; n];
     let mut on_stack = vec![false; n];
-    let mut stack: Vec<NodeId> = Vec::new();
+    let mut scc_stack: Vec<NodeId> = Vec::new();
     let mut next_index = 0i32;
     let mut sccs: Vec<Vec<NodeId>> = Vec::new();
 
-    for v in 0..n {
-        if index[v] == -1 {
-            strongconnect(
-                v,
-                graph,
-                &mut index,
-                &mut lowlink,
-                &mut on_stack,
-                &mut stack,
-                &mut next_index,
-                &mut sccs,
-            );
+    // Each work frame is (node, next-edge-index-to-process). The cursor lets
+    // us resume the neighbor loop after a child finishes. Storing only the
+    // cursor (instead of an owning iterator) avoids cloning edge lists.
+    let mut work: Vec<(usize, usize)> = Vec::new();
+
+    for start in 0..n {
+        if index[start] != -1 {
+            continue;
+        }
+
+        // "Enter" the start node, then drive the work loop.
+        index[start] = next_index;
+        lowlink[start] = next_index;
+        next_index += 1;
+        scc_stack.push(start as NodeId);
+        on_stack[start] = true;
+        work.push((start, 0));
+
+        while let Some(&(v, edge_idx)) = work.last() {
+            let edges = &graph.nodes[v].edges_out;
+            if edge_idx < edges.len() {
+                let w = edges[edge_idx] as usize;
+                // Advance the cursor so when this frame is revisited we move
+                // to the next neighbor.
+                work.last_mut().unwrap().1 = edge_idx + 1;
+
+                if index[w] == -1 {
+                    // "Recurse" on w: enter it, then push its work frame.
+                    index[w] = next_index;
+                    lowlink[w] = next_index;
+                    next_index += 1;
+                    scc_stack.push(w as NodeId);
+                    on_stack[w] = true;
+                    work.push((w, 0));
+                } else if on_stack[w] {
+                    // Cross-edge to an on-stack ancestor: tighten v's lowlink.
+                    lowlink[v] = lowlink[v].min(index[w]);
+                }
+                // else: edge to a finished SCC, ignored.
+            } else {
+                // All neighbors of v processed — close v out.
+                if lowlink[v] == index[v] {
+                    let mut scc = Vec::new();
+                    loop {
+                        let popped = scc_stack.pop().unwrap();
+                        on_stack[popped as usize] = false;
+                        scc.push(popped);
+                        if popped as usize == v {
+                            break;
+                        }
+                    }
+                    sccs.push(scc);
+                }
+
+                // Pop v's frame, then propagate its lowlink up to its parent
+                // (which is now the top of the work stack, if any). This is
+                // the iterative analog of `lowlink[parent] = min(lowlink[parent],
+                // lowlink[v])` after the recursive call returned.
+                work.pop();
+                if let Some(&(parent, _)) = work.last() {
+                    lowlink[parent] = lowlink[parent].min(lowlink[v]);
+                }
+            }
         }
     }
     sccs
-}
-
-#[allow(clippy::too_many_arguments)]
-fn strongconnect(
-    v: usize,
-    graph: &DepGraph,
-    index: &mut [i32],
-    lowlink: &mut [i32],
-    on_stack: &mut [bool],
-    stack: &mut Vec<NodeId>,
-    next_index: &mut i32,
-    sccs: &mut Vec<Vec<NodeId>>,
-) {
-    index[v] = *next_index;
-    lowlink[v] = *next_index;
-    *next_index += 1;
-    stack.push(v as NodeId);
-    on_stack[v] = true;
-
-    let successors = graph.nodes[v].edges_out.clone();
-    for w in successors {
-        let w = w as usize;
-        if index[w] == -1 {
-            strongconnect(w, graph, index, lowlink, on_stack, stack, next_index, sccs);
-            lowlink[v] = lowlink[v].min(lowlink[w]);
-        } else if on_stack[w] {
-            lowlink[v] = lowlink[v].min(index[w]);
-        }
-    }
-
-    if lowlink[v] == index[v] {
-        let mut scc = Vec::new();
-        loop {
-            let w = stack.pop().unwrap();
-            on_stack[w as usize] = false;
-            scc.push(w);
-            if w as usize == v {
-                break;
-            }
-        }
-        sccs.push(scc);
-    }
 }
 
 #[cfg(test)]
@@ -484,6 +499,54 @@ mod tests {
             }
             other => panic!("unexpected: {other:?}"),
         }
+    }
+
+    #[test]
+    fn detect_cycles_handles_deep_linear_chain_without_stack_overflow() {
+        // Build a 5000-node linear chain: pkg_0 -> pkg_1 -> ... -> pkg_4999.
+        // Recursive strongconnect could overflow at ~1000 nodes on small stacks.
+        const N: usize = 5000;
+        let mut packages = Vec::with_capacity(N);
+        for i in 0..N {
+            let name_str = format!("pkg-{:05}", i);
+            let deps = if i + 1 < N {
+                vec![DepEdge {
+                    name: PackageName::from_str(&format!("pkg-{:05}", i + 1)).unwrap(),
+                    extra: vec![],
+                    marker: None,
+                }]
+            } else {
+                vec![]
+            };
+            packages.push(Package {
+                name: PackageName::from_str(&name_str).unwrap(),
+                version: Version::from_str("1.0").unwrap(),
+                source: if i == 0 {
+                    Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    }
+                } else {
+                    Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    }
+                },
+                dependencies: deps,
+                sdist: None,
+                wheels: vec![],
+                metadata: None,
+            });
+        }
+
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.11".into(),
+            packages,
+        };
+
+        let graph = build(&lockfile).expect("graph builds");
+        detect_cycles(&graph).expect("no cycles in a linear chain");
     }
 
     #[test]
