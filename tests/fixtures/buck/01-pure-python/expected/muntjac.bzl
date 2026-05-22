@@ -3,10 +3,14 @@
 ##
 ## Wiring contract for consumers:
 ##
-##   One-time project setup — add to your root PACKAGE:
+##   One-time project setup — add to your root PACKAGE (see
+##   third-party/python/wiring.bzl for the full snippet):
 ##
-##     load("//third-party/python:wiring.bzl", "setup_muntjac")
-##     setup_muntjac()
+##     load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
+##     load("//third-party/python:wiring.bzl", "MUNTJAC_HOST_MODIFIERS")
+##     # ...plus cfg_constructor loads...
+##     set_cfg_constructor(...)
+##     set_cfg_modifiers(cfg_modifiers = MUNTJAC_HOST_MODIFIERS)
 ##
 ##   This registers buck2's cfg_constructor and auto-routes the host
 ##   OS+CPU to the matching muntjac platform constraint.
@@ -23,7 +27,6 @@
 ##     )
 ##
 ##     # root PACKAGE default
-##     load("@prelude//cfg/modifier:set_cfg_modifiers.bzl", "set_cfg_modifiers")
 ##     set_cfg_modifiers(["//third-party/python/config:py312"])
 ##
 ## Available muntjac python constraints: py311, py312

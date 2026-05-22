@@ -10,7 +10,7 @@ Commands:
   init     Write a starter muntjac.toml and third-party/python/ skeleton
   config   Validate muntjac.toml without performing any side effects
   vendor   Download wheels into ~/.cache/muntjac (or vendor/) — UNIMPLEMENTED (S5/S9)
-  buckify  Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and PACKAGE
+  buckify  Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl
   audit    Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10)
   fixups   Manage fixups (update / show) — UNIMPLEMENTED (S6/S7)
   unused   Report vendored wheels not referenced by any tree — UNIMPLEMENTED (S10)

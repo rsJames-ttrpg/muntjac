@@ -1,4 +1,4 @@
-//! Buck2 BUCK + muntjac.bzl + config/BUCK + PACKAGE emitter.
+//! Buck2 BUCK + muntjac.bzl + config/BUCK + wiring.bzl emitter.
 //!
 //! See `docs/superpowers/specs/2026-05-21-muntjac-s3-buck-emitter-design.md`
 //! for the design.

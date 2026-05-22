@@ -1,4 +1,4 @@
-//! `muntjac buckify` — read uv.lock + muntjac.toml, emit BUCK + muntjac.bzl + config/BUCK + PACKAGE.
+//! `muntjac buckify` — read uv.lock + muntjac.toml, emit BUCK + muntjac.bzl + config/BUCK + wiring.bzl.
 
 use std::fs;
 use std::path::Path;

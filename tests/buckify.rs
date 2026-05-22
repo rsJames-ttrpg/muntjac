@@ -100,7 +100,7 @@ fn fixture_10_determinism_two_runs_byte_identical() {
     let tpd_a = tmp_a.path().join("third-party/python");
     let tpd_b = tmp_b.path().join("third-party/python");
 
-    for rel in ["BUCK", "muntjac.bzl", "PACKAGE", "config/BUCK"] {
+    for rel in ["BUCK", "muntjac.bzl", "wiring.bzl", "config/BUCK"] {
         let bytes_a = std::fs::read(tpd_a.join(rel)).unwrap();
         let bytes_b = std::fs::read(tpd_b.join(rel)).unwrap();
         assert_eq!(bytes_a, bytes_b, "{} differs across runs", rel);

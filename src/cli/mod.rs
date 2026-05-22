@@ -77,7 +77,7 @@ pub enum Command {
 
     /// Download wheels into ~/.cache/muntjac (or vendor/) — UNIMPLEMENTED (S5/S9).
     Vendor,
-    /// Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and PACKAGE.
+    /// Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl.
     Buckify,
     /// Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10).
     Audit,

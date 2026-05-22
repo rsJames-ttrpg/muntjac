@@ -73,7 +73,7 @@ pub struct EmitOutput {
     pub buck: String,
     pub muntjac_bzl: String,
     pub config_buck: String,
-    pub package_file: String,
+    pub wiring_bzl: String,
 }
 
 /// Trait for muntjac's BUCK emitter. The v1 implementation is

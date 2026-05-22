@@ -14,7 +14,7 @@ pub fn write_outputs(output: &EmitOutput, third_party_dir: &Path) -> anyhow::Res
 
     atomic_write(&third_party_dir.join("BUCK"), &output.buck)?;
     atomic_write(&third_party_dir.join("muntjac.bzl"), &output.muntjac_bzl)?;
-    atomic_write(&third_party_dir.join("PACKAGE"), &output.package_file)?;
+    atomic_write(&third_party_dir.join("wiring.bzl"), &output.wiring_bzl)?;
     atomic_write(&config_dir.join("BUCK"), &output.config_buck)?;
     Ok(())
 }
@@ -41,7 +41,7 @@ mod tests {
             buck: "BUCK_BODY\n".into(),
             muntjac_bzl: "BZL_BODY\n".into(),
             config_buck: "CONFIG_BODY\n".into(),
-            package_file: "PACKAGE_BODY\n".into(),
+            wiring_bzl: "WIRING_BODY\n".into(),
         };
 
         write_outputs(&out, &tpd).unwrap();
@@ -55,8 +55,8 @@ mod tests {
             "BZL_BODY\n"
         );
         assert_eq!(
-            std::fs::read_to_string(tpd.join("PACKAGE")).unwrap(),
-            "PACKAGE_BODY\n"
+            std::fs::read_to_string(tpd.join("wiring.bzl")).unwrap(),
+            "WIRING_BODY\n"
         );
         assert_eq!(
             std::fs::read_to_string(tpd.join("config/BUCK")).unwrap(),
@@ -81,7 +81,7 @@ mod tests {
             buck: "OLD\n".into(),
             muntjac_bzl: String::new(),
             config_buck: String::new(),
-            package_file: String::new(),
+            wiring_bzl: String::new(),
         };
         write_outputs(&out1, &tpd).unwrap();
         assert_eq!(std::fs::read_to_string(tpd.join("BUCK")).unwrap(), "OLD\n");
@@ -90,7 +90,7 @@ mod tests {
             buck: "NEW\n".into(),
             muntjac_bzl: String::new(),
             config_buck: String::new(),
-            package_file: String::new(),
+            wiring_bzl: String::new(),
         };
         write_outputs(&out2, &tpd).unwrap();
         assert_eq!(std::fs::read_to_string(tpd.join("BUCK")).unwrap(), "NEW\n");
