@@ -1,0 +1,17 @@
+version = 1
+revision = 1
+requires-python = ">=3.12"
+
+[[package]]
+name = "muntjac-test-09-native-sdist-error"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "nativeonly" },
+]
+
+[[package]]
+name = "nativeonly"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/nativeonly-1.0.0.tar.gz", hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", size = 1024 }

@@ -156,6 +156,27 @@ fn fixture_04_pure_python_sdist_golden() {
 }
 
 #[test]
+fn fixture_09_native_sdist_error_message_pins_canonical_text() {
+    let fix = fixture("09-native-sdist-error");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+
+    assert!(
+        !out.status.success(),
+        "expected buckify to fail; got success"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let expected = std::fs::read_to_string(fix.join("expected-error.txt")).unwrap();
+    let expected = expected.trim_end();
+    assert!(
+        stderr.contains(expected),
+        "stderr did not contain the canonical native-sdist error.\n\
+         expected:\n{expected}\n\nactual stderr:\n{stderr}"
+    );
+}
+
+#[test]
 fn fixture_10_determinism_two_runs_byte_identical() {
     let fix = fixture("01-pure-python");
 

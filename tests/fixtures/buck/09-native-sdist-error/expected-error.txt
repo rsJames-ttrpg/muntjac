@@ -1,0 +1,4 @@
+nativeonly 1.0.0 has no wheel for (py312, linux-x86_64-musl) and is a native sdist.
+       add a fixup at third-party/python/fixups/nativeonly/fixups.toml — see
+       `muntjac fixups show nativeonly` for the current community fixup, or use
+       `replace_deps` to point at a hand-rolled Buck target.
