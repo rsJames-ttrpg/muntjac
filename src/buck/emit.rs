@@ -30,7 +30,7 @@ pub enum EmitDeps {
 pub struct EmitPackage {
     pub name: String,
     pub version: String,
-    pub deps: Vec<String>,
+    pub deps: EmitDeps,
     pub wheels: BTreeMap<ConfigName, EmitWheel>,
 }
 
@@ -218,7 +218,7 @@ pub fn build_emit_input(
         packages.push(EmitPackage {
             name: key.0,
             version: key.1,
-            deps,
+            deps: EmitDeps::Uniform(deps),
             wheels: wheel_map,
         });
     }
@@ -247,7 +247,7 @@ mod tests {
             packages: vec![EmitPackage {
                 name: "requests".into(),
                 version: "2.32.3".into(),
-                deps: vec![":certifi".into(), ":idna".into()],
+                deps: EmitDeps::Uniform(vec![":certifi".into(), ":idna".into()]),
                 wheels: {
                     let mut m = BTreeMap::new();
                     m.insert(
@@ -367,7 +367,10 @@ mod tests {
         let pkg = &input.packages[0];
         assert_eq!(pkg.name, "certifi");
         assert_eq!(pkg.version, "2025.4.26");
-        assert!(pkg.deps.is_empty());
+        match &pkg.deps {
+            EmitDeps::Uniform(v) => assert!(v.is_empty()),
+            EmitDeps::PerCell(_) => panic!("expected Uniform for empty-deps case"),
+        }
         assert_eq!(pkg.wheels.len(), 1);
         let wheel = pkg.wheels.values().next().unwrap();
         assert!(wheel.url.contains("certifi-2025.4.26"));

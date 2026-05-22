@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use super::emit::{BuckEmitter, ConfigName, EmitInput, EmitOutput, EmitPackage};
+use super::emit::{BuckEmitter, ConfigName, EmitDeps, EmitInput, EmitOutput, EmitPackage};
 
 pub struct StringTemplateEmitter;
 
@@ -230,11 +230,21 @@ fn write_pypi_package(s: &mut String, pkg: &EmitPackage) {
     writeln!(s, "pypi_package(").unwrap();
     writeln!(s, "    name = \"{}\",", pkg.name).unwrap();
     writeln!(s, "    version = \"{}\",", pkg.version).unwrap();
-    if pkg.deps.is_empty() {
+    // Task 9/10 fills in proper rendering for both variants. For now we
+    // preserve existing Uniform-case behavior and emit an empty `deps = []`
+    // for PerCell as a placeholder (no current test exercises PerCell).
+    let deps_iter: Vec<&String> = match &pkg.deps {
+        EmitDeps::Uniform(v) => v.iter().collect(),
+        EmitDeps::PerCell(_) => {
+            // Task 10 replaces this branch with select() rendering.
+            Vec::new()
+        }
+    };
+    if deps_iter.is_empty() {
         writeln!(s, "    deps = [],").unwrap();
     } else {
         writeln!(s, "    deps = [").unwrap();
-        for dep in &pkg.deps {
+        for dep in &deps_iter {
             writeln!(s, "        \"{}\",", dep).unwrap();
         }
         writeln!(s, "    ],").unwrap();
@@ -286,7 +296,7 @@ mod tests {
             packages: vec![EmitPackage {
                 name: "certifi".into(),
                 version: "2025.4.26".into(),
-                deps: vec![],
+                deps: EmitDeps::Uniform(vec![]),
                 wheels,
             }],
         }
@@ -467,7 +477,7 @@ mod tests {
             EmitPackage {
                 name: "alpha".into(),
                 version: "1.0".into(),
-                deps: vec![],
+                deps: EmitDeps::Uniform(vec![]),
                 wheels,
             },
         );
@@ -531,13 +541,13 @@ mod tests {
                 EmitPackage {
                     name: "idna".into(),
                     version: "3.7".into(),
-                    deps: vec![],
+                    deps: EmitDeps::Uniform(vec![]),
                     wheels: idna_wheels,
                 },
                 EmitPackage {
                     name: "requests".into(),
                     version: "2.32.3".into(),
-                    deps: vec![":idna".into()],
+                    deps: EmitDeps::Uniform(vec![":idna".into()]),
                     wheels: requests_wheels,
                 },
             ],
