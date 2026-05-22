@@ -73,6 +73,10 @@ fn fixture_01_pure_python_golden() {
         &tmp.path().join("third-party/python"),
         &fix.join("expected"),
     );
+    assert!(
+        !tmp.path().join("third-party/python/PACKAGE").exists(),
+        "third-party/python/PACKAGE should not exist (wiring.bzl replaces it)"
+    );
 }
 
 #[test]
