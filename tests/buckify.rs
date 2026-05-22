@@ -90,6 +90,10 @@ fn fixture_02_numpy_pandas_golden() {
         &tmp.path().join("third-party/python"),
         &fix.join("expected"),
     );
+    assert!(
+        !tmp.path().join("third-party/python/PACKAGE").exists(),
+        "third-party/python/PACKAGE should not exist (wiring.bzl replaces it)"
+    );
 }
 
 #[test]
