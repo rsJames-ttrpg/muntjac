@@ -7,6 +7,7 @@ pub mod config_check;
 pub mod debug;
 pub mod init;
 pub mod stub;
+pub mod vendor;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -75,7 +76,7 @@ pub enum Command {
         op: Option<debug::DebugOp>,
     },
 
-    /// Download wheels into ~/.cache/muntjac (or vendor/) — UNIMPLEMENTED (S5/S9).
+    /// Prebake pure-python sdists into wheels. Wheel caching → S9.
     Vendor,
     /// Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl.
     Buckify,
@@ -100,7 +101,7 @@ pub fn run(cli: Cli) -> Result<()> {
             op: ConfigOp::Check(args),
         } => config_check::run(args, &cli.globals),
         Command::Debug { op } => debug::run(op, &cli.globals),
-        Command::Vendor => stub::run("vendor", "S5/S9"),
+        Command::Vendor => vendor::run(&cli.globals),
         Command::Buckify => buckify::run(&cli.globals),
         Command::Audit => stub::run("audit", "S10"),
         Command::Fixups => stub::run("fixups", "S6/S7"),
