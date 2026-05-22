@@ -7,25 +7,26 @@ expression: StringTemplateEmitter.emit(&multi_package_input()).config_buck
 ## Do not edit by hand.
 ##
 
+constraint_setting(name = "python_version")
+constraint_value(name = "py311", constraint_setting = ":python_version", visibility = ["PUBLIC"])
+constraint_value(name = "py312", constraint_setting = ":python_version", visibility = ["PUBLIC"])
+
+constraint_setting(name = "platform")
+constraint_value(name = "linux-x86_64-gnu", constraint_setting = ":platform", visibility = ["PUBLIC"])
+
 config_setting(
     name = "py311-linux-x86_64-gnu",
     constraint_values = [
-        "//third-party/python/config:py311",
-        "//third-party/python/config:linux-x86_64-gnu",
+        ":linux-x86_64-gnu",
+        ":py311",
     ],
+    visibility = ["PUBLIC"],
 )
-
 config_setting(
     name = "py312-linux-x86_64-gnu",
     constraint_values = [
-        "//third-party/python/config:py312",
-        "//third-party/python/config:linux-x86_64-gnu",
+        ":linux-x86_64-gnu",
+        ":py312",
     ],
+    visibility = ["PUBLIC"],
 )
-
-constraint_setting(name = "python_version")
-constraint_value(name = "py311", constraint_setting = ":python_version")
-constraint_value(name = "py312", constraint_setting = ":python_version")
-
-constraint_setting(name = "platform")
-constraint_value(name = "linux-x86_64-gnu", constraint_setting = ":platform")
