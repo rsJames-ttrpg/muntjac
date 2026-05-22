@@ -4,4 +4,6 @@ pub mod config;
 pub mod error;
 pub mod lock;
 pub mod platform;
+pub mod sdist;
+pub mod uv;
 pub mod wheel;
