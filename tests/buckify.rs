@@ -29,6 +29,11 @@ fn copy_fixture_to(src: &Path, dst: &Path) {
                         let prebake_dst = dst.join("third-party/python/prebake");
                         copy_dir(&prebake_src, &prebake_dst);
                     }
+                    let fixups_src = path.join("python/fixups");
+                    if fixups_src.is_dir() {
+                        let fixups_dst = dst.join("third-party/python/fixups");
+                        copy_dir(&fixups_src, &fixups_dst);
+                    }
                     continue;
                 }
                 copy_dir(&path, &dst.join(&name));
@@ -152,6 +157,46 @@ fn fixture_04_pure_python_sdist_golden() {
     assert_files_match(
         &tmp.path().join("third-party/python"),
         &fix.join("expected"),
+    );
+}
+
+#[test]
+fn fixture_05_local_fixup_golden() {
+    let fix = fixture("05-local-fixup");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
+    );
+    // Negative assertion: NO PACKAGE in the third-party dir.
+    assert!(
+        !tmp.path().join("third-party/python/PACKAGE").exists(),
+        "third-party/python/PACKAGE should not exist (wiring.bzl replaces it)"
+    );
+    // Sanity: the fake-pillow rendered with the overlay + fixup-derived kwargs.
+    let buck = std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
+    assert!(
+        buck.contains("overlay_files = ["),
+        "expected overlay_files kwarg in BUCK for fake-pillow"
+    );
+    assert!(
+        buck.contains("//company/typing:te"),
+        "expected replace_deps target //company/typing:te in BUCK"
+    );
+    assert!(
+        !buck.contains(":useless-transitive"),
+        "useless-transitive must be dropped by omit_deps"
+    );
+    assert!(
+        buck.contains("//third-party/c:libssl"),
+        "expected linux-cfg-section dep //third-party/c:libssl"
     );
 }
 
