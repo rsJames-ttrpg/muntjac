@@ -414,16 +414,114 @@ pub fn build_emit_input(
             EmitDeps::PerCell(per_cell_formatted)
         };
 
+        // S6: per-package fields (visibility/labels/entry_points/overlay/runtime_env)
+        // are cell-independent at the top level. Resolve from the FIRST cell so
+        // top-level body survives; cfg-section firing reflects ONE valid view.
+        let first_cell_rf: Option<crate::fixup::ResolvedFixup> = if let Some(fs) = fixups {
+            let pkg_name = pep508_rs::PackageName::from_str(&key.0).ok();
+            pkg_name.and_then(|n| fs.get(&n)).map(|fc| {
+                let first_cfg = &configs[0];
+                let s_cfg = first_cfg.as_str();
+                // "py312-linux-x86_64-gnu" -> ("py312", "linux-x86_64-gnu")
+                let (py_str, plat_name) = match s_cfg.split_once('-') {
+                    Some((p, r)) => (p.trim_start_matches("py"), r),
+                    None => ("", ""),
+                };
+                // "312" -> "3.12"
+                let py_str_dotted = if py_str.len() >= 2 {
+                    format!("{}.{}", &py_str[0..1], &py_str[1..])
+                } else {
+                    py_str.to_string()
+                };
+                let plat = config.platforms.get(plat_name).expect("platform present");
+                let (arch, os, env) = crate::fixup::cfg::split_target_triple(&plat.target);
+                let pkg_ver = pep440_rs::Version::from_str(&key.1).expect("valid version");
+                let py_ver =
+                    pep440_rs::Version::from_str(&py_str_dotted).expect("valid python version");
+                let ctx = crate::fixup::CfgContext {
+                    package_version: &pkg_ver,
+                    python_version: py_ver,
+                    target_os: &os,
+                    target_arch: &arch,
+                    target_env: &env,
+                };
+                crate::fixup::resolve_for_cell(fc, &ctx)
+            })
+        } else {
+            None
+        };
+
+        // entry_points: validate form. Auto(true) errors per spec §6.
+        let entry_points_vec: Vec<String> = match &first_cell_rf {
+            Some(rf) => match &rf.entry_points {
+                Some(crate::fixup::EntryPoints::Auto(true)) => {
+                    anyhow::bail!(
+                        "entry_points = true is not supported in v1; list the binaries explicitly (e.g. entry_points = [\"ruff\"]).\n  package: {}",
+                        key.0
+                    );
+                }
+                Some(crate::fixup::EntryPoints::Auto(false)) | None => vec![],
+                Some(crate::fixup::EntryPoints::Named(names)) => names.clone(),
+            },
+            None => vec![],
+        };
+
+        // Validate extra_deps / replace_deps Buck targets.
+        if let Some(rf) = &first_cell_rf {
+            for ed in &rf.extra_deps {
+                if !crate::fixup::is_valid_buck_target(ed) {
+                    anyhow::bail!(
+                        "extra_deps target for {} is not a valid Buck target: `{}`\n  expected //path:name or :name form",
+                        key.0,
+                        ed
+                    );
+                }
+            }
+            for target in rf.replace_deps.values() {
+                if !crate::fixup::is_valid_buck_target(target) {
+                    anyhow::bail!(
+                        "replace_deps target for {} is not a valid Buck target: `{}`\n  expected //path:name or :name form",
+                        key.0,
+                        target
+                    );
+                }
+            }
+        }
+
+        // Overlay file discovery (filesystem walk via discover_overlay_files).
+        let overlay_emit: Option<EmitOverlay> = if let Some(rf) = &first_cell_rf {
+            if let Some(overlay_rel) = &rf.overlay {
+                let fixup_dir = tree.third_party_dir.join("fixups").join(&key.0);
+                let files = crate::fixup::discover_overlay_files(
+                    &key.0,
+                    &tree.third_party_dir,
+                    &fixup_dir,
+                    overlay_rel,
+                )?;
+                Some(EmitOverlay { files })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         packages.push(EmitPackage {
-            name: key.0,
-            version: key.1,
+            name: key.0.clone(),
+            version: key.1.clone(),
             deps,
             wheels: wheel_map,
-            overlay: None,
-            entry_points: vec![],
-            visibility: None,
-            labels: vec![],
-            runtime_env: BTreeMap::new(),
+            overlay: overlay_emit,
+            entry_points: entry_points_vec,
+            visibility: first_cell_rf.as_ref().and_then(|r| r.visibility.clone()),
+            labels: first_cell_rf
+                .as_ref()
+                .map(|r| r.labels.clone())
+                .unwrap_or_default(),
+            runtime_env: first_cell_rf
+                .as_ref()
+                .map(|r| r.runtime_env.clone())
+                .unwrap_or_default(),
         });
     }
 
@@ -1729,6 +1827,227 @@ manylinux = "2_17"
             ),
             other => panic!("expected Uniform deps, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn fixup_visibility_and_entry_points_thread_to_emit_package() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{EntryPoints, FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        let mut runtime_env = std::collections::BTreeMap::new();
+        runtime_env.insert("FOO".into(), "bar".into());
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    visibility: Some(vec!["//apps/imaging/...".into()]),
+                    labels: vec!["security-sensitive".into()],
+                    entry_points: Some(EntryPoints::Named(vec!["certifi-cli".into()])),
+                    runtime_env,
+                    // prefer_wheel keeps the test deterministic — picks one
+                    // of the two wheels in the harness.
+                    prefer_wheel: Some("sha256:abc".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect("build_emit_input with per-package fixup fields");
+        let pkg = &input.packages[0];
+        assert_eq!(
+            pkg.visibility.as_deref(),
+            Some(&["//apps/imaging/...".to_string()][..])
+        );
+        assert_eq!(pkg.labels, vec!["security-sensitive"]);
+        assert_eq!(pkg.entry_points, vec!["certifi-cli"]);
+        assert_eq!(pkg.runtime_env.get("FOO").map(|s| s.as_str()), Some("bar"));
+    }
+
+    #[test]
+    fn fixup_entry_points_auto_errors() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{EntryPoints, FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    entry_points: Some(EntryPoints::Auto(true)),
+                    prefer_wheel: Some("sha256:abc".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect_err("entry_points = true must bail");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("entry_points = true is not supported in v1"),
+            "wrong message: {msg}"
+        );
+        assert!(msg.contains("certifi"), "should name the package: {msg}");
+    }
+
+    #[test]
+    fn fixup_extra_dep_invalid_buck_target_errors() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    extra_deps: vec!["not-a-target".into()], // missing :, missing //
+                    prefer_wheel: Some("sha256:abc".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect_err("invalid extra_deps target must bail");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("extra_deps target for certifi is not a valid Buck target"),
+            "wrong message: {msg}"
+        );
+        assert!(
+            msg.contains("not-a-target"),
+            "should quote the bad target: {msg}"
+        );
+    }
+
+    #[test]
+    fn fixup_overlay_populates_emit_package_overlay() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Build a tree whose third_party_dir is a REAL filesystem path with
+        // an overlay layout. We need this because discover_overlay_files
+        // walks the actual disk.
+        let tmp = TempDir::new().unwrap();
+        let tpd = tmp.path().to_path_buf();
+        let fixup_dir = tpd.join("fixups/certifi");
+        fs::create_dir_all(fixup_dir.join("overlay/certifi")).unwrap();
+        fs::write(
+            fixup_dir.join("overlay/certifi/_paths.py"),
+            "OVERRIDDEN = True\n",
+        )
+        .unwrap();
+
+        // Build a one-cell harness pointing at the tempdir.
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: tpd.clone(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse("https://files.pythonhosted.org/p/certifi.whl").unwrap(),
+                        hash: "sha256:abc".into(),
+                        size: None,
+                        filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    overlay: Some("overlay".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect("build_emit_input with overlay");
+        let pkg = &input.packages[0];
+        let overlay = pkg.overlay.as_ref().expect("overlay should be populated");
+        assert_eq!(overlay.files.len(), 1);
+        let (in_wheel, src_rel) = &overlay.files[0];
+        assert_eq!(in_wheel, "certifi/_paths.py");
+        assert!(
+            src_rel.ends_with("fixups/certifi/overlay/certifi/_paths.py"),
+            "src_rel should be tpd-relative: {src_rel}"
+        );
     }
 
     #[test]
