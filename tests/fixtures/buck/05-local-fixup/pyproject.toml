@@ -3,7 +3,7 @@ name = "muntjac-test-05-local-fixup"
 version = "0.0.0"
 requires-python = ">=3.11"
 dependencies = [
-    "fake-pillow==1.0.0",
+    "tomli==2.0.1",
 ]
 
 [tool.uv]

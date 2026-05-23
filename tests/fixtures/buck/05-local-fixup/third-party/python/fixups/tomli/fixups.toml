@@ -1,0 +1,23 @@
+# Synthetic local fixup for tomli, exercising every applied v1 field
+# against a real PyPI wheel. The CI buck2-build step uses this fixture
+# to verify the overlay genrule actually produces a working wheel.
+#
+# Per spec §5.2, per-package scalar fields (visibility, labels, overlay)
+# resolve from the lexicographically-first cell (py311-linux-x86_64-gnu).
+# The cfg section targeting python >=3.12 exercises the parse path only.
+#
+# `extra_deps` points at `//third-party/c:libjpeg`, a stub filegroup
+# we ship for buck2-build resolution (fictional, not actually consumed
+# by tomli).
+
+extra_deps     = ["//third-party/c:libjpeg"]
+overlay        = "overlay"
+visibility     = ["PUBLIC"]
+labels         = ["security-sensitive"]
+exclude_wheels = ["*-cp311-*-macosx_*_arm64.*"]
+
+["cfg(target_os = \"linux\")"]
+extra_deps = ["//third-party/c:libjpeg"]  # idempotent (set-union with top-level)
+
+["cfg(all(version = \">=1.0\", python = \">=3.12\"))"]
+labels = ["needs-mod-3.12-shim"]

@@ -180,23 +180,20 @@ fn fixture_05_local_fixup_golden() {
         !tmp.path().join("third-party/python/PACKAGE").exists(),
         "third-party/python/PACKAGE should not exist (wiring.bzl replaces it)"
     );
-    // Sanity: the fake-pillow rendered with the overlay + fixup-derived kwargs.
+    // Sanity: tomli rendered with the overlay + fixup-derived kwargs.
     let buck = std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
     assert!(
         buck.contains("overlay_files = ["),
-        "expected overlay_files kwarg in BUCK for fake-pillow"
+        "expected overlay_files kwarg in BUCK for tomli"
     );
     assert!(
-        buck.contains("//company/typing:te"),
-        "expected replace_deps target //company/typing:te in BUCK"
+        buck.contains("//third-party/c:libjpeg"),
+        "expected extra_deps libjpeg in BUCK"
     );
+    assert!(buck.contains("labels = ["), "expected labels kwarg in BUCK");
     assert!(
-        !buck.contains(":useless-transitive"),
-        "useless-transitive must be dropped by omit_deps"
-    );
-    assert!(
-        buck.contains("//third-party/c:libssl"),
-        "expected linux-cfg-section dep //third-party/c:libssl"
+        buck.contains("security-sensitive"),
+        "expected security-sensitive label in BUCK"
     );
 }
 

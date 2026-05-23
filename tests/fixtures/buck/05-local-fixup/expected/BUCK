@@ -6,73 +6,24 @@
 load("//third-party/python:muntjac.bzl", "pypi_package")
 
 pypi_package(
-    name = "fake-pillow",
-    version = "1.0.0",
-    deps = select({
-        "//third-party/python/config:py311-linux-x86_64-gnu": [
-            "//company/typing:te",
-            "//third-party/c:libjpeg",
-            "//third-party/c:libssl",
-        ],
-        "//third-party/python/config:py311-macos-aarch64": [
-            "//company/typing:te",
-            "//third-party/c:libjpeg",
-        ],
-        "//third-party/python/config:py312-linux-x86_64-gnu": [
-            "//company/typing:te",
-            "//third-party/c:libjpeg",
-            "//third-party/c:libssl",
-        ],
-        "//third-party/python/config:py312-macos-aarch64": [
-            "//company/typing:te",
-            "//third-party/c:libjpeg",
-        ],
-    }),
+    name = "tomli",
+    version = "2.0.1",
+    deps = [
+        "//third-party/c:libjpeg",
+    ],
     wheels = {
-        "py311-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake"),
-        "py311-macos-aarch64": ("https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake"),
-        "py312-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake"),
-        "py312-macos-aarch64": ("https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake"),
+        "py311-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"),
+        "py311-macos-aarch64": ("https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"),
+        "py312-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"),
+        "py312-macos-aarch64": ("https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"),
     },
     overlay_files = [
-        ("fake_pillow/_paths.py", "fixups/fake-pillow/overlay/fake_pillow/_paths.py"),
-    ],
-    entry_points = [
-        "fake-pillow-cli",
+        ("tomli/_overlay_marker.py", "fixups/tomli/overlay/tomli/_overlay_marker.py"),
     ],
     labels = [
         "security-sensitive",
     ],
-    runtime_env = {
-        "LIBJPEG_PATH": "/opt/libjpeg/lib",
-    },
     visibility = [
-        "//apps/imaging/...",
+        "PUBLIC",
     ],
-)
-
-pypi_package(
-    name = "typing-extensions",
-    version = "4.10.0",
-    deps = [],
-    wheels = {
-        "py311-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        "py311-macos-aarch64": ("https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        "py312-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        "py312-macos-aarch64": ("https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-    },
-    visibility = ["PUBLIC"],
-)
-
-pypi_package(
-    name = "useless-transitive",
-    version = "0.1.0",
-    deps = [],
-    wheels = {
-        "py311-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-        "py311-macos-aarch64": ("https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-        "py312-linux-x86_64-gnu": ("https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-        "py312-macos-aarch64": ("https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-    },
-    visibility = ["PUBLIC"],
 )

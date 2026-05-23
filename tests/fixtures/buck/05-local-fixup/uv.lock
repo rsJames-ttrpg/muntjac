@@ -7,33 +7,13 @@ name = "muntjac-test-05-local-fixup"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "fake-pillow" },
+    { name = "tomli" },
 ]
 
 [[package]]
-name = "fake-pillow"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-    { name = "useless-transitive" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", hash = "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake", size = 1024 },
-]
-
-[[package]]
-name = "typing-extensions"
-version = "4.10.0"
+name = "tomli"
+version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", hash = "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", size = 70 },
-]
-
-[[package]]
-name = "useless-transitive"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", hash = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", size = 50 },
+    { url = "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc", size = 12757 },
 ]

@@ -117,3 +117,22 @@ jobs:
           set -euo pipefail
           cd tests/fixtures/buck/04-pure-python-sdist
           buck2 run //tests/smoke:prebake_demo
+
+      - name: muntjac buckify (05-local-fixup fixture)
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/05-local-fixup
+          # Initialize prelude submodule in case checkout step didn't.
+          git submodule update --init --recursive --depth 1
+          cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
+
+      - name: buck2 run overlay_demo
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/05-local-fixup
+          # zip + unzip must be on PATH for the overlay genrule.
+          sudo apt-get update && sudo apt-get install -y zip unzip
+          buck2 run //tests/smoke:overlay_demo 2>&1 | tee /tmp/overlay-out.txt
+          grep -F "OVERLAY_APPLIED: True" /tmp/overlay-out.txt
