@@ -141,7 +141,7 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     // inside the macro to match uv.lock's "sha256:" prefix convention.
     writeln!(
         s,
-        "def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):"
+        "def pypi_package(name, version, wheels, deps = [], visibility = None, labels = [], overlay_files = [], entry_points = [], runtime_env = {{}}, **kwargs):"
     )
     .unwrap();
     writeln!(
@@ -204,6 +204,66 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "                visibility = [],").unwrap();
     writeln!(s, "            )").unwrap();
     writeln!(s).unwrap();
+    writeln!(
+        s,
+        "    # Overlay (S6): if overlay_files non-empty, build an `__overlaid` rule"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    # that unzips the wheel, copies overlay sources in, and re-zips."
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    # The result is a single .whl that replaces every per-cell source."
+    )
+    .unwrap();
+    writeln!(s, "    overlay_label = None").unwrap();
+    writeln!(s, "    if overlay_files:").unwrap();
+    writeln!(s, "        first_src = sorted(src_targets.values())[0]").unwrap();
+    writeln!(s, "        cp_lines = []").unwrap();
+    writeln!(
+        s,
+        "        for (path_in_wheel, src_label) in overlay_files:"
+    )
+    .unwrap();
+    writeln!(s, "            parent = path_in_wheel.rsplit(\"/\", 1)[0] if \"/\" in path_in_wheel else \".\"").unwrap();
+    writeln!(s, "            cp_lines.append(\"mkdir -p _u/\" + parent + \" && cp $(location \" + src_label + \") _u/\" + path_in_wheel)").unwrap();
+    writeln!(s, "        cp_cmds = \" && \".join(cp_lines)").unwrap();
+    writeln!(s, "        cmd_template = (").unwrap();
+    writeln!(s, "            \"set -e && mkdir _u && cd _u && unzip -q $(location :\" + first_src + \") && cd .. && \" +").unwrap();
+    writeln!(
+        s,
+        "            cp_cmds + \" && cd _u && zip -qrX ../$OUT . -x '*/RECORD'\""
+    )
+    .unwrap();
+    writeln!(s, "        )").unwrap();
+    writeln!(s, "        native.genrule(").unwrap();
+    writeln!(
+        s,
+        "            name = \"{{}}-{{}}__overlaid\".format(name, version),"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "            srcs = [\":\" + first_src] + [src for (_, src) in overlay_files],"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "            out = \"{{}}-{{}}-overlaid.whl\".format(name, version),"
+    )
+    .unwrap();
+    writeln!(s, "            cmd = cmd_template,").unwrap();
+    writeln!(s, "            visibility = [],").unwrap();
+    writeln!(s, "        )").unwrap();
+    writeln!(
+        s,
+        "        overlay_label = \":{{}}-{{}}__overlaid\".format(name, version)"
+    )
+    .unwrap();
+    writeln!(s).unwrap();
     writeln!(s, "    for cfg in sorted(wheels.keys()):").unwrap();
     writeln!(s, "        native.prebuilt_python_library(").unwrap();
     writeln!(
@@ -213,7 +273,7 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     .unwrap();
     writeln!(
         s,
-        "            binary_src = \":{{}}\".format(src_targets[cfg]),"
+        "            binary_src = overlay_label or \":{{}}\".format(src_targets[cfg]),"
     )
     .unwrap();
     writeln!(s, "            deps = deps,").unwrap();
@@ -238,6 +298,46 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "        actual = \":{{}}-{{}}\".format(name, version),").unwrap();
     writeln!(s, "        visibility = visibility or [\"PUBLIC\"],").unwrap();
     writeln!(s, "    )").unwrap();
+    writeln!(s).unwrap();
+    writeln!(
+        s,
+        "    # Entry points (S6): one python_binary + convenience alias per name."
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    # main_module uses the standard `<importable>.__main__` convention;"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    # entry points that need a different module require a wheel-meta shim"
+    )
+    .unwrap();
+    writeln!(s, "    # (deferred — see TECH_DEBT TD-S6-03).").unwrap();
+    writeln!(s, "    for ep_name in entry_points:").unwrap();
+    writeln!(s, "        importable = name.replace(\"-\", \"_\")").unwrap();
+    writeln!(s, "        native.python_binary(").unwrap();
+    writeln!(
+        s,
+        "            name = \"{{}}-{{}}__bin-{{}}\".format(name, version, ep_name),"
+    )
+    .unwrap();
+    writeln!(s, "            main_module = importable + \".__main__\",").unwrap();
+    writeln!(s, "            deps = [\":\" + name],").unwrap();
+    writeln!(s, "            env = runtime_env,").unwrap();
+    writeln!(s, "            visibility = visibility or [\"PUBLIC\"],").unwrap();
+    writeln!(s, "            labels = labels,").unwrap();
+    writeln!(s, "        )").unwrap();
+    writeln!(s, "        native.alias(").unwrap();
+    writeln!(s, "            name = ep_name,").unwrap();
+    writeln!(
+        s,
+        "            actual = \":{{}}-{{}}__bin-{{}}\".format(name, version, ep_name),"
+    )
+    .unwrap();
+    writeln!(s, "            visibility = visibility or [\"PUBLIC\"],").unwrap();
+    writeln!(s, "        )").unwrap();
     s
 }
 
@@ -506,7 +606,44 @@ fn write_pypi_package(s: &mut String, pkg: &EmitPackage, pkg_third_party_dir: &s
         .unwrap();
     }
     writeln!(s, "    }},").unwrap();
-    writeln!(s, "    visibility = [\"PUBLIC\"],").unwrap();
+    // S6 kwargs: render each only when non-default to keep generated BUCK readable.
+    if let Some(overlay) = &pkg.overlay {
+        writeln!(s, "    overlay_files = [").unwrap();
+        for (in_wheel, src_rel) in &overlay.files {
+            writeln!(s, "        (\"{}\", \"{}\"),", in_wheel, src_rel).unwrap();
+        }
+        writeln!(s, "    ],").unwrap();
+    }
+    if !pkg.entry_points.is_empty() {
+        writeln!(s, "    entry_points = [").unwrap();
+        for ep in &pkg.entry_points {
+            writeln!(s, "        \"{}\",", ep).unwrap();
+        }
+        writeln!(s, "    ],").unwrap();
+    }
+    if !pkg.labels.is_empty() {
+        writeln!(s, "    labels = [").unwrap();
+        for l in &pkg.labels {
+            writeln!(s, "        \"{}\",", l).unwrap();
+        }
+        writeln!(s, "    ],").unwrap();
+    }
+    if !pkg.runtime_env.is_empty() {
+        writeln!(s, "    runtime_env = {{").unwrap();
+        for (k, v) in &pkg.runtime_env {
+            writeln!(s, "        \"{}\": \"{}\",", k, v).unwrap();
+        }
+        writeln!(s, "    }},").unwrap();
+    }
+    if let Some(vis) = &pkg.visibility {
+        writeln!(s, "    visibility = [").unwrap();
+        for v in vis {
+            writeln!(s, "        \"{}\",", v).unwrap();
+        }
+        writeln!(s, "    ],").unwrap();
+    } else {
+        writeln!(s, "    visibility = [\"PUBLIC\"],").unwrap();
+    }
     writeln!(s, ")").unwrap();
 }
 
@@ -1085,6 +1222,189 @@ mod tests {
                 .contains("\"prebake:tomli-2.0.1-py3-none-any.whl\""),
             "BUCK output should contain prebake URL verbatim:\n{}",
             out.buck
+        );
+    }
+
+    #[test]
+    fn macro_definition_includes_overlay_and_entry_points_branches() {
+        let input = empty_input(); // no packages; just check the bzl text
+        let out = StringTemplateEmitter.emit(&input);
+        // New kwargs in signature.
+        assert!(
+            out.muntjac_bzl.contains("overlay_files = []"),
+            "macro signature should include overlay_files = [] kwarg"
+        );
+        assert!(
+            out.muntjac_bzl.contains("entry_points = []"),
+            "macro signature should include entry_points = [] kwarg"
+        );
+        assert!(
+            out.muntjac_bzl.contains("labels = []"),
+            "macro signature should include labels = [] kwarg"
+        );
+        assert!(
+            out.muntjac_bzl.contains("runtime_env"),
+            "macro signature should include runtime_env kwarg"
+        );
+        // Overlay branch: must reference unzip + zip and emit a genrule.
+        assert!(
+            out.muntjac_bzl.contains("if overlay_files"),
+            "expected overlay branch (`if overlay_files:`)"
+        );
+        assert!(
+            out.muntjac_bzl.contains("native.genrule"),
+            "expected native.genrule for overlay"
+        );
+        assert!(
+            out.muntjac_bzl.contains("unzip"),
+            "expected unzip in overlay cmd"
+        );
+        assert!(
+            out.muntjac_bzl.contains("zip -qrX"),
+            "expected zip -qrX in overlay cmd (deterministic, strips timestamps)"
+        );
+        assert!(
+            out.muntjac_bzl.contains("RECORD"),
+            "expected RECORD exclusion in overlay cmd"
+        );
+        // Entry-points branch: must emit python_binary per name.
+        assert!(
+            out.muntjac_bzl.contains("for ep_name in entry_points"),
+            "expected entry_points loop"
+        );
+        assert!(
+            out.muntjac_bzl.contains("native.python_binary"),
+            "expected python_binary for entry points"
+        );
+        assert!(
+            out.muntjac_bzl.contains(".__main__"),
+            "expected __main__ convention in main_module"
+        );
+    }
+
+    #[test]
+    fn per_package_call_site_renders_non_default_kwargs_only() {
+        use crate::buck::emit::{EmitDeps, EmitOverlay, EmitPackage, EmitWheel};
+
+        let cfg = ConfigName::new("3.12", "linux-x86_64-gnu");
+        let mut wheels = BTreeMap::new();
+        wheels.insert(
+            cfg.clone(),
+            EmitWheel {
+                url: "https://example.com/fake-pillow-1.0-py3-none-any.whl".into(),
+                hash: "sha256:fakehash".into(),
+            },
+        );
+
+        let mut runtime_env = BTreeMap::new();
+        runtime_env.insert("LIBJPEG_PATH".into(), "/opt/libjpeg/lib".into());
+
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            configs: vec![cfg],
+            packages: vec![EmitPackage {
+                name: "fake-pillow".into(),
+                version: "1.0.0".into(),
+                deps: EmitDeps::Uniform(vec![]),
+                wheels,
+                overlay: Some(EmitOverlay {
+                    files: vec![(
+                        "fake_pillow/_paths.py".into(),
+                        "fixups/fake-pillow/overlay/fake_pillow/_paths.py".into(),
+                    )],
+                }),
+                entry_points: vec!["fake-pillow-cli".into()],
+                visibility: Some(vec!["//apps/imaging/...".into()]),
+                labels: vec!["security-sensitive".into()],
+                runtime_env,
+            }],
+        };
+        let out = StringTemplateEmitter.emit(&input);
+
+        // Required: each non-default field renders as a kwarg in the BUCK pypi_package call.
+        assert!(
+            out.buck.contains("overlay_files = ["),
+            "missing overlay_files kwarg:\n{}",
+            out.buck
+        );
+        assert!(
+            out.buck.contains("\"fake_pillow/_paths.py\""),
+            "missing overlay in_wheel path"
+        );
+        assert!(
+            out.buck
+                .contains("\"fixups/fake-pillow/overlay/fake_pillow/_paths.py\""),
+            "missing overlay src path"
+        );
+        assert!(
+            out.buck.contains("entry_points = ["),
+            "missing entry_points kwarg"
+        );
+        assert!(
+            out.buck.contains("\"fake-pillow-cli\""),
+            "missing entry-point name"
+        );
+        assert!(
+            out.buck.contains("visibility = ["),
+            "missing visibility kwarg"
+        );
+        assert!(
+            out.buck.contains("\"//apps/imaging/...\""),
+            "missing visibility entry"
+        );
+        assert!(out.buck.contains("labels = ["), "missing labels kwarg");
+        assert!(out.buck.contains("\"security-sensitive\""), "missing label");
+        assert!(
+            out.buck.contains("runtime_env = {"),
+            "missing runtime_env kwarg"
+        );
+        assert!(
+            out.buck.contains("\"LIBJPEG_PATH\""),
+            "missing runtime_env key"
+        );
+        assert!(
+            out.buck.contains("\"/opt/libjpeg/lib\""),
+            "missing runtime_env value"
+        );
+    }
+
+    #[test]
+    fn per_package_call_site_omits_default_kwargs() {
+        // single_package_input() helper creates a package with all-defaults
+        // for the T10 fields (overlay: None, entry_points: vec![], etc.).
+        let input = single_package_input();
+        let out = StringTemplateEmitter.emit(&input);
+
+        // Verifies the writer doesn't emit empty kwargs when the field is at default.
+        assert!(
+            !out.buck.contains("overlay_files"),
+            "should not emit overlay_files when None"
+        );
+        assert!(
+            !out.buck.contains("entry_points = ["),
+            "should not emit entry_points kwarg when empty"
+        );
+        assert!(
+            !out.buck.contains("labels = ["),
+            "should not emit labels kwarg when empty"
+        );
+        assert!(
+            !out.buck.contains("runtime_env = {"),
+            "should not emit runtime_env kwarg when empty"
+        );
+    }
+
+    #[test]
+    fn macro_overlay_rebinds_binary_src() {
+        let input = empty_input();
+        let out = StringTemplateEmitter.emit(&input);
+        // The per-cell prebuilt_python_library should use `overlay_label or :{src}`
+        // pattern so overlay'd packages bind to the genrule output.
+        assert!(
+            out.muntjac_bzl.contains("overlay_label or "),
+            "binary_src must conditionally use overlay_label:\n{}",
+            out.muntjac_bzl
         );
     }
 }

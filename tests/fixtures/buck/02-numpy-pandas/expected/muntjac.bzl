@@ -41,7 +41,7 @@ _CONFIGS = [
     "py312-macos-arm64",
 ]
 
-def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
+def pypi_package(name, version, wheels, deps = [], visibility = None, labels = [], overlay_files = [], entry_points = [], runtime_env = {}, **kwargs):
     unknown = [cfg for cfg in wheels.keys() if cfg not in _CONFIGS]
     if unknown:
         fail("unknown config(s) in {}: {}".format(name, unknown))
@@ -78,10 +78,34 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
                 visibility = [],
             )
 
+    # Overlay (S6): if overlay_files non-empty, build an `__overlaid` rule
+    # that unzips the wheel, copies overlay sources in, and re-zips.
+    # The result is a single .whl that replaces every per-cell source.
+    overlay_label = None
+    if overlay_files:
+        first_src = sorted(src_targets.values())[0]
+        cp_lines = []
+        for (path_in_wheel, src_label) in overlay_files:
+            parent = path_in_wheel.rsplit("/", 1)[0] if "/" in path_in_wheel else "."
+            cp_lines.append("mkdir -p _u/" + parent + " && cp $(location " + src_label + ") _u/" + path_in_wheel)
+        cp_cmds = " && ".join(cp_lines)
+        cmd_template = (
+            "set -e && mkdir _u && cd _u && unzip -q $(location :" + first_src + ") && cd .. && " +
+            cp_cmds + " && cd _u && zip -qrX ../$OUT . -x '*/RECORD'"
+        )
+        native.genrule(
+            name = "{}-{}__overlaid".format(name, version),
+            srcs = [":" + first_src] + [src for (_, src) in overlay_files],
+            out = "{}-{}-overlaid.whl".format(name, version),
+            cmd = cmd_template,
+            visibility = [],
+        )
+        overlay_label = ":{}-{}__overlaid".format(name, version)
+
     for cfg in sorted(wheels.keys()):
         native.prebuilt_python_library(
             name = "{}-{}__{}".format(name, version, cfg),
-            binary_src = ":{}".format(src_targets[cfg]),
+            binary_src = overlay_label or ":{}".format(src_targets[cfg]),
             deps = deps,
             visibility = [],
         )
@@ -99,3 +123,23 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, **kwargs):
         actual = ":{}-{}".format(name, version),
         visibility = visibility or ["PUBLIC"],
     )
+
+    # Entry points (S6): one python_binary + convenience alias per name.
+    # main_module uses the standard `<importable>.__main__` convention;
+    # entry points that need a different module require a wheel-meta shim
+    # (deferred — see TECH_DEBT TD-S6-03).
+    for ep_name in entry_points:
+        importable = name.replace("-", "_")
+        native.python_binary(
+            name = "{}-{}__bin-{}".format(name, version, ep_name),
+            main_module = importable + ".__main__",
+            deps = [":" + name],
+            env = runtime_env,
+            visibility = visibility or ["PUBLIC"],
+            labels = labels,
+        )
+        native.alias(
+            name = ep_name,
+            actual = ":{}-{}__bin-{}".format(name, version, ep_name),
+            visibility = visibility or ["PUBLIC"],
+        )
