@@ -1,5 +1,6 @@
 ---
 source: tests/help.rs
+assertion_line: 9
 expression: stdout
 ---
 Translate uv.lock into Buck2 build rules
@@ -12,7 +13,7 @@ Commands:
   vendor   Prebake pure-python sdists into wheels. Wheel caching → S9
   buckify  Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl
   audit    Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10)
-  fixups   Manage fixups (update / show) — UNIMPLEMENTED (S6/S7)
+  fixups   Manage fixups (show)
   unused   Report vendored wheels not referenced by any tree — UNIMPLEMENTED (S10)
   help     Print this message or the help of the given subcommand(s)
 

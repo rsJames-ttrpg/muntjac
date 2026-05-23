@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub mod buckify;
 pub mod config_check;
 pub mod debug;
+pub mod fixups;
 pub mod init;
 pub mod stub;
 pub mod vendor;
@@ -82,8 +83,11 @@ pub enum Command {
     Buckify,
     /// Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10).
     Audit,
-    /// Manage fixups (update / show) — UNIMPLEMENTED (S6/S7).
-    Fixups,
+    /// Manage fixups (show).
+    Fixups {
+        #[command(subcommand)]
+        op: fixups::FixupsOp,
+    },
     /// Report vendored wheels not referenced by any tree — UNIMPLEMENTED (S10).
     Unused,
 }
@@ -104,7 +108,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Vendor => vendor::run(&cli.globals),
         Command::Buckify => buckify::run(&cli.globals),
         Command::Audit => stub::run("audit", "S10"),
-        Command::Fixups => stub::run("fixups", "S6/S7"),
+        Command::Fixups { op } => fixups::run(op, &cli.globals),
         Command::Unused => stub::run("unused", "S10"),
     }
 }

@@ -14,15 +14,6 @@ fn audit_says_unimplemented() {
 }
 
 #[test]
-fn fixups_says_unimplemented() {
-    muntjac()
-        .arg("fixups")
-        .assert()
-        .failure()
-        .stderr(contains("not implemented yet (planned for S6/S7)"));
-}
-
-#[test]
 fn unused_says_unimplemented() {
     muntjac()
         .arg("unused")
