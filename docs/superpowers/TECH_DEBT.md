@@ -147,14 +147,6 @@ similar issue surfaces.
 - **Fix:** An upstream issue + PR to `tar-rs` would fix this for everyone. For muntjac, monitor `tar-rs` releases for a fix and drop the manual restore when one lands.
 - **Target:** Post-launch / monitor upstream.
 
-#### Fixture 04 lacks a root `.gitignore`
-- **Source:** S5 T12 implementer note
-- **Severity:** Polish
-- **What:** Running `buckify` locally against fixture 04 leaves `buck-out/`, generated `BUCK`/`muntjac.bzl`/`wiring.bzl`/`config/` untracked. Fixture 02 has a `.gitignore` covering this.
-- **Why it matters:** Noisy `git status` during local dev.
-- **Fix:** Add a `.gitignore` to `tests/fixtures/buck/04-pure-python-sdist/` covering `buck-out/`, `third-party/python/BUCK`, `third-party/python/muntjac.bzl`, `third-party/python/wiring.bzl`, `third-party/python/config/`.
-- **Target:** Any time; bundle with T13's polish pass.
-
 ### From S6 final stage review (2026-05-23, pre-tag)
 
 #### TD-S6-01: Overlay genrule strips PEP 427 RECORD
@@ -264,3 +256,7 @@ similar issue surfaces.
 ### Code-review subagent prompts don't run `cargo fmt --check`
 - **Resolved:** S5 cleanup, commit `6b71018` (`.claude/scripts/rust-precommit-gate.sh` + `.claude/settings.json`)
 - **Summary:** Added a project-local Claude Code `PreToolUse` hook on `Bash(git commit *)` that runs `cargo fmt --check` + `cargo clippy --all-targets -- -D warnings` and blocks the commit with a useful denial message on failure. S6 was the first stage to commit under this hook from start to finish — zero post-tag `style(...): cargo fmt` cleanups needed. The `.claude/` scope is documented in [[feedback_planning_cadence]].
+
+### Fixtures lack `.gitignore` for muntjac-generated files
+- **Resolved:** S6 post-tag, commit (this commit)
+- **Summary:** Added `.gitignore` files to fixtures 01, 04, and 05 covering muntjac's `third-party/python/{BUCK,muntjac.bzl,wiring.bzl,config/}` outputs plus `buck-out/`/`.buckd/`/`.venv/`. Fixtures 02 and 03 already had them. The 04/05 versions use explicit path patterns (rather than blanket-ignoring `third-party/`) because they have committed inputs there (prebake manifest+wheel for 04; fixups subtree + libjpeg stub for 05). Surfaced during S6 T22 when manual `cargo run -- buckify` for `expected/` regeneration left ~5 generated files per fixture untracked; this gap will repeat any time an emitter change requires regenerating goldens.

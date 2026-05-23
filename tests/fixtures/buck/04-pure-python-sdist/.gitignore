@@ -1,0 +1,14 @@
+# muntjac-generated files (reproduced by `cargo run -- buckify`).
+# The `prebake/` subtree IS committed (.manifest.toml + .whl); only
+# the top-level outputs and config/ are ignored.
+/third-party/python/BUCK
+/third-party/python/muntjac.bzl
+/third-party/python/wiring.bzl
+/third-party/python/config/
+
+# buck2 build outputs (local + CI)
+buck-out/
+.buckd/
+
+# uv's venv if developer creates one
+.venv/
