@@ -32,6 +32,23 @@ pub struct EmitPackage {
     pub version: String,
     pub deps: EmitDeps,
     pub wheels: BTreeMap<ConfigName, EmitWheel>,
+    /// Overlay file list (NEW in S6). `None` = no overlay.
+    pub overlay: Option<EmitOverlay>,
+    /// Entry-point names to emit `python_binary` rules for (NEW in S6).
+    /// Empty vec = no binaries.
+    pub entry_points: Vec<String>,
+    /// Top-level alias visibility (NEW in S6). `None` = `["PUBLIC"]`.
+    pub visibility: Option<Vec<String>>,
+    /// Top-level alias labels (NEW in S6).
+    pub labels: Vec<String>,
+    /// Env applied to emitted `python_binary` rules (NEW in S6).
+    pub runtime_env: std::collections::BTreeMap<String, String>,
+}
+
+/// Overlay file list. Each entry is `(path_in_wheel, src_path_rel_to_tpd)`.
+#[derive(Debug, Clone)]
+pub struct EmitOverlay {
+    pub files: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -308,6 +325,11 @@ pub fn build_emit_input(
             version: key.1,
             deps,
             wheels: wheel_map,
+            overlay: None,
+            entry_points: vec![],
+            visibility: None,
+            labels: vec![],
+            runtime_env: BTreeMap::new(),
         });
     }
 
@@ -347,11 +369,43 @@ mod tests {
                     );
                     m
                 },
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: BTreeMap::new(),
             }],
         };
         assert_eq!(inp.tree, "default");
         assert_eq!(inp.packages.len(), 1);
         assert_eq!(inp.configs[0].as_str(), "py312-linux-x86_64-gnu");
+    }
+
+    #[test]
+    fn emit_package_with_fixup_fields_constructs() {
+        use std::collections::BTreeMap;
+
+        let mut rt_env = BTreeMap::new();
+        rt_env.insert("LIBJPEG_PATH".into(), "/opt/libjpeg/lib".into());
+
+        let pkg = EmitPackage {
+            name: "pillow".into(),
+            version: "10.0.0".into(),
+            deps: EmitDeps::Uniform(vec![]),
+            wheels: BTreeMap::new(),
+            overlay: Some(EmitOverlay {
+                files: vec![(
+                    "PIL/_imaging.py".into(),
+                    "fixups/pillow/overlay/PIL/_imaging.py".into(),
+                )],
+            }),
+            entry_points: vec!["pillow-cli".into()],
+            visibility: Some(vec!["//apps/imaging/...".into()]),
+            labels: vec!["security-sensitive".into()],
+            runtime_env: rt_env,
+        };
+        assert_eq!(pkg.entry_points, vec!["pillow-cli"]);
+        assert_eq!(pkg.overlay.unwrap().files.len(), 1);
     }
 
     #[test]

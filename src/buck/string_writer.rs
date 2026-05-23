@@ -545,6 +545,11 @@ mod tests {
                 version: "2025.4.26".into(),
                 deps: EmitDeps::Uniform(vec![]),
                 wheels,
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: std::collections::BTreeMap::new(),
             }],
         }
     }
@@ -743,6 +748,11 @@ mod tests {
                 version: "1.0".into(),
                 deps: EmitDeps::Uniform(vec![]),
                 wheels,
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: std::collections::BTreeMap::new(),
             },
         );
         let out = StringTemplateEmitter.emit(&input);
@@ -807,12 +817,22 @@ mod tests {
                     version: "3.7".into(),
                     deps: EmitDeps::Uniform(vec![]),
                     wheels: idna_wheels,
+                    overlay: None,
+                    entry_points: vec![],
+                    visibility: None,
+                    labels: vec![],
+                    runtime_env: std::collections::BTreeMap::new(),
                 },
                 EmitPackage {
                     name: "requests".into(),
                     version: "2.32.3".into(),
                     deps: EmitDeps::Uniform(vec![":idna".into()]),
                     wheels: requests_wheels,
+                    overlay: None,
+                    entry_points: vec![],
+                    visibility: None,
+                    labels: vec![],
+                    runtime_env: std::collections::BTreeMap::new(),
                 },
             ],
         }
@@ -950,6 +970,11 @@ mod tests {
                 version: "13.0".into(),
                 deps: EmitDeps::PerCell(per_cell),
                 wheels,
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: std::collections::BTreeMap::new(),
             }],
         };
 
@@ -994,6 +1019,11 @@ mod tests {
                 version: "2.32.3".into(),
                 deps: EmitDeps::Uniform(vec![":certifi".into(), ":idna".into()]),
                 wheels,
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: std::collections::BTreeMap::new(),
             }],
         };
 
@@ -1041,6 +1071,11 @@ mod tests {
                 version: "2.0.1".to_string(),
                 deps: EmitDeps::Uniform(vec![]),
                 wheels,
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: std::collections::BTreeMap::new(),
             }],
         };
         let writer = StringTemplateEmitter;
