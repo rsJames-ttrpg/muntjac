@@ -125,6 +125,10 @@ pub fn build_emit_input(
     lockfile: &Lockfile,
     manifest: Option<&crate::sdist::Manifest>,
     fixups: Option<&crate::fixup::FixupSet>,
+    // Absolute path to the resolved `third_party_dir` for filesystem operations
+    // (overlay walk). When `None`, falls back to `tree.third_party_dir` (works
+    // when it's already absolute, e.g. in unit tests using `TempDir`).
+    abs_third_party_dir: Option<&std::path::Path>,
 ) -> anyhow::Result<EmitInput> {
     use crate::fixup::cfg::split_target_triple;
     use crate::fixup::{CfgContext, resolve_for_cell};
@@ -491,10 +495,14 @@ pub fn build_emit_input(
         // Overlay file discovery (filesystem walk via discover_overlay_files).
         let overlay_emit: Option<EmitOverlay> = if let Some(rf) = &first_cell_rf {
             if let Some(overlay_rel) = &rf.overlay {
-                let fixup_dir = tree.third_party_dir.join("fixups").join(&key.0);
+                // Use the absolute path for FS operations when provided; fall
+                // back to tree.third_party_dir for unit tests that already
+                // supply an absolute TempDir path.
+                let tpd_for_fs = abs_third_party_dir.unwrap_or(&tree.third_party_dir);
+                let fixup_dir = tpd_for_fs.join("fixups").join(&key.0);
                 let files = crate::fixup::discover_overlay_files(
                     &key.0,
-                    &tree.third_party_dir,
+                    tpd_for_fs,
                     &fixup_dir,
                     overlay_rel,
                 )?;
@@ -739,7 +747,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, None)
+        let input = build_emit_input(&config, &tree, &lockfile, None, None, None)
             .expect("build_emit_input succeeds");
 
         assert_eq!(input.tree, "default");
@@ -841,7 +849,7 @@ mod tests {
             packages: vec![app, ancient],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile, None, None)
+        let err = build_emit_input(&config, &tree, &lockfile, None, None, None)
             .expect_err("should fail on NoWheel");
         let msg = format!("{:#}", err);
         assert!(
@@ -974,7 +982,8 @@ mod tests {
             packages: vec![app, parent, child],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
+        let input =
+            build_emit_input(&config, &tree, &lockfile, None, None, None).expect("succeeds");
         let parent_pkg = input
             .packages
             .iter()
@@ -1104,7 +1113,8 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
+        let input =
+            build_emit_input(&config, &tree, &lockfile, None, None, None).expect("succeeds");
 
         let rich = input
             .packages
@@ -1206,7 +1216,8 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
+        let input =
+            build_emit_input(&config, &tree, &lockfile, None, None, None).expect("succeeds");
         let pkg = input
             .packages
             .iter()
@@ -1323,7 +1334,7 @@ manylinux = "2_17"
         };
 
         // No manifest provided → NotPrebaked error.
-        let err = build_emit_input(&config, &tree, &lockfile, None, None).unwrap_err();
+        let err = build_emit_input(&config, &tree, &lockfile, None, None, None).unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("not prebaked"),
@@ -1411,7 +1422,8 @@ manylinux = "2_17"
             }],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile, Some(&manifest), None).unwrap_err();
+        let err =
+            build_emit_input(&config, &tree, &lockfile, Some(&manifest), None, None).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("stale"), "expected 'stale' error, got: {msg}");
         assert!(
@@ -1506,7 +1518,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect("build_emit_input with fixups");
         let pkg = &input.packages[0];
         assert_eq!(pkg.name, "certifi");
@@ -1620,7 +1632,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect("build_emit_input with prefer_wheel");
         let pkg = &input.packages[0];
         let wheel = pkg.wheels.values().next().unwrap();
@@ -1743,7 +1755,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect_err("should fail when prefer_wheel sha is absent");
         let msg = format!("{:#}", err);
         assert!(
@@ -1778,7 +1790,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect_err("should fail when exclude_wheels empties the wheel set");
         let msg = format!("{:#}", err);
         assert!(
@@ -1815,7 +1827,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect("build_emit_input with prefer_wheel + extra_deps");
         let pkg = &input.packages[0];
         let wheel = pkg.wheels.values().next().unwrap();
@@ -1857,7 +1869,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect("build_emit_input with per-package fixup fields");
         let pkg = &input.packages[0];
         assert_eq!(
@@ -1890,7 +1902,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect_err("entry_points = true must bail");
         let msg = format!("{:#}", err);
         assert!(
@@ -1921,7 +1933,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect_err("invalid extra_deps target must bail");
         let msg = format!("{:#}", err);
         assert!(
@@ -2037,7 +2049,7 @@ manylinux = "2_17"
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups), None)
             .expect("build_emit_input with overlay");
         let pkg = &input.packages[0];
         let overlay = pkg.overlay.as_ref().expect("overlay should be populated");
@@ -2122,7 +2134,7 @@ manylinux = "2_17"
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None, None)
+        let input = build_emit_input(&config, &tree, &lockfile, None, None, None)
             .expect("build_emit_input with None fixups");
         assert_eq!(input.packages.len(), 1);
     }

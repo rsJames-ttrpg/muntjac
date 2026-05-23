@@ -1,0 +1,27 @@
+# Synthetic fake-pillow fixup exercising every applied v1 field.
+#
+# Per spec §5.2 (S6 v1), per-package scalar fields (visibility, labels,
+# entry_points, runtime_env, overlay) resolve against the FIRST cell
+# only — the lexicographically-smallest ConfigName, which here is
+# `py311-linux-x86_64-gnu`. The cfg section below targeting Python >=3.12
+# will not contribute its `labels` to the rendered EmitPackage; it
+# exercises the parse path only.
+#
+# The exclude_wheels glob doesn't match this fixture's universal
+# `*-py3-none-any.whl` wheel — also a parse-only exercise.
+
+extra_deps     = ["//third-party/c:libjpeg"]
+omit_deps      = ["useless-transitive"]
+replace_deps   = { typing-extensions = "//company/typing:te" }
+overlay        = "overlay"
+entry_points   = ["fake-pillow-cli"]
+visibility     = ["//apps/imaging/..."]
+labels         = ["security-sensitive"]
+runtime_env    = { LIBJPEG_PATH = "/opt/libjpeg/lib" }
+exclude_wheels = ["*-cp311-*-macosx_*_arm64.*"]
+
+["cfg(target_os = \"linux\")"]
+extra_deps = ["//third-party/c:libssl"]
+
+["cfg(all(version = \">=1.0\", python = \">=3.12\"))"]
+labels = ["needs-mod-3.12-shim"]

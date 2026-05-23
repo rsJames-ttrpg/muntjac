@@ -1,0 +1,39 @@
+version = 1
+revision = 1
+requires-python = ">=3.11"
+
+[[package]]
+name = "muntjac-test-05-local-fixup"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "fake-pillow" },
+]
+
+[[package]]
+name = "fake-pillow"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+    { name = "useless-transitive" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fake/fake_pillow-1.0.0-py3-none-any.whl", hash = "sha256:fakefakefakefakefakefakefakefakefakefakefakefakefakefakefakefake", size = 1024 },
+]
+
+[[package]]
+name = "typing-extensions"
+version = "4.10.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/t/typing_extensions-4.10.0-py3-none-any.whl", hash = "sha256:eecaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", size = 70 },
+]
+
+[[package]]
+name = "useless-transitive"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/u/useless_transitive-0.1.0-py3-none-any.whl", hash = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", size = 50 },
+]
