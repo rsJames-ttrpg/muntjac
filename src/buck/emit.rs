@@ -200,6 +200,27 @@ pub fn build_emit_input(
                 Some(resolve_for_cell(cfg, &ctx))
             });
 
+            // Apply fixup wheel-side ops (exclude_wheels filter + prefer_wheel override).
+            let (wheels_owned, prefer_override): (Vec<Wheel>, Option<String>) = if let Some(rf) =
+                &resolved_fixup
+            {
+                let pre_filter_count = wheels.len();
+                let filtered = apply_exclude_wheels(wheels, &rf.exclude_wheels);
+                let post_filter_count = filtered.len();
+                if pre_filter_count > 0 && post_filter_count == 0 {
+                    anyhow::bail!(
+                        "exclude_wheels eliminates every wheel for {} on cell {}.\n  loosen the patterns or remove the fixup",
+                        pkg.name,
+                        cfg_name,
+                    );
+                }
+                (filtered, rf.prefer_wheel.clone())
+            } else {
+                (wheels.to_vec(), None)
+            };
+            // Shadow the original &[Wheel] with the owned filtered slice.
+            let wheels: &[Wheel] = &wheels_owned;
+
             // ---- Sdist-only path: consult the prebake manifest. ----
             if wheels.is_empty() {
                 // Find the lockfile package to see whether there's an sdist.
@@ -279,6 +300,43 @@ pub fn build_emit_input(
             }
 
             // ---- Wheels-present path: pick the best wheel. ----
+            // prefer_wheel override: bypass picker and use a specific sha256.
+            if let Some(sha) = &prefer_override {
+                let want = sha.trim_start_matches("sha256:");
+                if let Some(wheel) = wheels
+                    .iter()
+                    .find(|w| w.hash.trim_start_matches("sha256:") == want)
+                {
+                    pkg_wheels.entry(key.clone()).or_default().insert(
+                        cfg_name.clone(),
+                        EmitWheel {
+                            url: wheel.url.to_string(),
+                            hash: wheel.hash.clone(),
+                        },
+                    );
+                    let mut cell_deps = pkg.deps.clone();
+                    if let Some(rf) = &resolved_fixup {
+                        apply_dep_ops(&mut cell_deps, rf);
+                    }
+                    pkg_deps_per_cell
+                        .entry(key.clone())
+                        .or_default()
+                        .insert(cfg_name.clone(), cell_deps);
+                    continue;
+                }
+                // prefer_wheel set but not found in filtered wheels.
+                let available: Vec<String> = wheels
+                    .iter()
+                    .map(|w| w.hash.trim_start_matches("sha256:").to_string())
+                    .collect();
+                anyhow::bail!(
+                    "prefer_wheel sha256:{} not found for {} on cell {}.\n  available wheel shas: {}",
+                    want,
+                    pkg.name,
+                    cfg_name,
+                    available.join(", "),
+                );
+            }
             match pick_wheel(wheels, &compat) {
                 PickResult::Picked { wheel, .. } => {
                     pkg_wheels.entry(key.clone()).or_default().insert(
@@ -412,6 +470,21 @@ fn apply_dep_ops(deps: &mut Vec<String>, fixup: &crate::fixup::ResolvedFixup) {
     for ed in &fixup.extra_deps {
         deps.push(format!("__BUCK_TARGET__{}", ed));
     }
+}
+
+fn apply_exclude_wheels(wheels: &[Wheel], patterns: &[String]) -> Vec<Wheel> {
+    if patterns.is_empty() {
+        return wheels.to_vec();
+    }
+    let patterns: Vec<glob::Pattern> = patterns
+        .iter()
+        .filter_map(|p| glob::Pattern::new(p).ok())
+        .collect();
+    wheels
+        .iter()
+        .filter(|w| !patterns.iter().any(|p| p.matches(&w.filename)))
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
@@ -1349,6 +1422,114 @@ manylinux = "2_17"
             }
             other => panic!("expected Uniform, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn fixup_prefer_wheel_overrides_picker() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        // Two wheels; one would be the picker's natural choice.
+        // prefer_wheel = sha256:xyz selects the OTHER one.
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![
+                        Wheel {
+                            url: Url::parse("https://files.pythonhosted.org/p/certifi-v1.whl")
+                                .unwrap(),
+                            hash: "sha256:abc".into(),
+                            size: None,
+                            filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                        },
+                        Wheel {
+                            url: Url::parse("https://files.pythonhosted.org/p/certifi-v2.whl")
+                                .unwrap(),
+                            hash: "sha256:xyz".into(),
+                            size: None,
+                            filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                        },
+                    ],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    prefer_wheel: Some("sha256:xyz".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect("build_emit_input with prefer_wheel");
+        let pkg = &input.packages[0];
+        let wheel = pkg.wheels.values().next().unwrap();
+        assert_eq!(
+            wheel.hash, "sha256:xyz",
+            "prefer_wheel should override picker"
+        );
     }
 
     #[test]
