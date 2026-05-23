@@ -117,6 +117,8 @@ sha2 = "0.10"
 tar = "0.4"
 ```
 
+**Promote `tempfile` from `[dev-dependencies]` to `[dependencies]`** — the existing `[dev-dependencies]` block has `tempfile = "3"`. T10's `src/cli/vendor.rs` calls `tempfile::tempdir()` at runtime, so it has to be a runtime dep. Move the existing line into `[dependencies]`; do not duplicate it under dev.
+
 Insert into the `[dev-dependencies]` block:
 
 ```toml
@@ -2084,7 +2086,7 @@ dependencies = [
 name = "tomli"
 version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08cbc4cbf8d8e3eb4f25aaffa50c8c79c8c8e0a2b8e3e1f/tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f", size = 16735 }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08564c5949a9c95e44352e23dee646869fa104a3b2060a3/tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f", size = 15164 }
 ```
 
 Download the actual `tomli 2.0.1` sdist + a known-good wheel built from it. The test that builds it lives in Task 11; for now, the implementer obtains the wheel via:
@@ -2092,7 +2094,7 @@ Download the actual `tomli 2.0.1` sdist + a known-good wheel built from it. The 
 ```bash
 # from an environment with uv installed:
 mkdir -p /tmp/munt-tomli && cd /tmp/munt-tomli
-curl -L 'https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08cbc4cbf8d8e3eb4f25aaffa50c8c79c8c8e0a2b8e3e1f/tomli-2.0.1.tar.gz' -o tomli-2.0.1.tar.gz
+curl -L 'https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08564c5949a9c95e44352e23dee646869fa104a3b2060a3/tomli-2.0.1.tar.gz' -o tomli-2.0.1.tar.gz
 tar xzf tomli-2.0.1.tar.gz
 uv build --wheel --out-dir wheel tomli-2.0.1
 ls wheel/  # tomli-2.0.1-py3-none-any.whl
@@ -3099,13 +3101,13 @@ dependencies = [
 name = "tomli"
 version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "http://__MOCK_HOST__:__MOCK_PORT__/tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f", size = 16735 }
+sdist = { url = "http://__MOCK_HOST__:__MOCK_PORT__/tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f", size = 15164 }
 ```
 
 Copy the upstream tarball into `seed/`:
 
 ```bash
-curl -L 'https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08cbc4cbf8d8e3eb4f25aaffa50c8c79c8c8e0a2b8e3e1f/tomli-2.0.1.tar.gz' -o tests/fixtures/buck/04-pure-python-sdist-vendor-input/seed/tomli-2.0.1.tar.gz
+curl -L 'https://files.pythonhosted.org/packages/c0/3f/d7af728f075fb08564c5949a9c95e44352e23dee646869fa104a3b2060a3/tomli-2.0.1.tar.gz' -o tests/fixtures/buck/04-pure-python-sdist-vendor-input/seed/tomli-2.0.1.tar.gz
 sha256sum tests/fixtures/buck/04-pure-python-sdist-vendor-input/seed/tomli-2.0.1.tar.gz
 # Expected: de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f
 ```

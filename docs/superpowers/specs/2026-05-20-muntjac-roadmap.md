@@ -233,8 +233,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S2 | [2026-05-20-muntjac-s2-wheel-selector-design.md](./2026-05-20-muntjac-s2-wheel-selector-design.md) | [2026-05-20-muntjac-s2-wheel-selector.md](../plans/2026-05-20-muntjac-s2-wheel-selector.md) | ✅ shipped (tag `s2-complete`, 26 commits, 118 tests) |
 | S3 | [2026-05-21-muntjac-s3-buck-emitter-design.md](./2026-05-21-muntjac-s3-buck-emitter-design.md) | [2026-05-21-muntjac-s3-buck-emitter.md](../plans/2026-05-21-muntjac-s3-buck-emitter.md) | ✅ shipped (tag `s3-complete`, 21 commits, 145 tests) |
 | S4 | [2026-05-21-muntjac-s4-multiplatform-design.md](./2026-05-21-muntjac-s4-multiplatform-design.md) | [2026-05-21-muntjac-s4-multiplatform.md](../plans/2026-05-21-muntjac-s4-multiplatform.md) | ✅ shipped (tag `s4-complete`, 31 commits, 158 tests) |
-| S5 | (not yet written) | (not yet written) | ⬜ next |
-| S6 | (not yet written) | (not yet written) | ⬜ blocked on S5 |
+| S5 | [2026-05-22-muntjac-s5-sdist-prebake-design.md](./2026-05-22-muntjac-s5-sdist-prebake-design.md) | [2026-05-22-muntjac-s5-sdist-prebake.md](../plans/2026-05-22-muntjac-s5-sdist-prebake.md) | ✅ shipped (tag `s5-complete`, 17 commits, 190 tests) |
+| S6 | (not yet written) | (not yet written) | ⬜ next |
 | S7 | (not yet written) | (not yet written) | ⬜ blocked on S6 |
 | S8 | (not yet written) | (not yet written) | ⬜ blocked on S7 |
 
