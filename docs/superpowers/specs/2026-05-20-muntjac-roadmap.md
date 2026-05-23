@@ -126,7 +126,7 @@ The credible-launch surface: numpy, pandas, fastapi, requests, ruff working end-
 
 **Touches:** `src/fixup/{schema,cfg,layer,loader,validate,overlay,error}.rs`, `src/buck/emit.rs`, `src/buck/string_writer.rs`, `src/cli/fixups.rs`, `src/cli/buckify.rs`, `tests/buckify.rs`, `tests/fixups_show_smoke.rs`, `.github/workflows/ci.yml`.
 
-**Shipped:** 25 commits (incl. design spec + plan); plan `docs/superpowers/plans/2026-05-23-muntjac-s6-local-fixups.md`; design `docs/superpowers/specs/2026-05-23-muntjac-s6-local-fixups-design.md`. Pre-tag follow-ups logged in `docs/superpowers/TECH_DEBT.md` (TD-S6-01..06).
+**Shipped:** 28 commits (incl. design spec + plan + 3 post-tag-attempt CI fixes for the overlay genrule: export_file wrapping, genrule toolchain, unzip cwd); plan `docs/superpowers/plans/2026-05-23-muntjac-s6-local-fixups.md`; design `docs/superpowers/specs/2026-05-23-muntjac-s6-local-fixups-design.md`. Pre-tag follow-ups logged in `docs/superpowers/TECH_DEBT.md` (TD-S6-01..06).
 
 ---
 
