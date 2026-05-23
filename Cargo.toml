@@ -43,4 +43,3 @@ assert_cmd = "2"
 httpmock = "0.7"
 insta = { version = "1", features = ["yaml"] }
 predicates = "3"
-walkdir = "2.5.0"
