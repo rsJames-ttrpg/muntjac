@@ -45,7 +45,9 @@ pub fn run(globals: &Globals) -> Result<()> {
             None
         };
 
-        let input = build_emit_input(&config, tree, &lockfile, manifest.as_ref(), None)?;
+        let fixups = crate::fixup::load_local(&third_party_dir)
+            .with_context(|| format!("loading fixups under {}", third_party_dir.display()))?;
+        let input = build_emit_input(&config, tree, &lockfile, manifest.as_ref(), Some(&fixups))?;
         let output = emitter.emit(&input);
 
         write_outputs(&output, &third_party_dir)?;
