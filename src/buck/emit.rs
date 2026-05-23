@@ -1532,6 +1532,205 @@ manylinux = "2_17"
         );
     }
 
+    /// Shared harness: app → certifi 2025.4.26 with two wheels (sha256:abc,
+    /// sha256:xyz). Single cell linux-x86_64-gnu @ py3.12. The lock graph is
+    /// the minimum needed to drive a single resolved package through the
+    /// emitter. Used by the prefer_wheel + exclude_wheels tests below.
+    #[allow(clippy::type_complexity)]
+    fn two_wheel_certifi_harness() -> (
+        crate::config::Tree,
+        crate::config::Config,
+        crate::lock::types::Lockfile,
+    ) {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![
+                        Wheel {
+                            url: Url::parse("https://files.pythonhosted.org/p/certifi-v1.whl")
+                                .unwrap(),
+                            hash: "sha256:abc".into(),
+                            size: None,
+                            filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                        },
+                        Wheel {
+                            url: Url::parse("https://files.pythonhosted.org/p/certifi-v2.whl")
+                                .unwrap(),
+                            hash: "sha256:xyz".into(),
+                            size: None,
+                            filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                        },
+                    ],
+                    metadata: None,
+                },
+            ],
+        };
+        (tree, config, lockfile)
+    }
+
+    /// prefer_wheel pointing at an absent sha must bail with the canonical
+    /// message listing the available shas (verbatim wording locked by spec §6).
+    #[test]
+    fn fixup_prefer_wheel_not_found_errors() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    prefer_wheel: Some("sha256:notfound".into()),
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect_err("should fail when prefer_wheel sha is absent");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("prefer_wheel sha256:notfound not found for certifi"),
+            "wrong message: {msg}"
+        );
+        assert!(
+            msg.contains("available wheel shas:") && msg.contains("abc") && msg.contains("xyz"),
+            "expected available shas in message: {msg}"
+        );
+    }
+
+    /// exclude_wheels patterns that wipe out the entire wheel set must bail
+    /// with the canonical message (verbatim wording locked by spec §6).
+    #[test]
+    fn fixup_exclude_wheels_leaves_none_errors() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    exclude_wheels: vec!["*.whl".into()],
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let err = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect_err("should fail when exclude_wheels empties the wheel set");
+        let msg = format!("{:#}", err);
+        assert!(
+            msg.contains("exclude_wheels eliminates every wheel for certifi"),
+            "wrong message: {msg}"
+        );
+        assert!(
+            msg.contains("loosen the patterns or remove the fixup"),
+            "missing remediation hint: {msg}"
+        );
+    }
+
+    /// Combining prefer_wheel with extra_deps proves the prefer-wheel happy
+    /// path still threads through apply_dep_ops (the fixup_extra_deps_appends
+    /// test covers the default picker path; this guards the second branch).
+    #[test]
+    fn fixup_prefer_wheel_still_applies_extra_deps() {
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use pep508_rs::PackageName;
+
+        let (tree, config, lockfile) = two_wheel_certifi_harness();
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    prefer_wheel: Some("sha256:xyz".into()),
+                    extra_deps: vec!["//third-party/c:openssl".into()],
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect("build_emit_input with prefer_wheel + extra_deps");
+        let pkg = &input.packages[0];
+        let wheel = pkg.wheels.values().next().unwrap();
+        assert_eq!(wheel.hash, "sha256:xyz");
+        match &pkg.deps {
+            EmitDeps::Uniform(deps) => assert!(
+                deps.contains(&"//third-party/c:openssl".to_string()),
+                "prefer-wheel branch dropped extra_deps: {deps:?}"
+            ),
+            other => panic!("expected Uniform deps, got {other:?}"),
+        }
+    }
+
     #[test]
     fn build_emit_input_accepts_none_fixups() {
         // Goal: signature compiles + behavior is unchanged from no-fixup case.
