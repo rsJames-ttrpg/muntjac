@@ -254,8 +254,29 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "            parent = path_in_wheel.rsplit(\"/\", 1)[0] if \"/\" in path_in_wheel else \".\"").unwrap();
     writeln!(s, "            cp_lines.append(\"mkdir -p _u/\" + parent + \" && cp $(location :\" + t + \") _u/\" + path_in_wheel)").unwrap();
     writeln!(s, "        cp_cmds = \" && \".join(cp_lines)").unwrap();
+    writeln!(
+        s,
+        "        # Genrule cmd runs at the project root. Buck's $(location :X)"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "        # expands to a project-root-relative path, so unzip must NOT cd"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "        # into _u before invoking it — instead, use `unzip -d _u`. The"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "        # final zip is run from inside _u so the archive's entries don't"
+    )
+    .unwrap();
+    writeln!(s, "        # carry the `_u/` prefix.").unwrap();
     writeln!(s, "        cmd_template = (").unwrap();
-    writeln!(s, "            \"set -e && mkdir _u && cd _u && unzip -q $(location :\" + first_src + \") && cd .. && \" +").unwrap();
+    writeln!(s, "            \"set -e && mkdir _u && unzip -q -d _u $(location :\" + first_src + \") && \" +").unwrap();
     writeln!(
         s,
         "            cp_cmds + \" && cd _u && zip -qrX ../$OUT . -x '*/RECORD'\""

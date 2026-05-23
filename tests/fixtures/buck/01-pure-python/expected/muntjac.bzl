@@ -96,8 +96,13 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, labels = [
             parent = path_in_wheel.rsplit("/", 1)[0] if "/" in path_in_wheel else "."
             cp_lines.append("mkdir -p _u/" + parent + " && cp $(location :" + t + ") _u/" + path_in_wheel)
         cp_cmds = " && ".join(cp_lines)
+        # Genrule cmd runs at the project root. Buck's $(location :X)
+        # expands to a project-root-relative path, so unzip must NOT cd
+        # into _u before invoking it — instead, use `unzip -d _u`. The
+        # final zip is run from inside _u so the archive's entries don't
+        # carry the `_u/` prefix.
         cmd_template = (
-            "set -e && mkdir _u && cd _u && unzip -q $(location :" + first_src + ") && cd .. && " +
+            "set -e && mkdir _u && unzip -q -d _u $(location :" + first_src + ") && " +
             cp_cmds + " && cd _u && zip -qrX ../$OUT . -x '*/RECORD'"
         )
         native.genrule(
