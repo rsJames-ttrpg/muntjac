@@ -1,4 +1,5 @@
 load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
+load("@prelude//toolchains:genrule.bzl", "system_genrule_toolchain")
 load("@prelude//toolchains:python.bzl", "system_python_bootstrap_toolchain", "system_python_toolchain")
 
 # The wheels under //third-party/python:* are cp312, so the interpreter
@@ -33,5 +34,13 @@ system_python_toolchain(
 
 system_cxx_toolchain(
     name = "cxx",
+    visibility = ["PUBLIC"],
+)
+
+# The overlay'd `__overlaid` rule emitted by muntjac's pypi_package macro
+# is a genrule, which requires a `:genrule` toolchain target. Other
+# fixtures (01-04) don't use genrules so they don't need this.
+system_genrule_toolchain(
+    name = "genrule",
     visibility = ["PUBLIC"],
 )
