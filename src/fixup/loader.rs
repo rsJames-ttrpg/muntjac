@@ -27,6 +27,11 @@ impl FixupSet {
     pub fn is_empty(&self) -> bool {
         self.fixups.is_empty()
     }
+
+    #[cfg(test)]
+    pub fn from_map_for_test(fixups: BTreeMap<PackageName, FixupConfig>) -> Self {
+        Self { fixups }
+    }
 }
 
 /// Load every `<third_party_dir>/fixups/<pkg>/fixups.toml` into a

@@ -126,7 +126,10 @@ pub fn build_emit_input(
     manifest: Option<&crate::sdist::Manifest>,
     fixups: Option<&crate::fixup::FixupSet>,
 ) -> anyhow::Result<EmitInput> {
-    let _ = fixups; // SUPPRESS unused-arg warning until T12 wires this
+    use crate::fixup::cfg::split_target_triple;
+    use crate::fixup::{CfgContext, resolve_for_cell};
+    use pep440_rs::Version as PepVersion;
+
     let graph = crate::lock::graph::build(lockfile)?;
     crate::lock::graph::detect_cycles(&graph)?;
     let view = crate::lock::resolved::project(&graph, config, tree);
@@ -175,10 +178,27 @@ pub fn build_emit_input(
             PythonVersion::from_str(&resolved_cfg.python_version).map_err(anyhow::Error::msg)?;
         let cfg_name = ConfigName::new(&resolved_cfg.python_version, plat_name);
         let compat = build_compatible_tags(plat, py.clone());
+        let (arch, os, env) = split_target_triple(&plat.target);
 
         for pkg in &resolved_cfg.packages {
             let key: PkgKey = (pkg.name.clone(), pkg.version.clone());
             let wheels = wheel_index.get(&key).copied().unwrap_or(&[]);
+
+            // Resolve fixup for (pkg, cell). None if no fixup configured.
+            let resolved_fixup: Option<crate::fixup::ResolvedFixup> = fixups.and_then(|fs| {
+                let name = pep508_rs::PackageName::from_str(&pkg.name).ok()?;
+                let cfg = fs.get(&name)?;
+                let pkg_ver = PepVersion::from_str(&pkg.version).ok()?;
+                let py_ver = PepVersion::from_str(&resolved_cfg.python_version).ok()?;
+                let ctx = CfgContext {
+                    package_version: &pkg_ver,
+                    python_version: py_ver,
+                    target_os: &os,
+                    target_arch: &arch,
+                    target_env: &env,
+                };
+                Some(resolve_for_cell(cfg, &ctx))
+            });
 
             // ---- Sdist-only path: consult the prebake manifest. ----
             if wheels.is_empty() {
@@ -226,10 +246,14 @@ pub fn build_emit_input(
                                 hash: format!("sha256:{}", wheel_sha256),
                             },
                         );
+                        let mut cell_deps = pkg.deps.clone();
+                        if let Some(rf) = &resolved_fixup {
+                            apply_dep_ops(&mut cell_deps, rf);
+                        }
                         pkg_deps_per_cell
-                            .entry(key)
+                            .entry(key.clone())
                             .or_default()
-                            .insert(cfg_name.clone(), pkg.deps.clone());
+                            .insert(cfg_name.clone(), cell_deps);
                         continue;
                     }
                     crate::sdist::ManifestClassification::Native { .. } => {
@@ -264,10 +288,14 @@ pub fn build_emit_input(
                             hash: wheel.hash.clone(),
                         },
                     );
+                    let mut cell_deps = pkg.deps.clone();
+                    if let Some(rf) = &resolved_fixup {
+                        apply_dep_ops(&mut cell_deps, rf);
+                    }
                     pkg_deps_per_cell
-                        .entry(key)
+                        .entry(key.clone())
                         .or_default()
-                        .insert(cfg_name.clone(), pkg.deps.clone());
+                        .insert(cfg_name.clone(), cell_deps);
                 }
                 PickResult::NoWheel => {
                     // Lockfile says this package has wheels but none matched
@@ -292,7 +320,13 @@ pub fn build_emit_input(
     let format_cell_deps = |raw: &Vec<String>| -> Vec<String> {
         let mut v: Vec<String> = raw
             .iter()
-            .map(|d| format!(":{}", d.split('@').next().unwrap_or(d)))
+            .map(|d| {
+                if let Some(target) = d.strip_prefix("__BUCK_TARGET__") {
+                    target.to_string()
+                } else {
+                    format!(":{}", d.split('@').next().unwrap_or(d))
+                }
+            })
             .collect();
         v.sort();
         v.dedup();
@@ -343,6 +377,41 @@ pub fn build_emit_input(
         configs,
         packages,
     })
+}
+
+/// Apply a `ResolvedFixup`'s dep-side ops to a package's raw dep list.
+/// Raw deps are formatted as "name@version" by the lock-resolver.
+///
+/// Order:
+///   1. `replace_deps`: substitute package names. The "name" portion of "name@version" is matched.
+///   2. `omit_deps`: drop entries matching by name.
+///   3. `extra_deps`: append (verbatim Buck targets — no transformation).
+fn apply_dep_ops(deps: &mut Vec<String>, fixup: &crate::fixup::ResolvedFixup) {
+    let extract_name = |s: &str| s.split('@').next().unwrap_or(s).to_string();
+
+    // 1. replace: rewrite each entry whose name is in replace_deps.
+    for dep in deps.iter_mut() {
+        let name = extract_name(dep);
+        if let Some(target) = fixup.replace_deps.get(&name) {
+            // The replacement is a full Buck target; mark it with a sentinel
+            // so format_cell_deps knows NOT to add the ":" prefix later.
+            *dep = format!("__BUCK_TARGET__{}", target);
+        }
+    }
+
+    // 2. omit: drop by name (does not affect already-replaced sentinels).
+    deps.retain(|d| {
+        if d.starts_with("__BUCK_TARGET__") {
+            return true;
+        }
+        let name = extract_name(d);
+        !fixup.omit_deps.iter().any(|o| o == &name)
+    });
+
+    // 3. extra: append as Buck-target sentinels.
+    for ed in &fixup.extra_deps {
+        deps.push(format!("__BUCK_TARGET__{}", ed));
+    }
 }
 
 #[cfg(test)]
@@ -1178,6 +1247,108 @@ manylinux = "2_17"
             msg.contains("muntjac vendor"),
             "expected hint to mention `muntjac vendor`, got: {msg}"
         );
+    }
+
+    #[test]
+    fn fixup_extra_deps_appends() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::fixup::FixupSet;
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse("https://files.pythonhosted.org/p/certifi.whl").unwrap(),
+                        hash: "sha256:abc".into(),
+                        size: None,
+                        filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let mut fixups_map = std::collections::BTreeMap::new();
+        fixups_map.insert(
+            PackageName::from_str("certifi").unwrap(),
+            FixupConfig {
+                top: FixupBody {
+                    extra_deps: vec!["//third-party/c:openssl".into()],
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+            },
+        );
+        let fixups = FixupSet::from_map_for_test(fixups_map);
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, Some(&fixups))
+            .expect("build_emit_input with fixups");
+        let pkg = &input.packages[0];
+        assert_eq!(pkg.name, "certifi");
+        match &pkg.deps {
+            EmitDeps::Uniform(deps) => {
+                assert!(
+                    deps.contains(&"//third-party/c:openssl".to_string()),
+                    "deps did not contain the extra_dep: {:?}",
+                    deps
+                );
+            }
+            other => panic!("expected Uniform, got {:?}", other),
+        }
     }
 
     #[test]
