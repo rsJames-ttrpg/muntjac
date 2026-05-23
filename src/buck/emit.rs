@@ -164,9 +164,10 @@ pub fn build_emit_input(
             // ---- Sdist-only path: consult the prebake manifest. ----
             if wheels.is_empty() {
                 // Find the lockfile package to see whether there's an sdist.
-                let lock_pkg = lockfile.packages.iter().find(|p| {
-                    p.name.as_ref() == pkg.name && p.version.to_string() == pkg.version
-                });
+                let lock_pkg = lockfile
+                    .packages
+                    .iter()
+                    .find(|p| p.name.as_ref() == pkg.name && p.version.to_string() == pkg.version);
                 let sdist = lock_pkg.and_then(|p| p.sdist.clone());
 
                 let Some(sdist) = sdist else {
@@ -221,7 +222,11 @@ pub fn build_emit_input(
                              `replace_deps` to point at a hand-rolled Buck target.",
                             pkg.name,
                             pkg.version,
-                            cfg_name.as_str().split('-').next().unwrap_or(cfg_name.as_str()),
+                            cfg_name
+                                .as_str()
+                                .split('-')
+                                .next()
+                                .unwrap_or(cfg_name.as_str()),
                             cfg_name.as_str().split_once('-').map(|x| x.1).unwrap_or(""),
                             pkg.name,
                             pkg.name,
@@ -438,7 +443,8 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None).expect("build_emit_input succeeds");
+        let input =
+            build_emit_input(&config, &tree, &lockfile, None).expect("build_emit_input succeeds");
 
         assert_eq!(input.tree, "default");
         assert_eq!(input.third_party_dir, "third-party/python");
@@ -539,7 +545,8 @@ mod tests {
             packages: vec![app, ancient],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile, None).expect_err("should fail on NoWheel");
+        let err =
+            build_emit_input(&config, &tree, &lockfile, None).expect_err("should fail on NoWheel");
         let msg = format!("{:#}", err);
         assert!(
             msg.contains("ancient-pkg"),
@@ -1037,9 +1044,7 @@ manylinux = "2_17"
         // Same lockfile as above but with a manifest whose sdist_sha256
         // disagrees → StalePrebake error.
         use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Sdist, Source};
-        use crate::sdist::{
-            AllowlistedBackend, Manifest, ManifestClassification, ManifestEntry,
-        };
+        use crate::sdist::{AllowlistedBackend, Manifest, ManifestClassification, ManifestEntry};
         use pep440_rs::Version;
         use pep508_rs::PackageName;
         use url::Url;
@@ -1112,10 +1117,7 @@ manylinux = "2_17"
 
         let err = build_emit_input(&config, &tree, &lockfile, Some(&manifest)).unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("stale"),
-            "expected 'stale' error, got: {msg}"
-        );
+        assert!(msg.contains("stale"), "expected 'stale' error, got: {msg}");
         assert!(
             msg.contains("muntjac vendor"),
             "expected hint to mention `muntjac vendor`, got: {msg}"

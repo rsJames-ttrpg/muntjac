@@ -11,9 +11,7 @@ pub mod error;
 pub mod manifest;
 pub mod prebake;
 
-pub use classifier::{
-    AllowlistedBackend, Classification, NativeReason, NativeSourceHit, classify,
-};
+pub use classifier::{AllowlistedBackend, Classification, NativeReason, NativeSourceHit, classify};
 pub use error::{ClassifyError, SdistError};
 pub use manifest::{Manifest, ManifestClassification, ManifestEntry};
 pub use prebake::{PrebakeOutput, build_wheel};

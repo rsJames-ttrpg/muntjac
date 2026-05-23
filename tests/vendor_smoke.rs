@@ -50,7 +50,8 @@ fn vendor_prebakes_tomli_into_matching_manifest_and_wheel() {
     let server = httpmock::MockServer::start();
     let tarball = std::fs::read(fix.join("seed/tomli-2.0.1.tar.gz")).unwrap();
     server.mock(|when, then| {
-        when.method(httpmock::Method::GET).path("/tomli-2.0.1.tar.gz");
+        when.method(httpmock::Method::GET)
+            .path("/tomli-2.0.1.tar.gz");
         then.status(200).body(tarball.clone());
     });
 

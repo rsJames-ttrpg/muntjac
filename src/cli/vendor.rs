@@ -104,12 +104,18 @@ pub fn run(globals: &Globals) -> Result<()> {
         // Step 4c: classify
         match classify(&sdist_root)? {
             Classification::PurePython { backend } => {
-                eprintln!("muntjac vendor: prebaking {} {} ({})", pkg_name, pkg_version, backend_str(backend));
+                eprintln!(
+                    "muntjac vendor: prebaking {} {} ({})",
+                    pkg_name,
+                    pkg_version,
+                    backend_str(backend)
+                );
                 // Step 4d: prebake
                 let staging = tmp.path().join("staging");
                 std::fs::create_dir_all(&staging)
                     .with_context(|| format!("creating {}", staging.display()))?;
-                let result = crate::sdist::build_wheel(&sdist_root, &staging, &pkg_name, &pkg_version)?;
+                let result =
+                    crate::sdist::build_wheel(&sdist_root, &staging, &pkg_name, &pkg_version)?;
                 // Step 4e: move into prebake/
                 let final_path = prebake_dir.join(&result.wheel_filename);
                 if final_path.is_file() {
@@ -123,7 +129,13 @@ pub fn run(globals: &Globals) -> Result<()> {
                         std::fs::remove_file(&result.wheel_path)?;
                         Ok::<_, std::io::Error>(())
                     })
-                    .with_context(|| format!("moving {} → {}", result.wheel_path.display(), final_path.display()))?;
+                    .with_context(|| {
+                        format!(
+                            "moving {} → {}",
+                            result.wheel_path.display(),
+                            final_path.display()
+                        )
+                    })?;
                 eprintln!(
                     "prebaked: {} {} → {}",
                     pkg_name,
@@ -209,21 +221,19 @@ fn render_native_reason(reason: &NativeReason) -> String {
 fn write_gitignore(prebake_dir: &Path) -> Result<()> {
     let gi = prebake_dir.join(".gitignore");
     if !gi.exists() {
-        std::fs::write(&gi, "*\n")
-            .with_context(|| format!("writing {}", gi.display()))?;
+        std::fs::write(&gi, "*\n").with_context(|| format!("writing {}", gi.display()))?;
     }
     Ok(())
 }
 
 fn download(url: &Url, dest: &Path, package: &str, version: &str) -> Result<()> {
     use crate::sdist::SdistError;
-    let response = reqwest::blocking::get(url.clone())
-        .map_err(|e| SdistError::Download {
-            package: package.into(),
-            version: version.into(),
-            url: url.to_string(),
-            source: e,
-        })?;
+    let response = reqwest::blocking::get(url.clone()).map_err(|e| SdistError::Download {
+        package: package.into(),
+        version: version.into(),
+        url: url.to_string(),
+        source: e,
+    })?;
     let bytes = response.bytes().map_err(|e| SdistError::Download {
         package: package.into(),
         version: version.into(),
@@ -236,8 +246,7 @@ fn download(url: &Url, dest: &Path, package: &str, version: &str) -> Result<()> 
 
 fn verify_sha256(path: &Path, expected: &str, package: &str, version: &str) -> Result<()> {
     use crate::sdist::SdistError;
-    let mut f = std::fs::File::open(path)
-        .with_context(|| format!("opening {}", path.display()))?;
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 8192];
     loop {
@@ -267,8 +276,8 @@ fn extract_tarball(tarball: &Path, dest: &Path, package: &str, version: &str) ->
     use flate2::read::GzDecoder;
     use tar::Archive;
 
-    let f = std::fs::File::open(tarball)
-        .with_context(|| format!("opening {}", tarball.display()))?;
+    let f =
+        std::fs::File::open(tarball).with_context(|| format!("opening {}", tarball.display()))?;
     let gz = GzDecoder::new(f);
     let mut archive = Archive::new(gz);
     archive.set_preserve_permissions(false);
@@ -293,7 +302,10 @@ fn extract_tarball(tarball: &Path, dest: &Path, package: &str, version: &str) ->
             .into_owned();
         // Path traversal hardening.
         for comp in path.components() {
-            if matches!(comp, std::path::Component::ParentDir | std::path::Component::RootDir) {
+            if matches!(
+                comp,
+                std::path::Component::ParentDir | std::path::Component::RootDir
+            ) {
                 return Err(SdistError::PathTraversal {
                     package: package.into(),
                     version: version.into(),

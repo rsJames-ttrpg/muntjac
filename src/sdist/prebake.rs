@@ -158,7 +158,10 @@ requires-python = ">=3.8"
         let out2 = tmp.path().join("out2");
         std::fs::create_dir_all(&out2).unwrap();
         let r2 = build_wheel(&src, &out2, "synth-prebake", "0.1.0").unwrap();
-        assert_eq!(r2.sha256, result.sha256, "wheel build should be deterministic");
+        assert_eq!(
+            r2.sha256, result.sha256,
+            "wheel build should be deterministic"
+        );
     }
 
     #[test]

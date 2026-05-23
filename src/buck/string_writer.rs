@@ -1046,7 +1046,8 @@ mod tests {
         let writer = StringTemplateEmitter;
         let out = writer.emit(&input);
         assert!(
-            out.buck.contains("\"prebake:tomli-2.0.1-py3-none-any.whl\""),
+            out.buck
+                .contains("\"prebake:tomli-2.0.1-py3-none-any.whl\""),
             "BUCK output should contain prebake URL verbatim:\n{}",
             out.buck
         );

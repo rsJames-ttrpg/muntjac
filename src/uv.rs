@@ -80,9 +80,12 @@ mod tests {
         // Run a child process with PATH unset to simulate uv missing.
         // We can't unset PATH inside this process without affecting other tests,
         // so we shell out to a known-bad subprocess via a helper.
-        let result = std::process::Command::new("nonexistent_binary_that_should_not_exist_42")
-            .output();
-        assert!(result.is_err(), "sanity check: nonexistent binary should fail to spawn");
+        let result =
+            std::process::Command::new("nonexistent_binary_that_should_not_exist_42").output();
+        assert!(
+            result.is_err(),
+            "sanity check: nonexistent binary should fail to spawn"
+        );
         // The actual UvNotFound conversion is exercised in the helper above when
         // PATH lookup fails — same code path as a missing uv.
     }

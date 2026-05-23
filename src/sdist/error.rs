@@ -63,9 +63,7 @@ pub enum SdistError {
         source: reqwest::Error,
     },
 
-    #[error(
-        "sha256 mismatch for {package} {version}: lockfile says `{expected}`, got `{actual}`"
-    )]
+    #[error("sha256 mismatch for {package} {version}: lockfile says `{expected}`, got `{actual}`")]
     HashMismatch {
         package: String,
         version: String,

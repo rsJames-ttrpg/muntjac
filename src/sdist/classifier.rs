@@ -44,7 +44,10 @@ const ALLOWLIST: &[(&str, AllowlistedBackend)] = &[
     ("flit_core.api", AllowlistedBackend::FlitCore),
     ("hatchling.build", AllowlistedBackend::Hatchling),
     ("setuptools.build_meta", AllowlistedBackend::Setuptools),
-    ("setuptools.build_meta:__legacy__", AllowlistedBackend::Setuptools),
+    (
+        "setuptools.build_meta:__legacy__",
+        AllowlistedBackend::Setuptools,
+    ),
     ("poetry.core.masonry.api", AllowlistedBackend::PoetryCore),
     ("pdm.backend", AllowlistedBackend::PdmBackend),
 ];
@@ -71,7 +74,10 @@ fn read_build_backend(pyproject: &Path) -> Result<Option<String>, ClassifyError>
 }
 
 fn match_backend(s: &str) -> Option<AllowlistedBackend> {
-    ALLOWLIST.iter().find(|(name, _)| *name == s).map(|(_, b)| *b)
+    ALLOWLIST
+        .iter()
+        .find(|(name, _)| *name == s)
+        .map(|(_, b)| *b)
 }
 
 fn setup_py_has_ext_modules(sdist_root: &Path) -> Result<bool, ClassifyError> {
@@ -226,7 +232,9 @@ mod tests {
         let result = classify(&fixture("flit_core_pure")).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::FlitCore }
+            Classification::PurePython {
+                backend: AllowlistedBackend::FlitCore
+            }
         );
     }
 
@@ -235,7 +243,9 @@ mod tests {
         let result = classify(&fixture("hatchling_pure")).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::Hatchling }
+            Classification::PurePython {
+                backend: AllowlistedBackend::Hatchling
+            }
         );
     }
 
@@ -244,7 +254,9 @@ mod tests {
         let result = classify(&fixture("setuptools_pure")).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::Setuptools }
+            Classification::PurePython {
+                backend: AllowlistedBackend::Setuptools
+            }
         );
     }
 
@@ -253,7 +265,9 @@ mod tests {
         let result = classify(&fixture("poetry_core_pure")).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::PoetryCore }
+            Classification::PurePython {
+                backend: AllowlistedBackend::PoetryCore
+            }
         );
     }
 
@@ -262,7 +276,9 @@ mod tests {
         let result = classify(&fixture("pdm_backend_pure")).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::PdmBackend }
+            Classification::PurePython {
+                backend: AllowlistedBackend::PdmBackend
+            }
         );
     }
 
@@ -271,7 +287,9 @@ mod tests {
         let result = classify(&fixture("missing_pyproject")).unwrap();
         assert_eq!(
             result,
-            Classification::Native { reason: NativeReason::MissingPyprojectToml }
+            Classification::Native {
+                reason: NativeReason::MissingPyprojectToml
+            }
         );
     }
 
@@ -291,7 +309,9 @@ mod tests {
         let result = classify(&fixture("setuptools_ext_modules")).unwrap();
         assert_eq!(
             result,
-            Classification::Native { reason: NativeReason::SetuptoolsWithExtModules }
+            Classification::Native {
+                reason: NativeReason::SetuptoolsWithExtModules
+            }
         );
     }
 
@@ -313,7 +333,10 @@ mod tests {
         let result = classify(&fixture("meson_build")).unwrap();
         match result {
             Classification::Native {
-                reason: NativeReason::AdjacentNativeSource { hit: NativeSourceHit::MesonBuild(_) },
+                reason:
+                    NativeReason::AdjacentNativeSource {
+                        hit: NativeSourceHit::MesonBuild(_),
+                    },
             } => {}
             other => panic!("expected MesonBuild hit, got {other:?}"),
         }
@@ -324,7 +347,10 @@ mod tests {
         let result = classify(&fixture("cmakelists")).unwrap();
         match result {
             Classification::Native {
-                reason: NativeReason::AdjacentNativeSource { hit: NativeSourceHit::CMakeLists(_) },
+                reason:
+                    NativeReason::AdjacentNativeSource {
+                        hit: NativeSourceHit::CMakeLists(_),
+                    },
             } => {}
             other => panic!("expected CMakeLists hit, got {other:?}"),
         }
@@ -335,7 +361,10 @@ mod tests {
         let result = classify(&fixture("c_ext")).unwrap();
         match result {
             Classification::Native {
-                reason: NativeReason::AdjacentNativeSource { hit: NativeSourceHit::CExt(_) },
+                reason:
+                    NativeReason::AdjacentNativeSource {
+                        hit: NativeSourceHit::CExt(_),
+                    },
             } => {}
             other => panic!("expected CExt hit, got {other:?}"),
         }
@@ -346,7 +375,10 @@ mod tests {
         let result = classify(&fixture("cpp_ext")).unwrap();
         match result {
             Classification::Native {
-                reason: NativeReason::AdjacentNativeSource { hit: NativeSourceHit::CppExt(_) },
+                reason:
+                    NativeReason::AdjacentNativeSource {
+                        hit: NativeSourceHit::CppExt(_),
+                    },
             } => {}
             other => panic!("expected CppExt hit, got {other:?}"),
         }
@@ -357,7 +389,10 @@ mod tests {
         let result = classify(&fixture("pyx_ext")).unwrap();
         match result {
             Classification::Native {
-                reason: NativeReason::AdjacentNativeSource { hit: NativeSourceHit::PyxExt(_) },
+                reason:
+                    NativeReason::AdjacentNativeSource {
+                        hit: NativeSourceHit::PyxExt(_),
+                    },
             } => {}
             other => panic!("expected PyxExt hit, got {other:?}"),
         }
@@ -381,7 +416,9 @@ mod tests {
         let result = classify(&root).unwrap();
         assert_eq!(
             result,
-            Classification::PurePython { backend: AllowlistedBackend::FlitCore }
+            Classification::PurePython {
+                backend: AllowlistedBackend::FlitCore
+            }
         );
     }
 
