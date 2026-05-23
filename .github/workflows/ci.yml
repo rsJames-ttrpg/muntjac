@@ -100,3 +100,20 @@ jobs:
           buck2 run //tests/smoke:numpy_demo 2>&1 | tee /tmp/numpy-out.txt
           # Sanity-check the output contains the expected array.
           grep -F "[0. 0. 0.]" /tmp/numpy-out.txt
+
+      - name: muntjac buckify (04-pure-python-sdist fixture)
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/04-pure-python-sdist
+          # Initialize prelude submodule in case checkout step didn't.
+          git submodule update --init --recursive --depth 1
+          # Buckify only consumes the committed manifest + wheel, no uv shellout.
+          cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
+
+      - name: buck2 run prebake_demo
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/04-pure-python-sdist
+          buck2 run //tests/smoke:prebake_demo

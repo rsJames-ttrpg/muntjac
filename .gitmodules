@@ -1,3 +1,6 @@
 [submodule "tests/fixtures/buck/02-numpy-pandas/prelude"]
 	path = tests/fixtures/buck/02-numpy-pandas/prelude
 	url = https://github.com/facebook/buck2-prelude.git
+[submodule "tests/fixtures/buck/04-pure-python-sdist/prelude"]
+	path = tests/fixtures/buck/04-pure-python-sdist/prelude
+	url = https://github.com/facebook/buck2-prelude.git
