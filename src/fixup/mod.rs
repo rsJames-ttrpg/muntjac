@@ -7,7 +7,7 @@ pub mod loader;
 pub mod schema;
 
 pub use cfg::{CfgContext, CfgPredicate};
-pub use error::FixupError;
+pub use error::{CfgParseError, FixupError};
 pub use layer::{ResolvedFixup, resolve_for_cell};
 pub use loader::{FixupSet, load_local};
 pub use schema::{EntryPoints, FixupBody, FixupConfig, SdistFixup};
