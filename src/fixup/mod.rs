@@ -6,7 +6,7 @@ pub mod layer;
 pub mod loader;
 pub mod schema;
 
-pub use cfg::{CfgContext, CfgPredicate};
+pub use cfg::{CfgContext, CfgPredicate, split_target_triple};
 pub use error::{CfgParseError, FixupError};
 pub use layer::{ResolvedFixup, resolve_for_cell};
 pub use loader::{FixupSet, load_local};

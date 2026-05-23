@@ -21,7 +21,6 @@ pub enum CfgPredicate {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct CfgContext<'a> {
     pub package_version: &'a pep440_rs::Version,
     pub python_version: pep440_rs::Version,
@@ -190,6 +189,61 @@ impl<'a> Parser<'a> {
     }
 }
 
+impl CfgPredicate {
+    /// Evaluate against a cell context. Returns true iff the predicate
+    /// holds for `(package_version, python_version, target_os, target_arch, target_env)`.
+    ///
+    /// PEP 440 specifier mismatches (malformed `version`/`python` strings) cause
+    /// the predicate to return false rather than error — by construction these
+    /// strings come from user-written fixups, and validation happens at parse
+    /// time (separate path; not implemented here for v1 simplicity).
+    pub fn evaluate(&self, ctx: &CfgContext<'_>) -> bool {
+        use pep440_rs::VersionSpecifiers;
+        use std::str::FromStr;
+        match self {
+            Self::Version(spec) => VersionSpecifiers::from_str(spec)
+                .map(|s| s.contains(ctx.package_version))
+                .unwrap_or(false),
+            Self::Python(spec) => VersionSpecifiers::from_str(spec)
+                .map(|s| s.contains(&ctx.python_version))
+                .unwrap_or(false),
+            Self::TargetOs(want) => ctx.target_os == want,
+            Self::TargetArch(want) => ctx.target_arch == want,
+            Self::TargetEnv(want) => ctx.target_env == want,
+            Self::All(args) => args.iter().all(|a| a.evaluate(ctx)),
+            Self::Any(args) => args.iter().any(|a| a.evaluate(ctx)),
+            Self::Not(arg) => !arg.evaluate(ctx),
+        }
+    }
+}
+
+/// Decompose a rustc-style target triple (e.g. "x86_64-unknown-linux-musl")
+/// into `(arch, os, env)`. Convention:
+///   arch = first segment
+///   os   = "linux" | "macos" | "windows"  (extracted from the triple)
+///   env  = trailing "gnu"/"musl" for linux; "" for macos/windows
+pub fn split_target_triple(triple: &str) -> (String, String, String) {
+    let parts: Vec<&str> = triple.split('-').collect();
+    let arch = parts.first().copied().unwrap_or("").to_string();
+    let (os, env) = if triple.contains("-linux-") || triple.ends_with("-linux") {
+        let env = if triple.ends_with("-musl") {
+            "musl"
+        } else if triple.ends_with("-gnu") {
+            "gnu"
+        } else {
+            ""
+        };
+        ("linux".to_string(), env.to_string())
+    } else if triple.contains("apple-darwin") || triple.contains("-macos") {
+        ("macos".to_string(), "".to_string())
+    } else if triple.contains("-windows-") || triple.contains("-windows") {
+        ("windows".to_string(), "".to_string())
+    } else {
+        ("".to_string(), "".to_string())
+    };
+    (arch, os, env)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,5 +330,162 @@ mod tests {
     fn parses_python_atom() {
         let p = CfgPredicate::parse("python = \">=3.12\"").unwrap();
         assert_eq!(p, CfgPredicate::Python(">=3.12".into()));
+    }
+
+    use std::str::FromStr;
+
+    fn ctx_for(
+        version: &str,
+        py: &str,
+        _arch: &str,
+        _os: &str,
+        _env: &str,
+    ) -> (pep440_rs::Version, pep440_rs::Version) {
+        (
+            pep440_rs::Version::from_str(version).unwrap(),
+            pep440_rs::Version::from_str(py).unwrap(),
+        )
+    }
+
+    #[test]
+    fn evaluates_target_os_match() {
+        let (v, py) = ctx_for("1.0", "3.12", "x86_64", "linux", "gnu");
+        let ctx = CfgContext {
+            package_version: &v,
+            python_version: py,
+            target_os: "linux",
+            target_arch: "x86_64",
+            target_env: "gnu",
+        };
+        assert!(
+            CfgPredicate::parse("target_os = \"linux\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            !CfgPredicate::parse("target_os = \"macos\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+    }
+
+    #[test]
+    fn evaluates_version_specifier() {
+        let (v, py) = ctx_for("10.5", "3.12", "x86_64", "linux", "gnu");
+        let ctx = CfgContext {
+            package_version: &v,
+            python_version: py,
+            target_os: "linux",
+            target_arch: "x86_64",
+            target_env: "gnu",
+        };
+        assert!(
+            CfgPredicate::parse("version = \">=10.0\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            !CfgPredicate::parse("version = \">=11.0\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            CfgPredicate::parse("version = \">=10.0,<11\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+    }
+
+    #[test]
+    fn evaluates_python_specifier() {
+        let (v, py) = ctx_for("1.0", "3.12.0", "x86_64", "linux", "gnu");
+        let ctx = CfgContext {
+            package_version: &v,
+            python_version: py,
+            target_os: "linux",
+            target_arch: "x86_64",
+            target_env: "gnu",
+        };
+        assert!(
+            CfgPredicate::parse("python = \">=3.12\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            !CfgPredicate::parse("python = \">=3.13\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+    }
+
+    #[test]
+    fn evaluates_combinators() {
+        let (v, py) = ctx_for("10.5", "3.12", "x86_64", "linux", "musl");
+        let ctx = CfgContext {
+            package_version: &v,
+            python_version: py,
+            target_os: "linux",
+            target_arch: "x86_64",
+            target_env: "musl",
+        };
+        assert!(
+            CfgPredicate::parse("all(target_os = \"linux\", target_env = \"musl\")")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            !CfgPredicate::parse("all(target_os = \"linux\", target_env = \"gnu\")")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            CfgPredicate::parse("any(target_env = \"musl\", target_env = \"gnu\")")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+        assert!(
+            CfgPredicate::parse("not(target_os = \"macos\")")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+    }
+
+    #[test]
+    fn evaluates_target_env_empty_for_macos() {
+        let (v, py) = ctx_for("1.0", "3.12", "aarch64", "macos", "");
+        let ctx = CfgContext {
+            package_version: &v,
+            python_version: py,
+            target_os: "macos",
+            target_arch: "aarch64",
+            target_env: "",
+        };
+        assert!(
+            CfgPredicate::parse("target_env = \"\"")
+                .unwrap()
+                .evaluate(&ctx)
+        );
+    }
+
+    #[test]
+    fn split_triple_x86_64_linux_gnu() {
+        let (arch, os, env) = split_target_triple("x86_64-unknown-linux-gnu");
+        assert_eq!(arch, "x86_64");
+        assert_eq!(os, "linux");
+        assert_eq!(env, "gnu");
+    }
+
+    #[test]
+    fn split_triple_aarch64_apple_darwin() {
+        let (arch, os, env) = split_target_triple("aarch64-apple-darwin");
+        assert_eq!(arch, "aarch64");
+        assert_eq!(os, "macos");
+        assert_eq!(env, "");
+    }
+
+    #[test]
+    fn split_triple_musl() {
+        let (_arch, _os, env) = split_target_triple("x86_64-unknown-linux-musl");
+        assert_eq!(env, "musl");
     }
 }
