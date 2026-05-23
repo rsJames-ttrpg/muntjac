@@ -2,6 +2,7 @@ pub mod buck;
 pub mod cli;
 pub mod config;
 pub mod error;
+pub mod fixup;
 pub mod lock;
 pub mod platform;
 pub mod sdist;
