@@ -155,6 +155,14 @@ similar issue surfaces.
 - **Fix:** Add a `.gitignore` to `tests/fixtures/buck/04-pure-python-sdist/` covering `buck-out/`, `third-party/python/BUCK`, `third-party/python/muntjac.bzl`, `third-party/python/wiring.bzl`, `third-party/python/config/`.
 - **Target:** Any time; bundle with T13's polish pass.
 
+#### Code-review subagent prompts don't run `cargo fmt --check`
+- **Source:** S5 post-tag CI failure (run 26335644662); same failure mode hit S4 (run 26296784343 → `style(s4): cargo fmt across emit.rs + string_writer.rs`).
+- **Severity:** Important (process)
+- **What:** The per-task code-quality reviewer prompts in `superpowers:subagent-driven-development` run `cargo clippy --all-targets -- -D warnings` and full `cargo test`, but never `cargo fmt --check`. CI's fmt-check step is the FIRST gate and fail-fast, so when it fails, every downstream step (clippy, build, test, both buck2 smokes) is skipped — masking the failure mode if you're only inspecting the green ✓ panes locally.
+- **Why it matters:** Two stages in a row (S4, S5) shipped + tagged + pushed, then immediately needed a post-tag `style(...): cargo fmt` cleanup commit. The tag's tree differs from what CI eventually green-stamps, which complicates "what does `s5-complete` actually represent" if anyone bisects against tags later.
+- **Fix:** Add `cargo fmt --check` to every code-quality reviewer's verification list (or, better, add it to a project-local pre-task verification checklist the controller runs before dispatching the implementer's commit-step). Also worth a local `git/hooks/pre-commit` running `cargo fmt --check`.
+- **Target:** S6 (before the next stage opens reviews).
+
 ---
 
 ## Resolved
