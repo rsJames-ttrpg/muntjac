@@ -124,7 +124,9 @@ pub fn build_emit_input(
     tree: &Tree,
     lockfile: &Lockfile,
     manifest: Option<&crate::sdist::Manifest>,
+    fixups: Option<&crate::fixup::FixupSet>,
 ) -> anyhow::Result<EmitInput> {
+    let _ = fixups; // SUPPRESS unused-arg warning until T12 wires this
     let graph = crate::lock::graph::build(lockfile)?;
     crate::lock::graph::detect_cycles(&graph)?;
     let view = crate::lock::resolved::project(&graph, config, tree);
@@ -497,8 +499,8 @@ mod tests {
             ],
         };
 
-        let input =
-            build_emit_input(&config, &tree, &lockfile, None).expect("build_emit_input succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None, None)
+            .expect("build_emit_input succeeds");
 
         assert_eq!(input.tree, "default");
         assert_eq!(input.third_party_dir, "third-party/python");
@@ -599,8 +601,8 @@ mod tests {
             packages: vec![app, ancient],
         };
 
-        let err =
-            build_emit_input(&config, &tree, &lockfile, None).expect_err("should fail on NoWheel");
+        let err = build_emit_input(&config, &tree, &lockfile, None, None)
+            .expect_err("should fail on NoWheel");
         let msg = format!("{:#}", err);
         assert!(
             msg.contains("ancient-pkg"),
@@ -732,7 +734,7 @@ mod tests {
             packages: vec![app, parent, child],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
         let parent_pkg = input
             .packages
             .iter()
@@ -862,7 +864,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
 
         let rich = input
             .packages
@@ -964,7 +966,7 @@ mod tests {
             ],
         };
 
-        let input = build_emit_input(&config, &tree, &lockfile, None).expect("succeeds");
+        let input = build_emit_input(&config, &tree, &lockfile, None, None).expect("succeeds");
         let pkg = input
             .packages
             .iter()
@@ -1081,7 +1083,7 @@ manylinux = "2_17"
         };
 
         // No manifest provided → NotPrebaked error.
-        let err = build_emit_input(&config, &tree, &lockfile, None).unwrap_err();
+        let err = build_emit_input(&config, &tree, &lockfile, None, None).unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("not prebaked"),
@@ -1169,12 +1171,89 @@ manylinux = "2_17"
             }],
         };
 
-        let err = build_emit_input(&config, &tree, &lockfile, Some(&manifest)).unwrap_err();
+        let err = build_emit_input(&config, &tree, &lockfile, Some(&manifest), None).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("stale"), "expected 'stale' error, got: {msg}");
         assert!(
             msg.contains("muntjac vendor"),
             "expected hint to mention `muntjac vendor`, got: {msg}"
         );
+    }
+
+    #[test]
+    fn build_emit_input_accepts_none_fixups() {
+        // Goal: signature compiles + behavior is unchanged from no-fixup case.
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("certifi").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("certifi").unwrap(),
+                    version: Version::from_str("2025.4.26").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse("https://files.pythonhosted.org/p/certifi.whl").unwrap(),
+                        hash: "sha256:abc".into(),
+                        size: None,
+                        filename: "certifi-2025.4.26-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let input = build_emit_input(&config, &tree, &lockfile, None, None)
+            .expect("build_emit_input with None fixups");
+        assert_eq!(input.packages.len(), 1);
     }
 }

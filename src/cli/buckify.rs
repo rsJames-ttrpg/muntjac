@@ -45,7 +45,7 @@ pub fn run(globals: &Globals) -> Result<()> {
             None
         };
 
-        let input = build_emit_input(&config, tree, &lockfile, manifest.as_ref())?;
+        let input = build_emit_input(&config, tree, &lockfile, manifest.as_ref(), None)?;
         let output = emitter.emit(&input);
 
         write_outputs(&output, &third_party_dir)?;
