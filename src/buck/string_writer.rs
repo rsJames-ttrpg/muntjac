@@ -222,14 +222,37 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "    overlay_label = None").unwrap();
     writeln!(s, "    if overlay_files:").unwrap();
     writeln!(s, "        first_src = sorted(src_targets.values())[0]").unwrap();
-    writeln!(s, "        cp_lines = []").unwrap();
     writeln!(
         s,
-        "        for (path_in_wheel, src_label) in overlay_files:"
+        "        # Wrap each overlay file in an export_file so genrule's $(location ...)"
     )
     .unwrap();
+    writeln!(
+        s,
+        "        # can resolve to it (buck2 rejects raw file paths inside $(location))."
+    )
+    .unwrap();
+    writeln!(s, "        overlay_targets = []").unwrap();
+    writeln!(
+        s,
+        "        for (i, (path_in_wheel, src_label)) in enumerate(overlay_files):"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "            t = \"{{}}-{{}}__overlay-src-{{}}\".format(name, version, i)"
+    )
+    .unwrap();
+    writeln!(s, "            native.export_file(").unwrap();
+    writeln!(s, "                name = t,").unwrap();
+    writeln!(s, "                src = src_label,").unwrap();
+    writeln!(s, "                visibility = [],").unwrap();
+    writeln!(s, "            )").unwrap();
+    writeln!(s, "            overlay_targets.append((path_in_wheel, t))").unwrap();
+    writeln!(s, "        cp_lines = []").unwrap();
+    writeln!(s, "        for (path_in_wheel, t) in overlay_targets:").unwrap();
     writeln!(s, "            parent = path_in_wheel.rsplit(\"/\", 1)[0] if \"/\" in path_in_wheel else \".\"").unwrap();
-    writeln!(s, "            cp_lines.append(\"mkdir -p _u/\" + parent + \" && cp $(location \" + src_label + \") _u/\" + path_in_wheel)").unwrap();
+    writeln!(s, "            cp_lines.append(\"mkdir -p _u/\" + parent + \" && cp $(location :\" + t + \") _u/\" + path_in_wheel)").unwrap();
     writeln!(s, "        cp_cmds = \" && \".join(cp_lines)").unwrap();
     writeln!(s, "        cmd_template = (").unwrap();
     writeln!(s, "            \"set -e && mkdir _u && cd _u && unzip -q $(location :\" + first_src + \") && cd .. && \" +").unwrap();
@@ -247,7 +270,7 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     .unwrap();
     writeln!(
         s,
-        "            srcs = [\":\" + first_src] + [src for (_, src) in overlay_files],"
+        "            srcs = [\":\" + first_src] + [\":\" + t for (_, t) in overlay_targets],"
     )
     .unwrap();
     writeln!(

@@ -83,10 +83,21 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, labels = [
     overlay_label = None
     if overlay_files:
         first_src = sorted(src_targets.values())[0]
+        # Wrap each overlay file in an export_file so genrule's $(location ...)
+        # can resolve to it (buck2 rejects raw file paths inside $(location)).
+        overlay_targets = []
+        for (i, (path_in_wheel, src_label)) in enumerate(overlay_files):
+            t = "{}-{}__overlay-src-{}".format(name, version, i)
+            native.export_file(
+                name = t,
+                src = src_label,
+                visibility = [],
+            )
+            overlay_targets.append((path_in_wheel, t))
         cp_lines = []
-        for (path_in_wheel, src_label) in overlay_files:
+        for (path_in_wheel, t) in overlay_targets:
             parent = path_in_wheel.rsplit("/", 1)[0] if "/" in path_in_wheel else "."
-            cp_lines.append("mkdir -p _u/" + parent + " && cp $(location " + src_label + ") _u/" + path_in_wheel)
+            cp_lines.append("mkdir -p _u/" + parent + " && cp $(location :" + t + ") _u/" + path_in_wheel)
         cp_cmds = " && ".join(cp_lines)
         cmd_template = (
             "set -e && mkdir _u && cd _u && unzip -q $(location :" + first_src + ") && cd .. && " +
@@ -94,7 +105,7 @@ def pypi_package(name, version, wheels, deps = [], visibility = None, labels = [
         )
         native.genrule(
             name = "{}-{}__overlaid".format(name, version),
-            srcs = [":" + first_src] + [src for (_, src) in overlay_files],
+            srcs = [":" + first_src] + [":" + t for (_, t) in overlay_targets],
             out = "{}-{}-overlaid.whl".format(name, version),
             cmd = cmd_template,
             visibility = [],
