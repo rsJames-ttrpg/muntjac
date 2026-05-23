@@ -155,13 +155,55 @@ similar issue surfaces.
 - **Fix:** Add a `.gitignore` to `tests/fixtures/buck/04-pure-python-sdist/` covering `buck-out/`, `third-party/python/BUCK`, `third-party/python/muntjac.bzl`, `third-party/python/wiring.bzl`, `third-party/python/config/`.
 - **Target:** Any time; bundle with T13's polish pass.
 
-#### Code-review subagent prompts don't run `cargo fmt --check`
-- **Source:** S5 post-tag CI failure (run 26335644662); same failure mode hit S4 (run 26296784343 → `style(s4): cargo fmt across emit.rs + string_writer.rs`).
-- **Severity:** Important (process)
-- **What:** The per-task code-quality reviewer prompts in `superpowers:subagent-driven-development` run `cargo clippy --all-targets -- -D warnings` and full `cargo test`, but never `cargo fmt --check`. CI's fmt-check step is the FIRST gate and fail-fast, so when it fails, every downstream step (clippy, build, test, both buck2 smokes) is skipped — masking the failure mode if you're only inspecting the green ✓ panes locally.
-- **Why it matters:** Two stages in a row (S4, S5) shipped + tagged + pushed, then immediately needed a post-tag `style(...): cargo fmt` cleanup commit. The tag's tree differs from what CI eventually green-stamps, which complicates "what does `s5-complete` actually represent" if anyone bisects against tags later.
-- **Fix:** Add `cargo fmt --check` to every code-quality reviewer's verification list (or, better, add it to a project-local pre-task verification checklist the controller runs before dispatching the implementer's commit-step). Also worth a local `git/hooks/pre-commit` running `cargo fmt --check`.
-- **Target:** S6 (before the next stage opens reviews).
+### From S6 final stage review (2026-05-23, pre-tag)
+
+#### TD-S6-01: Overlay genrule strips PEP 427 RECORD
+- **Source:** S6 spec §5.3; `src/buck/string_writer.rs` `pypi_package` overlay branch
+- **Severity:** Minor
+- **What:** The overlay genrule emits `zip -qrX ../$OUT . -x '*/RECORD'`, dropping the wheel's RECORD file. The resulting wheel passes Buck's `prebuilt_python_library` because Buck doesn't verify RECORD against entry hashes.
+- **Why:** Overlaying invalidates RECORD's `sha256=...` lines. Regenerating RECORD correctly requires walking the unpacked tree and rewriting `*.dist-info/RECORD`.
+- **Fix:** Add a small post-overlay step (script or built-in tool) that recomputes sha256/size for each entry under the unpacked dir and writes a fresh RECORD before the rezip.
+- **Target:** post-launch (when a downstream tool starts caring; PEP 427 doesn't *require* RECORD for installation to succeed)
+
+#### TD-S6-02: `entry_points = true` auto-discovery deferred
+- **Source:** S6 spec §1.2, §5.4; `src/fixup/schema.rs`, `src/buck/emit.rs` `EntryPointsAuto` error path
+- **Severity:** Minor
+- **What:** Shorthand `entry_points = true` parses successfully but errors at apply with the canonical message pointing to the explicit-list form.
+- **Why:** uv.lock doesn't carry entry-points metadata. Downloading wheels at buckify time would cut against buckify's no-network property.
+- **Fix:** Either (a) extend `muntjac vendor` to scrape `entry_points.txt` from each wheel into a manifest read by buckify, or (b) emit a Buck genrule that extracts entry-points metadata at build time. Option (a) is consistent with how S5's prebake manifest works for native-classification.
+- **Target:** post-launch
+
+#### TD-S6-03: `python_binary` entry-points hard-wired to `<pkg>.__main__`
+- **Source:** S6 spec §5.4; `src/buck/string_writer.rs` entry_points loop in `pypi_package` macro
+- **Severity:** Minor
+- **What:** Emitted `python_binary` rules use `main_module = importable + ".__main__"`. Entry points that map to a different `module:function` aren't supported.
+- **Why:** Mapping name → module:function requires reading wheel metadata (same blocker as TD-S6-02). The `__main__` convention covers most well-formed Python tools (ruff, black, pip, mypy, …).
+- **Fix:** When entry-points metadata becomes available (TD-S6-02), emit a small generated shim module per entry point that imports + invokes the right function.
+- **Target:** post-launch
+
+#### TD-S6-04: `build_emit_input` has 6 positional parameters
+- **Source:** S6 T18 added `abs_third_party_dir: Option<&Path>` to fix the overlay-walk relative-path bug found by the fixture test
+- **Severity:** Minor
+- **What:** `pub fn build_emit_input(config, tree, lockfile, manifest, fixups, abs_third_party_dir) -> Result<EmitInput>` — six positional args. Caller readability suffers at the cli/buckify.rs call site.
+- **Why:** The two `Option<&_>` arguments (`manifest`, `fixups`) and the awkward `Option<&Path>` (`abs_third_party_dir`) accumulated across S5+S6 without intermediate refactoring. Per [[feedback_pause_to_respec_on_pivot]]: T18 surfaced this as a side-effect of a bug-fix; the right pause-and-respec moment would have been mid-T18, but the bug was load-bearing and the simpler signature change unblocked the fixture.
+- **Fix:** Introduce a small `BuildEmitContext<'a>` (or similar) struct bundling `manifest`, `fixups`, `abs_third_party_dir`. The pure pipeline inputs (`config`, `tree`, `lockfile`) stay positional; the optional + caller-derived inputs move into the context.
+- **Target:** S7 or S8 (before community-registry adds a fourth optional)
+
+#### TD-S6-05: `05-local-fixup` fixture has dual personality
+- **Source:** S6 T18 → T21; `tests/fixtures/buck/05-local-fixup/`
+- **Severity:** Minor
+- **What:** T18 created the fixture against a synthetic `fake-pillow` that exercised every applied fixup field (extra/omit/replace/overlay/visibility/labels/runtime_env/entry_points + 2 cfg sections). T21 swapped it to a real `tomli==2.0.1` wheel so `buck2 build` could actually run the overlay genrule end-to-end in CI — but dropped `omit_deps`, `replace_deps`, `entry_points`, `runtime_env` because tomli has no transitives to omit/replace and no `__main__` to bind a python_binary against.
+- **Why:** Two constraints in tension: real-wheel buck2-build requires a package with the right shape (no unresolvable deps, no missing `__main__`), but exercising every fixup field requires a package with variety. Keeping one fixture means choosing one.
+- **Fix:** Split into two fixtures: `05a-local-fixup-snapshot` (synthetic, exercises every field for byte-snapshot only) and `05b-local-fixup-buck2` (real wheel, narrow field coverage, drives the CI buck2 smoke). Or: keep the current fixture for buck2 smoke and add per-field unit-test coverage in `src/buck/emit.rs::tests::` (most of which already exists from T12-T14 — verify completeness, fill gaps).
+- **Target:** S7 or S8 (low priority — the buck2 smoke catches the moat-critical overlay path; the dropped fields are covered by unit tests in `build_emit_input`)
+
+#### TD-S6-06: T20 was skipped (redundant with T19's snapshot+sanity asserts)
+- **Source:** S6 T20 planned `tests/fixups_smoke.rs` end-to-end smoke; skipped during execution per [[feedback_pause_to_respec_on_pivot]]
+- **Severity:** Polish
+- **What:** T19's `fixture_05_local_fixup_golden` test in `tests/buckify.rs` includes sanity assertions on `overlay_files`, `//third-party/c:libjpeg`, `:useless-transitive` absence (later updated to `//third-party/c:libjpeg` after T21's tomli swap). T20's plan was a second end-to-end smoke constructing inputs inline in a tempdir — strictly weaker coverage than T19.
+- **Why it matters:** Documenting the skip prevents a future planner from re-introducing the redundancy. The fixups-show command is already independently smoked by `tests/fixups_show_smoke.rs` (T17).
+- **Fix:** none — keep the smoke surface lean.
+- **Target:** n/a
 
 ---
 
@@ -218,3 +260,7 @@ similar issue surfaces.
 ### Tarjan SCC is recursive — could stack-overflow on adversarial input
 - **Resolved:** S4, commit `cfabbd4`
 - **Summary:** Converted `tarjan_scc` in `src/lock/graph.rs` to iterative form using an explicit `Vec<(node, edge_cursor)>` work stack. The recursive form actually overflowed at 5000 nodes on cargo's default 2MB test-thread stack — verified, this was a real bug, not just hardening. Algorithm output unchanged; existing graph tests pass. New stress test asserts a 5000-node linear chain processes without stack overflow.
+
+### Code-review subagent prompts don't run `cargo fmt --check`
+- **Resolved:** S5 cleanup, commit `6b71018` (`.claude/scripts/rust-precommit-gate.sh` + `.claude/settings.json`)
+- **Summary:** Added a project-local Claude Code `PreToolUse` hook on `Bash(git commit *)` that runs `cargo fmt --check` + `cargo clippy --all-targets -- -D warnings` and blocks the commit with a useful denial message on failure. S6 was the first stage to commit under this hook from start to finish — zero post-tag `style(...): cargo fmt` cleanups needed. The `.claude/` scope is documented in [[feedback_planning_cadence]].

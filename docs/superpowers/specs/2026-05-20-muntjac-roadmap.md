@@ -112,19 +112,21 @@ The credible-launch surface: numpy, pandas, fastapi, requests, ruff working end-
 
 ---
 
-### S6 — Local fixups
+### S6 — Local fixups ✅ shipped
 
-**Scope:** `FixupConfig` schema (serde-derived from the design spec §7). `cfg()` predicate parser + evaluator. Layering algorithm (local-only at this stage; registry comes in S7). Applied in the BUCK emitter.
+**Scope:** `FixupConfig` schema (serde-derived from the design spec §7). `cfg()` predicate parser + evaluator. Layering algorithm (local-only at this stage; registry comes in S7). Applied in the BUCK emitter. Overlay via http_file-mode genrule (decision recorded in the S6 spec §5.3).
 
 **Exit criteria:**
-- `04-local-fixup` fixture exercises `extra_deps`, `omit_deps`, `overlay`, `entry_points = true`, `visibility`.
-- `cfg()` predicates work for `version = "…"`, `target_os`, `target_arch`, `target_env`, plus `all`/`any`/`not`.
-- `muntjac fixups show <pkg>` prints the merged effective fixup (local-only at this stage).
-- Per-package fixup overlay is mounted into the wheel's unpacked directory in `vendor` mode (or via a generated overlay rule in http_file mode; one of these is decided in the S6 spec).
+- `05-local-fixup` fixture exercises `extra_deps`, `omit_deps`, `replace_deps`, `prefer_wheel`, `exclude_wheels`, `overlay`, explicit `entry_points`, `visibility`, `labels`, `runtime_env`, plus cfg sections (`target_os`, `all(version, python)`). `entry_points = true` parses but errors at apply per spec §1.2 ([[TD-S6-02]]).
+- `cfg()` predicates work for `version`, `python`, `target_os`, `target_arch`, `target_env`, plus `all`/`any`/`not`.
+- `muntjac fixups show <pkg>` prints the merged effective fixup as canonical TOML.
+- Per-package fixup overlay materializes via a generated `genrule(unzip → cp → zip -qrX)` in http_file mode (vendor-mode overlay deferred). `unzip`/`zip` required on PATH at Buck-build time.
 
-**Demo:** A fixture where `pillow` has a local fixup that omits a dep and adds an `extra_deps` pointing at a stub C library target.
+**Demo:** `tests/fixtures/buck/05-local-fixup/` overlays a marker module into `tomli==2.0.1`'s real PyPI wheel; CI runs `buck2 run //tests/smoke:overlay_demo` on ubuntu-latest and greps for `OVERLAY_APPLIED: True`. Synthetic-package coverage of the fields the real wheel can't exercise (`omit_deps`, `replace_deps`, `entry_points`, `runtime_env`) lives in `src/buck/emit.rs::tests::` unit tests.
 
-**Touches:** `src/fixup/schema.rs`, `src/fixup/cfg.rs`, `src/fixup/layer.rs`, emitter integration.
+**Touches:** `src/fixup/{schema,cfg,layer,loader,validate,overlay,error}.rs`, `src/buck/emit.rs`, `src/buck/string_writer.rs`, `src/cli/fixups.rs`, `src/cli/buckify.rs`, `tests/buckify.rs`, `tests/fixups_show_smoke.rs`, `.github/workflows/ci.yml`.
+
+**Shipped:** 25 commits (incl. design spec + plan); plan `docs/superpowers/plans/2026-05-23-muntjac-s6-local-fixups.md`; design `docs/superpowers/specs/2026-05-23-muntjac-s6-local-fixups-design.md`. Pre-tag follow-ups logged in `docs/superpowers/TECH_DEBT.md` (TD-S6-01..06).
 
 ---
 
