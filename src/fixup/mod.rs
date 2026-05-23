@@ -5,12 +5,14 @@ pub mod error;
 pub mod layer;
 pub mod loader;
 pub mod schema;
+pub mod validate;
 
 pub use cfg::{CfgContext, CfgPredicate, split_target_triple};
 pub use error::{CfgParseError, FixupError};
 pub use layer::{ResolvedFixup, resolve_for_cell};
 pub use loader::{FixupSet, load_local};
 pub use schema::{EntryPoints, FixupBody, FixupConfig, SdistFixup};
+pub use validate::is_valid_buck_target;
 
 #[cfg(test)]
 mod smoke_tests {
