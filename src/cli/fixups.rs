@@ -47,6 +47,7 @@ fn show(package: String, globals: &Globals) -> Result<()> {
         &config.fixups.registry,
         &third_party_dir,
         config.fixups.allow_local_overrides,
+        globals.no_network,
     )
     .with_context(|| format!("loading layered fixups for tree '{}'", tree.name))?;
 

@@ -54,6 +54,7 @@ pub fn run(globals: &Globals) -> Result<()> {
             &config.fixups.registry,
             &third_party_dir,
             config.fixups.allow_local_overrides,
+            globals.no_network,
         )
         .with_context(|| format!("loading fixups for tree '{}'", tree.name))?;
 

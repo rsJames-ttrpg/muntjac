@@ -128,22 +128,25 @@ impl EffectiveFixups {
     ///
     /// - `RegistryConfig::None`        → community is empty.
     /// - `RegistryConfig::FileUrl(p)`  → community loaded from `<p>/packages/`.
-    /// - `RegistryConfig::Git { .. }`  → community is empty placeholder (S7b T8 implements).
+    /// - `RegistryConfig::Git { url, rev }` → calls `fetch_into_cache(url, rev, offline)`
+    ///   to obtain a local working tree, then loads community from that tree.
+    ///   When `offline=true`, the fetch skips network access and uses any cached
+    ///   copy (failing if none exists).
     /// - `allow_local_overrides=false` → local is empty regardless of disk state.
     pub fn load(
         registry: &crate::fixup::RegistryConfig,
         third_party_dir: &std::path::Path,
         allow_local_overrides: bool,
+        offline: bool,
     ) -> Result<Self, crate::fixup::FixupError> {
         let community = match registry {
             crate::fixup::RegistryConfig::None => FixupSet::default(),
             crate::fixup::RegistryConfig::FileUrl(registry_dir) => {
                 crate::fixup::load_community(registry_dir)?
             }
-            crate::fixup::RegistryConfig::Git { .. } => {
-                // S7b T8 will implement the git arm; for now return empty
-                // community (unreachable in production until T8).
-                FixupSet::default()
+            crate::fixup::RegistryConfig::Git { url, rev } => {
+                let resolved = crate::fixup::fetch_into_cache(url, rev.as_deref(), offline)?;
+                crate::fixup::load_community(&resolved.working_tree)?
             }
         };
 
@@ -188,6 +191,8 @@ mod tests {
     use crate::fixup::cfg::CfgContext;
     use pep440_rs::Version;
     use std::str::FromStr;
+
+    static ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn empty_ctx() -> (Version, Version) {
         (
@@ -700,8 +705,8 @@ mod tests {
         use crate::fixup::RegistryConfig;
         use tempfile::TempDir;
         let tmp = TempDir::new().unwrap();
-        let eff =
-            super::EffectiveFixups::load(&RegistryConfig::None, tmp.path(), true).expect("loads");
+        let eff = super::EffectiveFixups::load(&RegistryConfig::None, tmp.path(), true, false)
+            .expect("loads");
         assert!(eff.community.is_empty());
         assert!(eff.local.is_empty()); // no fixups/ subdir
     }
@@ -723,7 +728,7 @@ mod tests {
         std::fs::create_dir_all(&tpd).unwrap();
 
         let registry = RegistryConfig::FileUrl(registry_dir);
-        let eff = super::EffectiveFixups::load(&registry, &tpd, true).expect("loads");
+        let eff = super::EffectiveFixups::load(&registry, &tpd, true, false).expect("loads");
         let pillow = pep508_rs::PackageName::from_str("pillow").unwrap();
         assert!(eff.community.get(&pillow).is_some());
     }
@@ -735,7 +740,7 @@ mod tests {
 
         let tmp = TempDir::new().unwrap();
         let registry = RegistryConfig::FileUrl(tmp.path().to_path_buf());
-        let err = super::EffectiveFixups::load(&registry, tmp.path(), true).unwrap_err();
+        let err = super::EffectiveFixups::load(&registry, tmp.path(), true, false).unwrap_err();
         match err {
             crate::fixup::FixupError::RegistryPathNotFound { .. } => {}
             other => panic!("expected RegistryPathNotFound, got {:?}", other),
@@ -756,7 +761,86 @@ mod tests {
         )
         .unwrap();
 
-        let eff = super::EffectiveFixups::load(&RegistryConfig::None, &tpd, false).expect("loads");
+        let eff =
+            super::EffectiveFixups::load(&RegistryConfig::None, &tpd, false, false).expect("loads");
         assert!(eff.local.is_empty());
+    }
+
+    #[test]
+    fn effective_fixups_load_git_fetches_from_bare_repo() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+
+        let _g = ENV_GUARD.lock().unwrap();
+        let cache_tmp = TempDir::new().unwrap();
+        unsafe {
+            std::env::set_var("MUNTJAC_CACHE_HOME", cache_tmp.path());
+        }
+
+        let src_tmp = TempDir::new().unwrap();
+        let src = src_tmp.path();
+        std::fs::create_dir_all(src.join("packages/pkg-a")).unwrap();
+        std::fs::write(
+            src.join("packages/pkg-a/fixups.toml"),
+            "extra_deps = [\"//x:y\"]\n",
+        )
+        .unwrap();
+
+        let bare_tmp = TempDir::new().unwrap();
+        let bare = bare_tmp.path().join("registry.git");
+
+        // Inline bare-repo construction (same shape as the helper in tests/common/git_fixture.rs).
+        let work = TempDir::new().unwrap();
+        for entry in walkdir::WalkDir::new(src) {
+            let entry = entry.unwrap();
+            let rel = entry.path().strip_prefix(src).unwrap();
+            let dst = work.path().join(rel);
+            if entry.file_type().is_dir() {
+                std::fs::create_dir_all(&dst).unwrap();
+            } else if entry.file_type().is_file() {
+                if let Some(p) = dst.parent() {
+                    std::fs::create_dir_all(p).unwrap();
+                }
+                std::fs::copy(entry.path(), &dst).unwrap();
+            }
+        }
+        let run_git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(work.path())
+                .env("GIT_AUTHOR_NAME", "muntjac-test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_AUTHOR_DATE", "1970-01-01T00:00:00Z")
+                .env("GIT_COMMITTER_NAME", "muntjac-test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_DATE", "1970-01-01T00:00:00Z")
+                .output()
+                .unwrap()
+        };
+        assert!(run_git(&["init", "-q", "-b", "main"]).status.success());
+        assert!(run_git(&["add", "-A"]).status.success());
+        assert!(run_git(&["commit", "-q", "-m", "initial"]).status.success());
+        assert!(
+            run_git(&["clone", "-q", "--bare", ".", bare.to_str().unwrap()])
+                .status
+                .success()
+        );
+
+        let url = format!("file://{}", bare.display());
+        let registry = RegistryConfig::Git {
+            url: url.clone(),
+            rev: None,
+        };
+
+        let tpd_tmp = TempDir::new().unwrap();
+        let eff = super::EffectiveFixups::load(&registry, tpd_tmp.path(), true, false)
+            .expect("loads via git arm");
+
+        let pkg_a = pep508_rs::PackageName::from_str("pkg-a").unwrap();
+        assert!(eff.community.get(&pkg_a).is_some());
+
+        unsafe {
+            std::env::remove_var("MUNTJAC_CACHE_HOME");
+        }
     }
 }
