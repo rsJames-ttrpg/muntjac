@@ -24,6 +24,11 @@ pub enum ConfigError {
     )]
     BadRegistry(String),
 
+    #[error(
+        "registry path must be absolute (got `{path}`); use a full file:// URL or set registry to a path relative to muntjac.toml"
+    )]
+    RegistryPathNotAbsolute { path: String },
+
     #[error("invalid dependency-group name `{0}`: must match [a-z][a-z0-9-]*")]
     BadGroupName(String),
 }
@@ -104,6 +109,17 @@ fn fmt_cycle(cycles: &Vec<Vec<String>>, f: &mut std::fmt::Formatter<'_>) -> std:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registry_path_not_absolute_message_is_exact() {
+        let e = ConfigError::RegistryPathNotAbsolute {
+            path: "./registry".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "registry path must be absolute (got `./registry`); use a full file:// URL or set registry to a path relative to muntjac.toml"
+        );
+    }
 
     #[test]
     fn lockfile_error_messages_include_context() {
