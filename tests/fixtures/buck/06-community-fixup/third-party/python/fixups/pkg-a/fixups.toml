@@ -1,0 +1,4 @@
+extra_deps = ["//local:base"]
+
+["cfg(target_arch = \"x86_64\")"]
+extra_deps = ["//local:x86-only"]

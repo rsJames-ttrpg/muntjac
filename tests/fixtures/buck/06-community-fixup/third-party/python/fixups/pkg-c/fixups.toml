@@ -1,0 +1,2 @@
+extra_deps = ["//local:c-base"]
+entry_points = ["pkg-c"]
