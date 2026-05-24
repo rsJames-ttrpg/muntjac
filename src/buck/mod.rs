@@ -8,7 +8,8 @@ pub mod string_writer;
 pub mod write;
 
 pub use emit::{
-    BuckEmitter, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel, build_emit_input,
+    BuckEmitter, BuildEmitContext, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel,
+    build_emit_input,
 };
 pub use string_writer::StringTemplateEmitter;
 pub use write::write_outputs;

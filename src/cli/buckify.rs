@@ -6,7 +6,9 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result};
 
-use crate::buck::{BuckEmitter, StringTemplateEmitter, build_emit_input, write_outputs};
+use crate::buck::{
+    BuckEmitter, BuildEmitContext, StringTemplateEmitter, build_emit_input, write_outputs,
+};
 use crate::cli::Globals;
 use crate::config::Config;
 use crate::lock;
@@ -51,9 +53,11 @@ pub fn run(globals: &Globals) -> Result<()> {
             &config,
             tree,
             &lockfile,
-            manifest.as_ref(),
-            Some(&fixups),
-            Some(&third_party_dir),
+            &BuildEmitContext {
+                manifest: manifest.as_ref(),
+                fixups: Some(&fixups),
+                abs_third_party_dir: Some(&third_party_dir),
+            },
         )?;
         let output = emitter.emit(&input);
 
