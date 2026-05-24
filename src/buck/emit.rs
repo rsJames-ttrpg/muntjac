@@ -112,8 +112,8 @@ pub trait BuckEmitter {
 pub struct BuildEmitContext<'a> {
     /// S5: prebake manifest for sdist routing. `None` when no manifest exists.
     pub manifest: Option<&'a crate::sdist::Manifest>,
-    /// S6 (will be swapped to EffectiveFixups in T13): fixup set.
-    pub fixups: Option<&'a crate::fixup::FixupSet>,
+    /// S7a: layered fixups (community + local) exposed as a single facade.
+    pub fixups: Option<&'a crate::fixup::EffectiveFixups>,
     /// Absolute path to the resolved `third_party_dir` for overlay walk
     /// and other filesystem ops.
     pub abs_third_party_dir: Option<&'a std::path::Path>,
@@ -144,8 +144,8 @@ pub fn build_emit_input(
     let manifest = ctx.manifest;
     let fixups = ctx.fixups;
     let abs_third_party_dir = ctx.abs_third_party_dir;
+    use crate::fixup::CfgContext;
     use crate::fixup::cfg::split_target_triple;
-    use crate::fixup::{CfgContext, resolve_for_cell};
     use pep440_rs::Version as PepVersion;
 
     let graph = crate::lock::graph::build(lockfile)?;
@@ -203,9 +203,8 @@ pub fn build_emit_input(
             let wheels = wheel_index.get(&key).copied().unwrap_or(&[]);
 
             // Resolve fixup for (pkg, cell). None if no fixup configured.
-            let resolved_fixup: Option<crate::fixup::ResolvedFixup> = fixups.and_then(|fs| {
+            let resolved_fixup: Option<crate::fixup::ResolvedFixup> = fixups.and_then(|eff| {
                 let name = pep508_rs::PackageName::from_str(&pkg.name).ok()?;
-                let cfg = fs.get(&name)?;
                 let pkg_ver = PepVersion::from_str(&pkg.version).ok()?;
                 let py_ver = PepVersion::from_str(&resolved_cfg.python_version).ok()?;
                 let ctx = CfgContext {
@@ -215,7 +214,14 @@ pub fn build_emit_input(
                     target_arch: &arch,
                     target_env: &env,
                 };
-                Some(resolve_for_cell(cfg, &ctx))
+                // Preserve "no fixup at all" semantics: only Some when at
+                // least one layer has the package. Default ResolvedFixup
+                // would otherwise exercise downstream apply branches.
+                if eff.community.get(&name).is_none() && eff.local.get(&name).is_none() {
+                    None
+                } else {
+                    Some(eff.resolve(&name, &ctx))
+                }
             });
 
             // Apply fixup wheel-side ops (exclude_wheels filter + prefer_wheel override).
@@ -435,9 +441,14 @@ pub fn build_emit_input(
         // S6: per-package fields (visibility/labels/entry_points/overlay/runtime_env)
         // are cell-independent at the top level. Resolve from the FIRST cell so
         // top-level body survives; cfg-section firing reflects ONE valid view.
-        let first_cell_rf: Option<crate::fixup::ResolvedFixup> = if let Some(fs) = fixups {
+        let first_cell_rf: Option<crate::fixup::ResolvedFixup> = if let Some(eff) = fixups {
             let pkg_name = pep508_rs::PackageName::from_str(&key.0).ok();
-            pkg_name.and_then(|n| fs.get(&n)).map(|fc| {
+            pkg_name.and_then(|n| {
+                // Preserve "no fixup at all" semantics: skip when neither
+                // layer has this package.
+                if eff.community.get(&n).is_none() && eff.local.get(&n).is_none() {
+                    return None;
+                }
                 let first_cfg = &configs[0];
                 let s_cfg = first_cfg.as_str();
                 // "py312-linux-x86_64-gnu" -> ("py312", "linux-x86_64-gnu")
@@ -463,7 +474,7 @@ pub fn build_emit_input(
                     target_arch: &arch,
                     target_env: &env,
                 };
-                crate::fixup::resolve_for_cell(fc, &ctx)
+                Some(eff.resolve(&n, &ctx))
             })
         } else {
             None
@@ -1542,6 +1553,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let input = build_emit_input(
             &config,
@@ -1549,7 +1564,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1566,6 +1581,143 @@ manylinux = "2_17"
             }
             other => panic!("expected Uniform, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn build_emit_input_applies_community_and_local_extra_deps() {
+        use crate::config::{Config, Platform, PythonVersion, Tree};
+        use crate::fixup::schema::{FixupBody, FixupConfig};
+        use crate::fixup::{EffectiveFixups, FixupSet};
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let tree = Tree {
+            name: "default".into(),
+            manifest_path: "pyproject.toml".into(),
+            third_party_dir: "third-party/python".into(),
+            python_versions: vec![PythonVersion(3, 12)],
+        };
+        let mut platforms = std::collections::BTreeMap::new();
+        platforms.insert(
+            "linux-x86_64-gnu".into(),
+            Platform {
+                target: "x86_64-unknown-linux-gnu".into(),
+                manylinux: Some("2_17".into()),
+                musllinux: None,
+                macos_min: None,
+            },
+        );
+        let config = Config {
+            trees: vec![tree.clone()],
+            platforms,
+            fixups: Default::default(),
+            buck: Default::default(),
+            lockfile: Default::default(),
+        };
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 3,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("app").unwrap(),
+                    version: Version::from_str("0.1").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("pkg-a").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                },
+                Package {
+                    name: PackageName::from_str("pkg-a").unwrap(),
+                    version: Version::from_str("1.0.0").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    dependencies: vec![],
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse("https://files.pythonhosted.org/p/pkg-a-1.0.0.whl")
+                            .unwrap(),
+                        hash: "sha256:abc".into(),
+                        size: None,
+                        filename: "pkg_a-1.0.0-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                },
+            ],
+        };
+
+        let pkg_name = PackageName::from_str("pkg-a").unwrap();
+
+        let mut comm_map = std::collections::BTreeMap::new();
+        comm_map.insert(
+            pkg_name.clone(),
+            FixupConfig {
+                top: FixupBody {
+                    extra_deps: vec!["//c:base".into()],
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+                replace_community: false,
+            },
+        );
+
+        let mut loc_map = std::collections::BTreeMap::new();
+        loc_map.insert(
+            pkg_name.clone(),
+            FixupConfig {
+                top: FixupBody {
+                    extra_deps: vec!["//l:base".into()],
+                    ..Default::default()
+                },
+                cfg_sections: vec![],
+                replace_community: false,
+            },
+        );
+
+        let eff = EffectiveFixups {
+            community: FixupSet::from_map_for_test(comm_map),
+            local: FixupSet::from_map_for_test(loc_map),
+        };
+
+        let input = build_emit_input(
+            &config,
+            &tree,
+            &lockfile,
+            &BuildEmitContext {
+                manifest: None,
+                fixups: Some(&eff),
+                abs_third_party_dir: None,
+            },
+        )
+        .expect("build_emit_input succeeds");
+
+        let pkg_a = input
+            .packages
+            .iter()
+            .find(|p| p.name == "pkg-a")
+            .expect("pkg-a emitted");
+        let deps_str = format!("{:?}", pkg_a.deps);
+        assert!(
+            deps_str.contains("//c:base"),
+            "expected //c:base in {}",
+            deps_str
+        );
+        assert!(
+            deps_str.contains("//l:base"),
+            "expected //l:base in {}",
+            deps_str
+        );
     }
 
     #[test]
@@ -1666,6 +1818,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let input = build_emit_input(
             &config,
@@ -1673,7 +1829,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1799,6 +1955,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let err = build_emit_input(
             &config,
@@ -1806,7 +1966,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1844,6 +2004,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let err = build_emit_input(
             &config,
@@ -1851,7 +2015,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1891,6 +2055,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let input = build_emit_input(
             &config,
@@ -1898,7 +2066,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1943,6 +2111,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let input = build_emit_input(
             &config,
@@ -1950,7 +2122,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -1986,6 +2158,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let err = build_emit_input(
             &config,
@@ -1993,7 +2169,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -2027,6 +2203,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let err = build_emit_input(
             &config,
@@ -2034,7 +2214,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )
@@ -2153,6 +2333,10 @@ manylinux = "2_17"
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
+        let eff = crate::fixup::EffectiveFixups {
+            community: crate::fixup::FixupSet::default(),
+            local: fixups,
+        };
 
         let input = build_emit_input(
             &config,
@@ -2160,7 +2344,7 @@ manylinux = "2_17"
             &lockfile,
             &BuildEmitContext {
                 manifest: None,
-                fixups: Some(&fixups),
+                fixups: Some(&eff),
                 abs_third_party_dir: None,
             },
         )

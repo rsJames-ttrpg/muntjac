@@ -47,8 +47,16 @@ pub fn run(globals: &Globals) -> Result<()> {
             None
         };
 
-        let fixups = crate::fixup::load_local(&third_party_dir)
-            .with_context(|| format!("loading fixups under {}", third_party_dir.display()))?;
+        let canonical_third_party_dir =
+            std::fs::canonicalize(&third_party_dir).unwrap_or_else(|_| third_party_dir.clone());
+
+        let fixups = crate::fixup::EffectiveFixups::load(
+            &config.fixups.registry,
+            &third_party_dir,
+            config.fixups.allow_local_overrides,
+        )
+        .with_context(|| format!("loading fixups for tree '{}'", tree.name))?;
+
         let input = build_emit_input(
             &config,
             tree,
@@ -56,7 +64,7 @@ pub fn run(globals: &Globals) -> Result<()> {
             &BuildEmitContext {
                 manifest: manifest.as_ref(),
                 fixups: Some(&fixups),
-                abs_third_party_dir: Some(&third_party_dir),
+                abs_third_party_dir: Some(&canonical_third_party_dir),
             },
         )?;
         let output = emitter.emit(&input);
