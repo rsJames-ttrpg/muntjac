@@ -1,3 +1,6 @@
+#![allow(dead_code)] // each test binary uses a subset
+pub mod git_fixture;
+
 use assert_cmd::cargo::CommandCargoExt;
 use std::process::Command;
 
