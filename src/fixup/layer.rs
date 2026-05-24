@@ -123,6 +123,39 @@ pub struct EffectiveFixups {
 }
 
 impl EffectiveFixups {
+    /// Load both layers per the registry configuration and the
+    /// `allow_local_overrides` flag.
+    ///
+    /// - `RegistryConfig::None`        → community is empty.
+    /// - `RegistryConfig::FileUrl(p)`  → community loaded from `<p>/packages/`.
+    /// - `RegistryConfig::Git { .. }`  → errors with `GitRegistryNotImplemented` (S7b implements).
+    /// - `allow_local_overrides=false` → local is empty regardless of disk state.
+    pub fn load(
+        registry: &crate::fixup::RegistryConfig,
+        third_party_dir: &std::path::Path,
+        allow_local_overrides: bool,
+    ) -> Result<Self, crate::fixup::FixupError> {
+        let community = match registry {
+            crate::fixup::RegistryConfig::None => FixupSet::default(),
+            crate::fixup::RegistryConfig::FileUrl(registry_dir) => {
+                crate::fixup::load_community(registry_dir)?
+            }
+            crate::fixup::RegistryConfig::Git { url, .. } => {
+                return Err(crate::fixup::FixupError::GitRegistryNotImplemented {
+                    registry: url.clone(),
+                });
+            }
+        };
+
+        let local = if allow_local_overrides {
+            crate::fixup::load_local(third_party_dir)?
+        } else {
+            FixupSet::default()
+        };
+
+        Ok(Self { community, local })
+    }
+
     /// Resolve a package's fixup for one cell. Always returns a
     /// `ResolvedFixup` — default if neither layer has the package.
     ///
@@ -660,5 +693,89 @@ mod tests {
         let rf = eff.resolve(&pkg, &ctx_linux());
         assert!(rf.extra_deps.is_empty());
         assert!(rf.overlay.is_none());
+    }
+
+    #[test]
+    fn effective_fixups_load_none_yields_empty_community() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let eff =
+            super::EffectiveFixups::load(&RegistryConfig::None, tmp.path(), true).expect("loads");
+        assert!(eff.community.is_empty());
+        assert!(eff.local.is_empty()); // no fixups/ subdir
+    }
+
+    #[test]
+    fn effective_fixups_load_file_url_walks_packages() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let registry_dir = tmp.path().join("registry");
+        let tpd = tmp.path().join("third-party/python");
+        std::fs::create_dir_all(registry_dir.join("packages/pillow")).unwrap();
+        std::fs::write(
+            registry_dir.join("packages/pillow/fixups.toml"),
+            r#"extra_deps = ["//c:libjpeg"]"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(&tpd).unwrap();
+
+        let registry = RegistryConfig::FileUrl(registry_dir);
+        let eff = super::EffectiveFixups::load(&registry, &tpd, true).expect("loads");
+        let pillow = pep508_rs::PackageName::from_str("pillow").unwrap();
+        assert!(eff.community.get(&pillow).is_some());
+    }
+
+    #[test]
+    fn effective_fixups_load_file_url_missing_packages_errors() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let registry = RegistryConfig::FileUrl(tmp.path().to_path_buf());
+        let err = super::EffectiveFixups::load(&registry, tmp.path(), true).unwrap_err();
+        match err {
+            crate::fixup::FixupError::RegistryPathNotFound { .. } => {}
+            other => panic!("expected RegistryPathNotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn effective_fixups_load_git_errors_in_s7a() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let registry = RegistryConfig::Git {
+            url: "github.com/x/y".into(),
+            rev: None,
+        };
+        let err = super::EffectiveFixups::load(&registry, tmp.path(), true).unwrap_err();
+        match err {
+            crate::fixup::FixupError::GitRegistryNotImplemented { registry } => {
+                assert_eq!(registry, "github.com/x/y");
+            }
+            other => panic!("expected GitRegistryNotImplemented, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn effective_fixups_load_allow_local_overrides_false_skips_local() {
+        use crate::fixup::RegistryConfig;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let tpd = tmp.path().join("third-party/python");
+        std::fs::create_dir_all(tpd.join("fixups/pillow")).unwrap();
+        std::fs::write(
+            tpd.join("fixups/pillow/fixups.toml"),
+            r#"extra_deps = ["//local:pillow"]"#,
+        )
+        .unwrap();
+
+        let eff = super::EffectiveFixups::load(&RegistryConfig::None, &tpd, false).expect("loads");
+        assert!(eff.local.is_empty());
     }
 }
