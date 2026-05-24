@@ -132,17 +132,35 @@ The credible-launch surface: numpy, pandas, fastapi, requests, ruff working end-
 
 ### S7 — Community fixup registry
 
-**Scope:** Registry git fetch via `gix`. Cache at `~/.cache/muntjac/fixups/<sha>/`. Community ⊕ local layering. `muntjac fixups update` / `muntjac fixups show`. `replace_community = true` escape hatch. Air-gapped modes (`registry = "none"`, `registry = "file://…"`).
+Decomposed into two sub-stages during the S7a brainstorm (split rationale: capability boundary — layering is independently demoable without git fetch).
+
+#### S7a — Community layering (no-network registry modes)
+
+**Scope:** `RegistryConfig` typed enum (`None`/`FileUrl`/`Git`). Community ⊕ local layering via per-layer-then-merge algorithm. `replace_community = true` escape hatch. `allow_local_overrides = false` toggle. `muntjac fixups show <pkg>` layered output. `BuildEmitContext<'a>` refactor (TD-S6-04). Air-gapped modes only: `registry = "none"`, `registry = "file://…"`. Git fetch defers to S7b.
+
+**Exit criteria:**
+- Three new fixtures (`06-community-fixup`, `07-allow-local-overrides-false`, `08-replace-community`) snapshot-test the layering algorithm.
+- `EffectiveFixups::resolve` correctly produces per-cell merged fixups across layers.
+- `replace_community = true` on local drops the community layer for that package.
+- `allow_local_overrides = false` skips loading local fixups.
+- `muntjac fixups show <pkg>` prints labeled community + local blocks.
+
+**Demo:** Synthetic-package fixture with a vendored-style registry directory at `tests/fixtures/buck/06-community-fixup/registry/packages/<pkg>/fixups.toml` plus local fixups; snapshot diff proves correct layered output.
+
+**Touches:** `src/fixup/{registry,layer,loader,schema,error}.rs`, `src/buck/emit.rs`, `src/cli/{buckify,fixups,init}.rs`, `src/config.rs`, `tests/fixtures/buck/{06,07,08}-*/`.
+
+#### S7b — Git fetch & cache
+
+**Scope:** `gix` dependency. `~/.cache/muntjac/fixups/<sha>/` content-addressed cache. `muntjac fixups update` command with structured diff output. `--offline` integration test. S5's symlink-traversal hardening (re-targeted from S5 TECH_DEBT).
 
 **Exit criteria:**
 - `muntjac fixups update` fetches the pinned registry, caches by git sha, prints a structured diff of fixup changes.
-- `05-community-fixup` fixture exercises layered fixups (community sets X, local overrides Y).
-- `replace_community = true` correctly disables the community fixup.
-- Air-gapped modes work in tests with no network access (verified by an `--offline` integration test).
+- `RegistryConfig::Git { url, rev }` mode produces correct buckify output (functionally equivalent to S7a's `file://` mode pointing at the cached checkout).
+- `--offline` integration test confirms no network access when pin is cached; errors with `OfflineButCacheMiss` if pin is not cached.
 
 **Demo:** From a fresh checkout, `muntjac fixups update` then `muntjac buckify` produces a BUCK that incorporates community fixups for the test corpus.
 
-**Touches:** `src/fixup/registry.rs`, `src/cache.rs`, `src/cli/fixups.rs`.
+**Touches:** `src/fixup/registry.rs` (extends S7a), `src/cache.rs` (NEW), `src/cli/fixups.rs` (`update` subcommand), `Cargo.toml` (gix dep).
 
 ---
 
@@ -203,7 +221,10 @@ Not blocking v0.1.0; sequenced once Phase 1 has shipped and feedback is in hand.
                        S6 (local fixups)
                                │
                                ▼
-                  S7 (community fixup registry)
+                  S7a (community layering, no-network)
+                               │
+                               ▼
+                  S7b (git fetch + cache + fixups update)
                                │
                                ▼
                   S8 (launch polish + v0.1.0)
@@ -236,9 +257,10 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S3 | [2026-05-21-muntjac-s3-buck-emitter-design.md](./2026-05-21-muntjac-s3-buck-emitter-design.md) | [2026-05-21-muntjac-s3-buck-emitter.md](../plans/2026-05-21-muntjac-s3-buck-emitter.md) | ✅ shipped (tag `s3-complete`, 21 commits, 145 tests) |
 | S4 | [2026-05-21-muntjac-s4-multiplatform-design.md](./2026-05-21-muntjac-s4-multiplatform-design.md) | [2026-05-21-muntjac-s4-multiplatform.md](../plans/2026-05-21-muntjac-s4-multiplatform.md) | ✅ shipped (tag `s4-complete`, 31 commits, 158 tests) |
 | S5 | [2026-05-22-muntjac-s5-sdist-prebake-design.md](./2026-05-22-muntjac-s5-sdist-prebake-design.md) | [2026-05-22-muntjac-s5-sdist-prebake.md](../plans/2026-05-22-muntjac-s5-sdist-prebake.md) | ✅ shipped (tag `s5-complete`, 18 commits, 190 tests) |
-| S6 | (not yet written) | (not yet written) | ⬜ next |
-| S7 | (not yet written) | (not yet written) | ⬜ blocked on S6 |
-| S8 | (not yet written) | (not yet written) | ⬜ blocked on S7 |
+| S6 | [2026-05-23-muntjac-s6-local-fixups-design.md](./2026-05-23-muntjac-s6-local-fixups-design.md) | [2026-05-23-muntjac-s6-local-fixups.md](../plans/2026-05-23-muntjac-s6-local-fixups.md) | ✅ shipped (tag `s6-complete`, 28 commits, 262 tests) |
+| S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | (not yet written) | ⬜ next |
+| S7b | (not yet written) | (not yet written) | ⬜ blocked on S7a |
+| S8 | (not yet written) | (not yet written) | ⬜ blocked on S7b |
 
 ---
 
