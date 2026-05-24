@@ -189,6 +189,25 @@ similar issue surfaces.
 - **Fix:** none — keep the smoke surface lean.
 - **Target:** n/a
 
+### From S7a final stage review (2026-05-24, post-tag)
+
+#### TD-S7a-01: `prebake/.gitignore = "*"` pattern requires per-file `git add -f`
+- **Source:** S7a CI break on tag commit (run `26368444720`); fixture 08's prebake stubs absent from the push, buckify errored, `fixture_08_replace_community_golden` failed `status.success()`. Fixed in commit `e4f0c42` by force-adding the three prebake files.
+- **Severity:** Minor (caught by CI on first push; just a re-push cycle)
+- **What:** Each new fixture's `third-party/python/prebake/.gitignore` contains a single `*`, which excludes everything in the directory. The convention is then to `git add -f <each committed file>` individually. Easy to skip a file silently — the local working tree shows the file present, `git status` shows nothing, but the file isn't tracked. This bit fixtures 04, 05 (S5/S6 era) before the convention was understood, and bit fixture 08 again in S7a.
+- **Why it matters:** Brittle and discoverable only via CI failure. Repeats once per fixture; the bigger the corpus, the more failure-prone.
+- **Fix:** Replace `*` with a pattern that allow-lists known committed artifacts and ignore-lists the volatile ones. Example:
+  ```
+  # Ignore everything by default, allow-list the committed stubs + manifest:
+  *
+  !.gitignore
+  !.manifest.toml
+  !*.whl
+  !*.tar.gz
+  ```
+  Or just commit the prebake files directly with no `.gitignore` at all — the prebake subdir intent is "this is the committed test corpus", not "muntjac-generated."
+- **Target:** Any time; bundle with the next fixture-adding stage (S7b's `06-git-registry-cached/` or similar) so the convention is established before another mistake.
+
 ---
 
 ## Resolved
