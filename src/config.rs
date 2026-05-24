@@ -844,4 +844,54 @@ python_versions = ["3.12"]
         };
         assert_eq!(p_mac.macos_min_parsed(), Some((11, 0)));
     }
+
+    #[test]
+    fn registry_rev_with_none_registry_parses_ok() {
+        // This invocation triggers the stderr warning (we can't easily
+        // capture it in-process; assert behavior: parse succeeds, value
+        // is preserved on the struct).
+        let toml = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[fixups]
+registry = "none"
+registry_rev = "abc123"
+"#;
+        let config = Config::from_str(toml).expect("parse");
+        use crate::fixup::RegistryConfig;
+        assert_eq!(config.fixups.registry, RegistryConfig::None);
+        assert_eq!(config.fixups.registry_rev.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn registry_rev_with_git_registry_no_warning() {
+        let toml = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[fixups]
+registry = "github.com/o/r"
+registry_rev = "abc123"
+"#;
+        let config = Config::from_str(toml).expect("parse");
+        use crate::fixup::RegistryConfig;
+        match &config.fixups.registry {
+            RegistryConfig::Git { url, rev } => {
+                assert_eq!(url, "github.com/o/r");
+                assert_eq!(rev.as_deref(), Some("abc123"));
+            }
+            other => panic!("expected Git, got {:?}", other),
+        }
+    }
 }
