@@ -385,3 +385,153 @@ fn fixture_10_determinism_two_runs_byte_identical() {
         assert_eq!(bytes_a, bytes_b, "{} differs across runs", rel);
     }
 }
+
+fn build_bare_repo_inline(source_dir: &std::path::Path, bare_dest: &std::path::Path) -> String {
+    use std::process::Command;
+    let work = tempfile::TempDir::new().unwrap();
+    for entry in walkdir::WalkDir::new(source_dir) {
+        let entry = entry.unwrap();
+        let rel = entry.path().strip_prefix(source_dir).unwrap();
+        let dst = work.path().join(rel);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&dst).unwrap();
+        } else if entry.file_type().is_file() {
+            if let Some(p) = dst.parent() {
+                std::fs::create_dir_all(p).unwrap();
+            }
+            std::fs::copy(entry.path(), &dst).unwrap();
+        }
+    }
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(work.path())
+            .env("GIT_AUTHOR_NAME", "muntjac-test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_AUTHOR_DATE", "1970-01-01T00:00:00Z")
+            .env("GIT_COMMITTER_NAME", "muntjac-test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_DATE", "1970-01-01T00:00:00Z")
+            .output()
+            .unwrap()
+    };
+    assert!(git(&["init", "-q", "-b", "main"]).status.success());
+    assert!(git(&["add", "-A"]).status.success());
+    assert!(git(&["commit", "-q", "-m", "initial"]).status.success());
+    let sha = String::from_utf8(git(&["rev-parse", "HEAD"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    assert!(
+        git(&["clone", "-q", "--bare", ".", bare_dest.to_str().unwrap()])
+            .status
+            .success()
+    );
+    sha
+}
+
+#[test]
+fn fixture_11_git_registry_golden() {
+    let fixture_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/buck/09-git-registry");
+    let tmp = tempfile::TempDir::new().unwrap();
+    copy_fixture_to(&fixture_src, tmp.path());
+
+    // Build the bare repo at the placeholder location.
+    let bare_path = tmp.path().join("registry.git");
+    let sha = build_bare_repo_inline(&tmp.path().join("registry-source"), &bare_path);
+
+    // Substitute placeholders in muntjac.toml.
+    let muntjac_toml_path = tmp.path().join("muntjac.toml");
+    let mut bytes = std::fs::read_to_string(&muntjac_toml_path).unwrap();
+    bytes = bytes.replace(
+        "/REPLACED_AT_TEST_TIME/registry.git",
+        &bare_path.display().to_string(),
+    );
+    bytes = bytes.replace(
+        "registry_rev = \"REPLACED_AT_TEST_TIME\"",
+        &format!("registry_rev = \"{}\"", sha),
+    );
+    std::fs::write(&muntjac_toml_path, bytes).unwrap();
+
+    // Isolate the cache.
+    let cache_home = tmp.path().join("cache");
+    std::fs::create_dir_all(&cache_home).unwrap();
+
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_muntjac"))
+        .env("MUNTJAC_CACHE_HOME", &cache_home)
+        .args(["-C", tmp.path().to_str().unwrap(), "buckify"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let generated = std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
+    let expected = std::fs::read_to_string(fixture_src.join("expected/BUCK")).unwrap();
+    assert_eq!(generated, expected, "BUCK byte-diff");
+
+    // Sanity: cache was populated at the resolved SHA.
+    assert!(
+        cache_home
+            .join("fixups")
+            .join(&sha)
+            .join("packages")
+            .is_dir()
+    );
+
+    // Sanity: BUCK has both community and local extra_deps.
+    assert!(generated.contains("//community:base"));
+    assert!(generated.contains("//local:base"));
+}
+
+#[test]
+fn fixture_12_offline_cache_hit() {
+    let fixture_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/buck/09-git-registry");
+    let tmp = tempfile::TempDir::new().unwrap();
+    copy_fixture_to(&fixture_src, tmp.path());
+
+    let bare_path = tmp.path().join("registry.git");
+    let sha = build_bare_repo_inline(&tmp.path().join("registry-source"), &bare_path);
+
+    let muntjac_toml_path = tmp.path().join("muntjac.toml");
+    let mut bytes = std::fs::read_to_string(&muntjac_toml_path).unwrap();
+    bytes = bytes.replace(
+        "/REPLACED_AT_TEST_TIME/registry.git",
+        &bare_path.display().to_string(),
+    );
+    bytes = bytes.replace(
+        "registry_rev = \"REPLACED_AT_TEST_TIME\"",
+        &format!("registry_rev = \"{}\"", sha),
+    );
+    std::fs::write(&muntjac_toml_path, bytes).unwrap();
+
+    let cache_home = tmp.path().join("cache");
+    std::fs::create_dir_all(&cache_home).unwrap();
+
+    // First run: populates cache.
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_muntjac"))
+        .env("MUNTJAC_CACHE_HOME", &cache_home)
+        .args(["-C", tmp.path().to_str().unwrap(), "buckify"])
+        .status()
+        .unwrap();
+    assert!(status.success(), "first buckify run must succeed");
+
+    // Delete the bare repo (proves the second run doesn't need network).
+    std::fs::remove_dir_all(&bare_path).unwrap();
+
+    // Second run: --no-network, expect success from cache.
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_muntjac"))
+        .env("MUNTJAC_CACHE_HOME", &cache_home)
+        .args([
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "--no-network",
+            "buckify",
+        ])
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "--no-network buckify with cached fetch must succeed"
+    );
+}
