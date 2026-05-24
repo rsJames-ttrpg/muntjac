@@ -207,6 +207,19 @@ similar issue surfaces.
   ```
   Or just commit the prebake files directly with no `.gitignore` at all — the prebake subdir intent is "this is the committed test corpus", not "muntjac-generated."
 - **Target:** Any time; bundle with the next fixture-adding stage (S7b's `06-git-registry-cached/` or similar) so the convention is established before another mistake.
+- **Update from S7b:** Fixture 09 uses the safer allow-list pattern. T10 verified `git add tests/fixtures/buck/09-git-registry/` includes all prebake files without `-f`. Retroactive cleanup of fixtures 06/07/08 still pending.
+
+### From S7b final stage review (2026-05-24, pre-tag)
+
+#### TD-S7b-01: `fetch_into_cache` ignores explicit hex SHA on cache miss
+- **Source:** S7b T7 implementation; documented inline. `gix`'s `prepare_clone().with_ref_name(<hex-sha>)` panics per its own docs.
+- **Severity:** Minor (latent correctness bug, narrow use case)
+- **What:** When `rev` is a 40-char hex SHA AND it's not already in the cache, `fetch_into_cache` silently falls through to "fetch HEAD of default branch + resolve to that SHA" rather than fetching the requested SHA. The returned `FetchResult.sha` is the default branch's HEAD, not the requested SHA. For a multi-commit repo where the requested SHA is not the current HEAD of main, the user gets the wrong commit silently.
+- **Why it matters:** Doesn't bite the common case (default `muntjac fixups update` with no `--rev` works correctly; `--rev <branch>` and `--rev <tag>` work via `with_ref_name`; cache-hit on previously-pinned SHAs works correctly). Only bites `muntjac fixups update --rev <specific-sha>` for a SHA that's not currently HEAD of the default branch AND isn't already cached. Test coverage is thin because the bare-repo fixture only has one commit (so the SHA == HEAD).
+- **Fix options:**
+  - **(a) Surface as error:** After fetch + checkout, if `rev` was `Some(hex_sha)` and `resolved_sha != hex_sha`, return `FixupError::GitFetch` with a "requested SHA not at HEAD; specify a branch or tag instead" message. 3 lines, surfaces the limitation correctly.
+  - **(b) Do it right:** Post-checkout, if `rev` was a hex SHA, `gix::Repository::find_object(sha)` + checkout to that commit. Requires more gix navigation.
+- **Target:** S8 polish OR post-launch. Current behavior is wrong-but-rare; the common workflows aren't affected.
 
 ---
 

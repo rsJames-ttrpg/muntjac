@@ -151,7 +151,7 @@ Decomposed into two sub-stages during the S7a brainstorm (split rationale: capab
 
 **Shipped:** 24 commits (incl. design spec + plan + 19 implementation + 2 final-cleanup + 1 post-tag CI fix for missing fixture-08 prebake stubs); plan `docs/superpowers/plans/2026-05-24-muntjac-s7a-community-layering.md`; design `docs/superpowers/specs/2026-05-24-muntjac-s7a-community-layering-design.md`. TD-S6-04 resolved in commits `b4a2267` (BuildEmitContext refactor) + `13856de` (EffectiveFixups migration).
 
-#### S7b — Git fetch & cache
+#### S7b — Git fetch & cache ✅ shipped
 
 **Scope:** `gix` dependency. `~/.cache/muntjac/fixups/<sha>/` content-addressed cache. `muntjac fixups update` command with structured diff output. `--offline` integration test. S5's symlink-traversal hardening (re-targeted from S5 TECH_DEBT).
 
@@ -162,7 +162,9 @@ Decomposed into two sub-stages during the S7a brainstorm (split rationale: capab
 
 **Demo:** From a fresh checkout, `muntjac fixups update` then `muntjac buckify` produces a BUCK that incorporates community fixups for the test corpus.
 
-**Touches:** `src/fixup/registry.rs` (extends S7a), `src/cache.rs` (NEW), `src/cli/fixups.rs` (`update` subcommand), `Cargo.toml` (gix dep).
+**Touches:** `src/fixup/registry.rs` (extends S7a), `src/cache.rs` (NEW), `src/fixup/diff.rs` (NEW), `src/cli/fixups.rs` (`update` subcommand), `src/cli/buckify.rs`, `Cargo.toml` (gix + toml_edit + dirs deps), `tests/common/git_fixture.rs` (NEW shared helper), `tests/fixtures/buck/09-git-registry/`.
+
+**Shipped:** 15 commits (design spec + plan + 12 implementation + 1 style cleanup); plan `docs/superpowers/plans/2026-05-24-muntjac-s7b-git-registry.md`; design `docs/superpowers/specs/2026-05-24-muntjac-s7b-git-registry-design.md`. Pre-tag follow-up logged: TD-S7b-01 (raw-SHA-on-cache-miss falls through to default branch — narrow correctness gap, S8/post-launch fix).
 
 ---
 
@@ -261,8 +263,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S5 | [2026-05-22-muntjac-s5-sdist-prebake-design.md](./2026-05-22-muntjac-s5-sdist-prebake-design.md) | [2026-05-22-muntjac-s5-sdist-prebake.md](../plans/2026-05-22-muntjac-s5-sdist-prebake.md) | ✅ shipped (tag `s5-complete`, 18 commits, 190 tests) |
 | S6 | [2026-05-23-muntjac-s6-local-fixups-design.md](./2026-05-23-muntjac-s6-local-fixups-design.md) | [2026-05-23-muntjac-s6-local-fixups.md](../plans/2026-05-23-muntjac-s6-local-fixups.md) | ✅ shipped (tag `s6-complete`, 28 commits, 262 tests) |
 | S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | [2026-05-24-muntjac-s7a-community-layering.md](../plans/2026-05-24-muntjac-s7a-community-layering.md) | ✅ shipped (tag `s7a-complete`, 24 commits, 316 tests) |
-| S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | (not yet written) | ⬜ next |
-| S8 | (not yet written) | (not yet written) | ⬜ blocked on S7b |
+| S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 15 commits, 346 tests) |
+| S8 | (not yet written) | (not yet written) | ⬜ next |
 
 ---
 
