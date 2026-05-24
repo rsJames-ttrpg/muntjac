@@ -170,18 +170,35 @@ Decomposed into two sub-stages during the S7a brainstorm (split rationale: capab
 
 ### S8 — Launch polish & v0.1.0
 
-**Scope:** README + 60-second demo (also wired as a CI fixture). `muntjac-fixups` repo seeded with 8 packages (lxml, pillow, cryptography, psycopg2, pyzmq, opencv-python, scipy, torch). Cargo metadata for publish. Release workflow. v0.1.0 tag + cargo publish. Posted to Buck2 Discord + GitHub Discussions + r/Python.
+Decomposed into two sub-stages during the S8 brainstorm (split rationale: separate repos — S8b lands in a new `muntjac-fixups` repo, S8a stays in muntjac).
+
+#### S8b — `muntjac-fixups` seed repo
+
+**Scope:** New repo at `github.com/rsJames-ttrpg/muntjac-fixups`. 5 seeded packages (pillow, cryptography, lxml, pyzmq, psycopg2-binary; torch + opencv + scipy deferred per launch trim). README, CONTRIBUTING.md, MIT LICENSE. Schema-only CI via `muntjac fixups show`. `tests/schema-smoke/` synthetic fixture.
+
+**Exit criteria:**
+- `github.com/rsJames-ttrpg/muntjac-fixups` is public with the seeded packages + docs.
+- CI on the seed repo passes (schema-only validation).
+- Tag `seed-v0.1.0` on the seed repo marks the launch state.
+- muntjac repo: design spec + plan committed; TD-S8b-01/02/03 logged in TECH_DEBT.
+
+**Demo:** `muntjac fixups show pillow` (against the schema-smoke fixture) prints the seeded pillow fixup as canonical TOML.
+
+**Touches:** `muntjac-fixups` repo (separate); `docs/superpowers/specs/2026-05-24-muntjac-s8b-fixups-seed-design.md`; `docs/superpowers/TECH_DEBT.md` (TD-S8b-01/02/03 entries).
+
+#### S8a — muntjac repo polish & v0.1.0
+
+**Scope:** README rewrite (canonical project entry point). 60-second demo wired as CI fixture. `Cargo.toml.repository` update (`jackmpcollins` → `rsJames-ttrpg`). Cargo metadata polish (keywords, categories, authors). `muntjac init` template URL update to reference seed repo. Release workflow. `cargo publish --dry-run` gate. v0.1.0 tag + cargo publish. Release notes drafted.
 
 **Exit criteria:**
 - README's `cargo install muntjac && muntjac init && uv add numpy && muntjac vendor && muntjac buckify` demo passes as a CI test.
-- `muntjac-fixups` repo public with CONTRIBUTING.md + 8 seeded fixups.
 - `cargo publish --dry-run` succeeds.
 - v0.1.0 git tag exists; release notes drafted.
 - Launch post drafted (not posted by tooling; the maintainer presses send).
 
 **Demo:** A new user can go from `cargo install muntjac` to a working Buck-built Python binary in five minutes by following the README.
 
-**Touches:** `README.md`, `.github/workflows/release.yml`, `Cargo.toml` metadata, `muntjac-fixups` repo (separate).
+**Touches:** `README.md`, `.github/workflows/release.yml`, `Cargo.toml` metadata, `src/cli/init.rs` (template URL).
 
 ---
 
@@ -231,7 +248,10 @@ Not blocking v0.1.0; sequenced once Phase 1 has shipped and feedback is in hand.
                   S7b (git fetch + cache + fixups update)
                                │
                                ▼
-                  S8 (launch polish + v0.1.0)
+                  S8b (muntjac-fixups seed repo)
+                               │
+                               ▼
+                  S8a (muntjac README + cargo publish + v0.1.0)
                                │
                                ▼
             ────────── v0.1.0 SHIPPED ──────────
@@ -264,7 +284,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S6 | [2026-05-23-muntjac-s6-local-fixups-design.md](./2026-05-23-muntjac-s6-local-fixups-design.md) | [2026-05-23-muntjac-s6-local-fixups.md](../plans/2026-05-23-muntjac-s6-local-fixups.md) | ✅ shipped (tag `s6-complete`, 28 commits, 262 tests) |
 | S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | [2026-05-24-muntjac-s7a-community-layering.md](../plans/2026-05-24-muntjac-s7a-community-layering.md) | ✅ shipped (tag `s7a-complete`, 24 commits, 316 tests) |
 | S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 16 commits, 346 tests) |
-| S8 | (not yet written) | (not yet written) | ⬜ next |
+| S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | (not yet written) | ⬜ next |
+| S8a | (not yet written) | (not yet written) | ⬜ blocked on S8b |
 
 ---
 
