@@ -34,6 +34,30 @@ impl FixupSet {
     }
 }
 
+/// Read and parse a single `fixups.toml` file. Shared internals between
+/// `load_local` and `load_community`.
+pub(crate) fn load_one_fixup(toml_path: &Path) -> Result<FixupConfig, FixupError> {
+    let body = std::fs::read_to_string(toml_path).map_err(|e| FixupError::Io {
+        path: toml_path.to_path_buf(),
+        source: e,
+    })?;
+
+    FixupConfig::from_toml_str(&body).map_err(|source| {
+        let msg = source.to_string();
+        if let Some(field) = extract_unknown_field(&msg) {
+            FixupError::UnknownField {
+                file: toml_path.to_path_buf(),
+                field,
+            }
+        } else {
+            FixupError::ParseError {
+                file: toml_path.to_path_buf(),
+                source,
+            }
+        }
+    })
+}
+
 /// Load every `<third_party_dir>/fixups/<pkg>/fixups.toml` into a
 /// `FixupSet`. Package names are PEP 503-normalized.
 ///
@@ -76,33 +100,12 @@ pub fn load_local(third_party_dir: &Path) -> Result<FixupSet, FixupError> {
                     ),
                 })?;
 
-        // PEP 503: normalize via PackageName.
         let pkg_name = PackageName::from_str(pkg_dir_name).map_err(|e| FixupError::Io {
             path: path.clone(),
             source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
         })?;
 
-        let body = std::fs::read_to_string(&toml_path).map_err(|e| FixupError::Io {
-            path: toml_path.clone(),
-            source: e,
-        })?;
-
-        let config = FixupConfig::from_toml_str(&body).map_err(|source| {
-            // Distinguish unknown-field vs other parse errors.
-            let msg = source.to_string();
-            if let Some(field) = extract_unknown_field(&msg) {
-                FixupError::UnknownField {
-                    file: toml_path.clone(),
-                    field,
-                }
-            } else {
-                FixupError::ParseError {
-                    file: toml_path.clone(),
-                    source,
-                }
-            }
-        })?;
-
+        let config = load_one_fixup(&toml_path)?;
         fixups.insert(pkg_name, config);
     }
 
@@ -202,5 +205,28 @@ mod tests {
         let set = load_local(tmp.path()).unwrap();
         let names: Vec<String> = set.iter().map(|(n, _)| n.to_string()).collect();
         assert_eq!(names, vec!["aaa", "mmm", "zzz"]); // BTreeMap sorted
+    }
+
+    #[test]
+    fn load_one_fixup_loads_single_file() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("fixups.toml");
+        fs::write(&path, r#"extra_deps = ["//x:y"]"#).unwrap();
+
+        let cfg = super::load_one_fixup(&path).expect("loads");
+        assert_eq!(cfg.top.extra_deps, vec!["//x:y"]);
+    }
+
+    #[test]
+    fn load_one_fixup_unknown_field_is_typed() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("fixups.toml");
+        fs::write(&path, r#"unknown_thing = []"#).unwrap();
+
+        let err = super::load_one_fixup(&path).unwrap_err();
+        match err {
+            FixupError::UnknownField { field, .. } => assert_eq!(field, "unknown_thing"),
+            other => panic!("expected UnknownField, got {:?}", other),
+        }
     }
 }
