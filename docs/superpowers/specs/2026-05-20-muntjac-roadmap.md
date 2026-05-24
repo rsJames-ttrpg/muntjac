@@ -134,7 +134,7 @@ The credible-launch surface: numpy, pandas, fastapi, requests, ruff working end-
 
 Decomposed into two sub-stages during the S7a brainstorm (split rationale: capability boundary — layering is independently demoable without git fetch).
 
-#### S7a — Community layering (no-network registry modes)
+#### S7a — Community layering (no-network registry modes) ✅ shipped
 
 **Scope:** `RegistryConfig` typed enum (`None`/`FileUrl`/`Git`). Community ⊕ local layering via per-layer-then-merge algorithm. `replace_community = true` escape hatch. `allow_local_overrides = false` toggle. `muntjac fixups show <pkg>` layered output. `BuildEmitContext<'a>` refactor (TD-S6-04). Air-gapped modes only: `registry = "none"`, `registry = "file://…"`. Git fetch defers to S7b.
 
@@ -148,6 +148,8 @@ Decomposed into two sub-stages during the S7a brainstorm (split rationale: capab
 **Demo:** Synthetic-package fixture with a vendored-style registry directory at `tests/fixtures/buck/06-community-fixup/registry/packages/<pkg>/fixups.toml` plus local fixups; snapshot diff proves correct layered output.
 
 **Touches:** `src/fixup/{registry,layer,loader,schema,error}.rs`, `src/buck/emit.rs`, `src/cli/{buckify,fixups,init}.rs`, `src/config.rs`, `tests/fixtures/buck/{06,07,08}-*/`.
+
+**Shipped:** 23 commits (incl. design spec + plan + 19 implementation + 2 final-cleanup); plan `docs/superpowers/plans/2026-05-24-muntjac-s7a-community-layering.md`; design `docs/superpowers/specs/2026-05-24-muntjac-s7a-community-layering-design.md`. TD-S6-04 resolved in commits `b4a2267` (BuildEmitContext refactor) + `13856de` (EffectiveFixups migration).
 
 #### S7b — Git fetch & cache
 
@@ -258,8 +260,8 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S4 | [2026-05-21-muntjac-s4-multiplatform-design.md](./2026-05-21-muntjac-s4-multiplatform-design.md) | [2026-05-21-muntjac-s4-multiplatform.md](../plans/2026-05-21-muntjac-s4-multiplatform.md) | ✅ shipped (tag `s4-complete`, 31 commits, 158 tests) |
 | S5 | [2026-05-22-muntjac-s5-sdist-prebake-design.md](./2026-05-22-muntjac-s5-sdist-prebake-design.md) | [2026-05-22-muntjac-s5-sdist-prebake.md](../plans/2026-05-22-muntjac-s5-sdist-prebake.md) | ✅ shipped (tag `s5-complete`, 18 commits, 190 tests) |
 | S6 | [2026-05-23-muntjac-s6-local-fixups-design.md](./2026-05-23-muntjac-s6-local-fixups-design.md) | [2026-05-23-muntjac-s6-local-fixups.md](../plans/2026-05-23-muntjac-s6-local-fixups.md) | ✅ shipped (tag `s6-complete`, 28 commits, 262 tests) |
-| S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | (not yet written) | ⬜ next |
-| S7b | (not yet written) | (not yet written) | ⬜ blocked on S7a |
+| S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | [2026-05-24-muntjac-s7a-community-layering.md](../plans/2026-05-24-muntjac-s7a-community-layering.md) | ✅ shipped (tag `s7a-complete`, 23 commits, 316 tests) |
+| S7b | (not yet written) | (not yet written) | ⬜ next |
 | S8 | (not yet written) | (not yet written) | ⬜ blocked on S7b |
 
 ---

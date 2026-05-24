@@ -173,14 +173,6 @@ similar issue surfaces.
 - **Fix:** When entry-points metadata becomes available (TD-S6-02), emit a small generated shim module per entry point that imports + invokes the right function.
 - **Target:** post-launch
 
-#### TD-S6-04: `build_emit_input` has 6 positional parameters
-- **Source:** S6 T18 added `abs_third_party_dir: Option<&Path>` to fix the overlay-walk relative-path bug found by the fixture test
-- **Severity:** Minor
-- **What:** `pub fn build_emit_input(config, tree, lockfile, manifest, fixups, abs_third_party_dir) -> Result<EmitInput>` — six positional args. Caller readability suffers at the cli/buckify.rs call site.
-- **Why:** The two `Option<&_>` arguments (`manifest`, `fixups`) and the awkward `Option<&Path>` (`abs_third_party_dir`) accumulated across S5+S6 without intermediate refactoring. Per [[feedback_pause_to_respec_on_pivot]]: T18 surfaced this as a side-effect of a bug-fix; the right pause-and-respec moment would have been mid-T18, but the bug was load-bearing and the simpler signature change unblocked the fixture.
-- **Fix:** Introduce a small `BuildEmitContext<'a>` (or similar) struct bundling `manifest`, `fixups`, `abs_third_party_dir`. The pure pipeline inputs (`config`, `tree`, `lockfile`) stay positional; the optional + caller-derived inputs move into the context.
-- **Target:** S7 or S8 (before community-registry adds a fourth optional)
-
 #### TD-S6-05: `05-local-fixup` fixture has dual personality
 - **Source:** S6 T18 → T21; `tests/fixtures/buck/05-local-fixup/`
 - **Severity:** Minor
@@ -200,6 +192,10 @@ similar issue surfaces.
 ---
 
 ## Resolved
+
+### TD-S6-04: `build_emit_input` has 6 positional parameters
+- **Resolved:** S7a, commits `b4a2267` (introduce `BuildEmitContext<'a>` + migrate signature) and `13856de` (swap `fixups` field type to `EffectiveFixups` and migrate emit body resolve sites)
+- **Summary:** New `pub struct BuildEmitContext<'a> { manifest, fixups, abs_third_party_dir }` in `src/buck/emit.rs`. `build_emit_input(config, tree, lockfile, ctx)` is now 3 positional + 1 context — pure pipeline inputs stay positional, optional+caller-derived inputs move into the context. All ~17 in-file test call sites migrated to struct-literal form (`&BuildEmitContext { ... }` or `&BuildEmitContext::default()` for the all-None baseline). `src/cli/buckify.rs` call site updated. The `fixups` field carries `Option<&'a EffectiveFixups>` directly, so S7b can add a cache directory to the context without any positional-arg churn.
 
 ### Cycle error formatting is opaque
 - **Resolved:** S2, commit `a61b14d`
