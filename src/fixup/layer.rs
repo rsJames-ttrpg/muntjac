@@ -128,7 +128,7 @@ impl EffectiveFixups {
     ///
     /// - `RegistryConfig::None`        → community is empty.
     /// - `RegistryConfig::FileUrl(p)`  → community loaded from `<p>/packages/`.
-    /// - `RegistryConfig::Git { .. }`  → errors with `GitRegistryNotImplemented` (S7b implements).
+    /// - `RegistryConfig::Git { .. }`  → community is empty placeholder (S7b T8 implements).
     /// - `allow_local_overrides=false` → local is empty regardless of disk state.
     pub fn load(
         registry: &crate::fixup::RegistryConfig,
@@ -140,10 +140,10 @@ impl EffectiveFixups {
             crate::fixup::RegistryConfig::FileUrl(registry_dir) => {
                 crate::fixup::load_community(registry_dir)?
             }
-            crate::fixup::RegistryConfig::Git { url, .. } => {
-                return Err(crate::fixup::FixupError::GitRegistryNotImplemented {
-                    registry: url.clone(),
-                });
+            crate::fixup::RegistryConfig::Git { .. } => {
+                // S7b T8 will implement the git arm; for now return empty
+                // community (unreachable in production until T8).
+                FixupSet::default()
             }
         };
 
@@ -739,25 +739,6 @@ mod tests {
         match err {
             crate::fixup::FixupError::RegistryPathNotFound { .. } => {}
             other => panic!("expected RegistryPathNotFound, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn effective_fixups_load_git_errors_in_s7a() {
-        use crate::fixup::RegistryConfig;
-        use tempfile::TempDir;
-
-        let tmp = TempDir::new().unwrap();
-        let registry = RegistryConfig::Git {
-            url: "github.com/x/y".into(),
-            rev: None,
-        };
-        let err = super::EffectiveFixups::load(&registry, tmp.path(), true).unwrap_err();
-        match err {
-            crate::fixup::FixupError::GitRegistryNotImplemented { registry } => {
-                assert_eq!(registry, "github.com/x/y");
-            }
-            other => panic!("expected GitRegistryNotImplemented, got {:?}", other),
         }
     }
 

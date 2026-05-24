@@ -72,9 +72,22 @@ pub enum FixupError {
     ReplaceCommunityInCommunity { file: PathBuf },
 
     #[error(
-        "git-based community registry is not yet implemented (S7b); registry = {registry} requires either \"none\" or \"file://...\""
+        "offline mode but cache miss for pinned rev `{pin}`\n  run `muntjac fixups update` (without --offline) first"
     )]
-    GitRegistryNotImplemented { registry: String },
+    Offline { pin: String },
+
+    #[error(
+        "cache entry at {path} appears corrupt: {reason}\n  delete it and re-run `muntjac fixups update`"
+    )]
+    CacheCorrupt { path: PathBuf, reason: String },
+
+    #[error(fmt = fmt_git_fetch)]
+    GitFetch {
+        url: String,
+        rev: Option<String>,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
+    },
 
     #[error("community registry path {path} does not exist")]
     RegistryPathNotFound { path: PathBuf },
@@ -85,6 +98,20 @@ pub enum FixupError {
         #[source]
         source: std::io::Error,
     },
+}
+
+#[allow(clippy::borrowed_box)]
+fn fmt_git_fetch(
+    url: &str,
+    rev: &Option<String>,
+    source: &Box<dyn std::error::Error + Send + Sync + 'static>,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    write!(f, "git fetch failed for {url}")?;
+    if let Some(r) = rev {
+        write!(f, " @ {r}")?;
+    }
+    write!(f, ": {source}")
 }
 
 /// Errors from `cfg.rs` parser; wrapped by `FixupError::CfgParse`.
@@ -157,13 +184,36 @@ mod tests {
     }
 
     #[test]
-    fn git_registry_not_implemented_message_is_exact() {
-        let e = FixupError::GitRegistryNotImplemented {
-            registry: "github.com/jackmpcollins/muntjac-fixups".into(),
+    fn offline_message_is_exact() {
+        let e = FixupError::Offline {
+            pin: "abc123def456".into(),
         };
         assert_eq!(
             e.to_string(),
-            "git-based community registry is not yet implemented (S7b); registry = github.com/jackmpcollins/muntjac-fixups requires either \"none\" or \"file://...\""
+            "offline mode but cache miss for pinned rev `abc123def456`\n  run `muntjac fixups update` (without --offline) first"
+        );
+    }
+
+    #[test]
+    fn offline_default_branch_pin_message_is_exact() {
+        let e = FixupError::Offline {
+            pin: "(default branch)".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "offline mode but cache miss for pinned rev `(default branch)`\n  run `muntjac fixups update` (without --offline) first"
+        );
+    }
+
+    #[test]
+    fn cache_corrupt_message_is_exact() {
+        let e = FixupError::CacheCorrupt {
+            path: PathBuf::from("/tmp/muntjac/fixups/abc"),
+            reason: "missing packages/ subdir".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "cache entry at /tmp/muntjac/fixups/abc appears corrupt: missing packages/ subdir\n  delete it and re-run `muntjac fixups update`"
         );
     }
 

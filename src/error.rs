@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -87,6 +89,19 @@ pub enum LockfileError {
     BadPackageName(String, String),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum CacheError {
+    #[error("could not resolve cache root: {0}")]
+    CacheRootResolve(String),
+
+    #[error("could not create cache directory {path}: {source}")]
+    CreateDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
 fn fmt_cycle(cycles: &Vec<Vec<String>>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     writeln!(f, "dependency cycle(s) detected:")?;
     for cycle in cycles {
@@ -109,6 +124,15 @@ fn fmt_cycle(cycles: &Vec<Vec<String>>, f: &mut std::fmt::Formatter<'_>) -> std:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_root_resolve_error_message() {
+        let e = CacheError::CacheRootResolve("no XDG_CACHE_HOME or HOME".into());
+        assert_eq!(
+            e.to_string(),
+            "could not resolve cache root: no XDG_CACHE_HOME or HOME"
+        );
+    }
 
     #[test]
     fn registry_path_not_absolute_message_is_exact() {

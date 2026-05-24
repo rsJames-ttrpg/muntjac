@@ -15,8 +15,7 @@ pub enum RegistryConfig {
     None,
     /// Local checkout (path is absolute).
     FileUrl(PathBuf),
-    /// Git-hosted registry. Declared in S7a; `EffectiveFixups::load`
-    /// errors with `GitRegistryNotImplemented` until S7b lands.
+    /// Git-hosted registry. `EffectiveFixups::load` wires this up in S7b T8.
     Git { url: String, rev: Option<String> },
 }
 
