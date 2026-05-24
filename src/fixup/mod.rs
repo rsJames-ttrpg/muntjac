@@ -1,6 +1,7 @@
 //! Local & community fixup configuration parsing, layering, and resolution.
 
 pub mod cfg;
+pub mod diff;
 pub mod error;
 pub mod layer;
 pub mod loader;
@@ -10,6 +11,7 @@ pub mod schema;
 pub mod validate;
 
 pub use cfg::{CfgContext, CfgPredicate, split_target_triple};
+pub use diff::{DiffLine, diff_fixup_sets, render_diff};
 pub use error::{CfgParseError, FixupError};
 pub use layer::{EffectiveFixups, ResolvedFixup, merge_resolved, resolve_for_cell};
 pub use loader::{FixupSet, load_community, load_local};
