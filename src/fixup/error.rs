@@ -66,6 +66,19 @@ pub enum FixupError {
     )]
     BadCfgAtom { atom: String },
 
+    #[error(
+        "fixup file {file} sets `replace_community = true`, which is only valid in local fixups, not in the community registry"
+    )]
+    ReplaceCommunityInCommunity { file: PathBuf },
+
+    #[error(
+        "git-based community registry is not yet implemented (S7b); registry = {registry} requires either \"none\" or \"file://...\""
+    )]
+    GitRegistryNotImplemented { registry: String },
+
+    #[error("community registry path {path} does not exist")]
+    RegistryPathNotFound { path: PathBuf },
+
     #[error("I/O error reading fixups directory {path}: {source}")]
     Io {
         path: PathBuf,
@@ -129,6 +142,39 @@ mod tests {
         assert_eq!(
             e.to_string(),
             "unknown cfg atom `target_family`; expected one of: version, python, target_os, target_arch, target_env"
+        );
+    }
+
+    #[test]
+    fn replace_community_in_community_message_is_exact() {
+        let e = FixupError::ReplaceCommunityInCommunity {
+            file: PathBuf::from("registry/packages/pillow/fixups.toml"),
+        };
+        assert_eq!(
+            e.to_string(),
+            "fixup file registry/packages/pillow/fixups.toml sets `replace_community = true`, which is only valid in local fixups, not in the community registry"
+        );
+    }
+
+    #[test]
+    fn git_registry_not_implemented_message_is_exact() {
+        let e = FixupError::GitRegistryNotImplemented {
+            registry: "github.com/jackmpcollins/muntjac-fixups".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "git-based community registry is not yet implemented (S7b); registry = github.com/jackmpcollins/muntjac-fixups requires either \"none\" or \"file://...\""
+        );
+    }
+
+    #[test]
+    fn registry_path_not_found_message_is_exact() {
+        let e = FixupError::RegistryPathNotFound {
+            path: PathBuf::from("/tmp/no/such/packages"),
+        };
+        assert_eq!(
+            e.to_string(),
+            "community registry path /tmp/no/such/packages does not exist"
         );
     }
 }
