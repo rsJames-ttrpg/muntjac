@@ -1,0 +1,6 @@
+# Ignore everything by default, allow-list the committed stubs + manifest.
+*
+!.gitignore
+!.manifest.toml
+!*.whl
+!*.tar.gz
