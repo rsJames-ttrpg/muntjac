@@ -298,6 +298,42 @@ fn fixture_07_allow_local_overrides_false_golden() {
 }
 
 #[test]
+fn fixture_08_replace_community_golden() {
+    let fixture_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/buck/08-replace-community");
+    let tmp = tempfile::TempDir::new().unwrap();
+    copy_fixture_to(&fixture_src, tmp.path());
+
+    let abs_registry = tmp.path().join("registry");
+    let muntjac_toml_path = tmp.path().join("muntjac.toml");
+    let mut toml_bytes = std::fs::read_to_string(&muntjac_toml_path).unwrap();
+    toml_bytes = toml_bytes.replace(
+        "file:///REPLACED_AT_TEST_TIME",
+        &format!("file://{}", abs_registry.display()),
+    );
+    std::fs::write(&muntjac_toml_path, toml_bytes).unwrap();
+
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_muntjac"))
+        .args(["-C", tmp.path().to_str().unwrap(), "buckify"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let generated_buck =
+        std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
+    let expected_buck = std::fs::read_to_string(fixture_src.join("expected/BUCK")).unwrap();
+    assert_eq!(generated_buck, expected_buck);
+
+    // Community must be fully suppressed.
+    assert!(generated_buck.contains("//local:only"));
+    assert!(
+        !generated_buck.contains("//community:"),
+        "community fields leaked: {}",
+        generated_buck
+    );
+}
+
+#[test]
 fn fixture_09_native_sdist_error_message_pins_canonical_text() {
     let fix = fixture("09-native-sdist-error");
     let tmp = tempfile::tempdir().unwrap();

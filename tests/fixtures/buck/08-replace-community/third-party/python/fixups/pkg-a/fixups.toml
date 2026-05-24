@@ -1,0 +1,2 @@
+replace_community = true
+extra_deps = ["//local:only"]
