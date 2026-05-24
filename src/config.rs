@@ -61,34 +61,87 @@ impl Platform {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FixupsConfig {
-    #[serde(default = "default_registry")]
-    pub registry: FixupRegistry,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registry: crate::fixup::RegistryConfig,
     pub registry_rev: Option<String>,
-    #[serde(default = "default_true")]
     pub allow_local_overrides: bool,
 }
 
-/// Raw registry URL as read from muntjac.toml. Parsed/dispatched into
-/// `"none"` / `"file://…"` / `"github.com/<owner>/<repo>"` forms by
-/// `Config::validate` (Task 4) and by S7's registry fetcher.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(transparent)]
-pub struct FixupRegistry(pub String);
+// Deserialize wrapper: parse from TOML's raw view (where registry is a
+// String) into the typed FixupsConfig.
+impl<'de> serde::Deserialize<'de> for FixupsConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            #[serde(default = "default_registry_str")]
+            registry: String,
+            #[serde(default)]
+            registry_rev: Option<String>,
+            #[serde(default = "default_true")]
+            allow_local_overrides: bool,
+        }
+        let raw = Raw::deserialize(de)?;
+        let registry =
+            crate::fixup::parse_registry_config(&raw.registry, raw.registry_rev.as_deref())
+                .map_err(serde::de::Error::custom)?;
 
-impl Default for FixupRegistry {
-    fn default() -> Self {
-        FixupRegistry("none".into())
+        // Warn if registry_rev is set but registry is None or FileUrl
+        // (only meaningful for Git mode in S7b).
+        if raw.registry_rev.is_some() {
+            match &registry {
+                crate::fixup::RegistryConfig::None | crate::fixup::RegistryConfig::FileUrl(_) => {
+                    eprintln!(
+                        "[muntjac] warn: registry_rev is ignored when registry is \"none\" or \"file://...\"; effective in S7b for git-based registries"
+                    );
+                }
+                crate::fixup::RegistryConfig::Git { .. } => {}
+            }
+        }
+
+        Ok(FixupsConfig {
+            registry,
+            registry_rev: raw.registry_rev,
+            allow_local_overrides: raw.allow_local_overrides,
+        })
     }
 }
 
-fn default_registry() -> FixupRegistry {
-    FixupRegistry::default()
+fn default_registry_str() -> String {
+    "none".into()
 }
 fn default_true() -> bool {
     true
+}
+
+// Serialize back to TOML for fixtures / round-trips. Map RegistryConfig to its
+// canonical string form.
+impl serde::Serialize for FixupsConfig {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut st = s.serialize_struct("FixupsConfig", 3)?;
+        let reg_str = match &self.registry {
+            crate::fixup::RegistryConfig::None => "none".to_string(),
+            crate::fixup::RegistryConfig::FileUrl(p) => {
+                format!("file://{}", p.display())
+            }
+            crate::fixup::RegistryConfig::Git { url, .. } => url.clone(),
+        };
+        st.serialize_field("registry", &reg_str)?;
+        st.serialize_field("registry_rev", &self.registry_rev)?;
+        st.serialize_field("allow_local_overrides", &self.allow_local_overrides)?;
+        st.end()
+    }
+}
+
+impl Default for FixupsConfig {
+    fn default() -> Self {
+        Self {
+            registry: crate::fixup::RegistryConfig::None,
+            registry_rev: None,
+            allow_local_overrides: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -267,7 +320,6 @@ impl Config {
             validate_target_triple(name, &platform.target)?;
             validate_platform_baseline(name, platform)?;
         }
-        validate_registry(&self.fixups.registry)?;
         for g in &self.lockfile.include_groups {
             validate_group_name(g)?;
         }
@@ -373,23 +425,6 @@ fn validate_group_name(name: &str) -> Result<(), crate::error::ConfigError> {
         }
     }
     Ok(())
-}
-
-fn validate_registry(reg: &FixupRegistry) -> Result<(), crate::error::ConfigError> {
-    let FixupRegistry(s) = reg;
-    if s == "none" {
-        return Ok(());
-    }
-    if s.starts_with("file://") {
-        return Ok(());
-    }
-    if let Some(rest) = s.strip_prefix("github.com/") {
-        let parts: Vec<&str> = rest.split('/').collect();
-        if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
-            return Ok(());
-        }
-    }
-    Err(crate::error::ConfigError::BadRegistry(s.clone()))
 }
 
 #[cfg(test)]
@@ -562,7 +597,9 @@ manylinux = "2_17"
 registry = "https://example.com/whatever"
 "#;
         let err = Config::from_str(bad).expect_err("should fail");
-        assert!(matches!(err, crate::error::ConfigError::BadRegistry(_)));
+        // With typed parse, the bad registry is rejected at deserialize time,
+        // which folds into ConfigError::Parse.
+        assert!(matches!(err, crate::error::ConfigError::Parse(_)));
     }
 
     #[test]
@@ -588,6 +625,44 @@ registry = "{r}"
             );
             Config::from_str(&toml_str).unwrap_or_else(|_| panic!("parse+validate `{r}`"));
         }
+    }
+
+    #[test]
+    fn config_parses_file_url_registry() {
+        let toml = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[fixups]
+registry = "file:///abs/path/to/checkout"
+"#;
+        let config = Config::from_str(toml).expect("parse");
+        use crate::fixup::RegistryConfig;
+        assert_eq!(
+            config.fixups.registry,
+            RegistryConfig::FileUrl(std::path::PathBuf::from("/abs/path/to/checkout"))
+        );
+    }
+
+    #[test]
+    fn config_defaults_registry_to_none() {
+        let toml = r#"
+manifest_path   = "../pyproject.toml"
+third_party_dir = "."
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+"#;
+        let config = Config::from_str(toml).expect("parse");
+        use crate::fixup::RegistryConfig;
+        assert_eq!(config.fixups.registry, RegistryConfig::None);
     }
 
     #[test]
