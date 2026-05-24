@@ -431,7 +431,7 @@ fn build_bare_repo_inline(source_dir: &std::path::Path, bare_dest: &std::path::P
 }
 
 #[test]
-fn fixture_11_git_registry_golden() {
+fn fixture_09_git_registry_golden() {
     let fixture_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/buck/09-git-registry");
     let tmp = tempfile::TempDir::new().unwrap();
@@ -484,7 +484,7 @@ fn fixture_11_git_registry_golden() {
 }
 
 #[test]
-fn fixture_12_offline_cache_hit() {
+fn fixture_09_offline_cache_hit() {
     let fixture_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/buck/09-git-registry");
     let tmp = tempfile::TempDir::new().unwrap();
