@@ -198,6 +198,67 @@ fn fixture_05_local_fixup_golden() {
 }
 
 #[test]
+fn fixture_06_community_fixup_golden() {
+    let fix = fixture("06-community-fixup");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+
+    // Rewrite the file:// registry placeholder to the absolute path inside
+    // the tempdir copy so buckify can resolve the local registry.
+    let abs_registry = tmp.path().join("registry");
+    let muntjac_toml_path = tmp.path().join("muntjac.toml");
+    let toml_src = std::fs::read_to_string(&muntjac_toml_path).unwrap();
+    let toml_src = toml_src.replace(
+        "file:///REPLACED_AT_TEST_TIME",
+        &format!("file://{}", abs_registry.display()),
+    );
+    std::fs::write(&muntjac_toml_path, toml_src).unwrap();
+
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
+    );
+
+    // Sanity: layering correctness assertions.
+    let buck = std::fs::read_to_string(tmp.path().join("third-party/python/BUCK")).unwrap();
+    // pkg-a must have both community and local deps.
+    assert!(
+        buck.contains("//community:base"),
+        "missing community base in BUCK for pkg-a"
+    );
+    assert!(
+        buck.contains("//local:base"),
+        "missing local base in BUCK for pkg-a"
+    );
+    // pkg-a linux-only (community) and x86-only (local) are merged into deps.
+    assert!(
+        buck.contains("//community:linux-only"),
+        "missing community linux-only dep"
+    );
+    assert!(
+        buck.contains("//local:x86-only"),
+        "missing local x86-only dep"
+    );
+    // pkg-b community-only.
+    assert!(
+        buck.contains("//community:b-base"),
+        "missing pkg-b community dep"
+    );
+    assert!(
+        buck.contains("community-tag"),
+        "missing community-tag label for pkg-b"
+    );
+    // pkg-c local-only.
+    assert!(buck.contains("//local:c-base"), "missing pkg-c local dep");
+}
+
+#[test]
 fn fixture_09_native_sdist_error_message_pins_canonical_text() {
     let fix = fixture("09-native-sdist-error");
     let tmp = tempfile::tempdir().unwrap();
