@@ -34,8 +34,6 @@ fn show(package: String, globals: &Globals) -> Result<()> {
     let config =
         Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
 
-    // S6 v1: use the first tree's third_party_dir. Multi-tree fixup show is
-    // future work (use --tree).
     let tree = config
         .trees
         .first()
@@ -45,20 +43,72 @@ fn show(package: String, globals: &Globals) -> Result<()> {
     let pkg_name = PackageName::from_str(&package)
         .with_context(|| format!("normalizing package name `{}`", package))?;
 
-    let set = fixup::load_local(&third_party_dir)
-        .with_context(|| format!("loading fixups under {}", third_party_dir.display()))?;
+    let eff = fixup::EffectiveFixups::load(
+        &config.fixups.registry,
+        &third_party_dir,
+        config.fixups.allow_local_overrides,
+    )
+    .with_context(|| format!("loading layered fixups for tree '{}'", tree.name))?;
 
-    let fixup_cfg = set.get(&pkg_name).ok_or_else(|| {
-        anyhow!(
-            "no fixup for package `{}` at {}/fixups/",
+    let community_cfg = eff.community.get(&pkg_name);
+    let local_cfg = eff.local.get(&pkg_name);
+
+    if community_cfg.is_none() && local_cfg.is_none() {
+        let community_path = match &config.fixups.registry {
+            fixup::RegistryConfig::None => "(none)".to_string(),
+            fixup::RegistryConfig::FileUrl(p) => p.join("packages").display().to_string(),
+            fixup::RegistryConfig::Git { url, .. } => format!("git: {}", url),
+        };
+        let local_path = third_party_dir.join("fixups").display().to_string();
+        anyhow::bail!(
+            "no fixup for package '{}' (checked community at {}, local at {})",
             package,
-            third_party_dir.display()
-        )
-    })?;
+            community_path,
+            local_path,
+        );
+    }
 
-    let toml_out = fixup_cfg
-        .to_toml_string()
-        .context("re-emitting fixup as TOML")?;
-    print!("{}", toml_out);
+    let both_present = community_cfg.is_some() && local_cfg.is_some();
+
+    if let Some(c) = community_cfg {
+        if both_present {
+            if let fixup::RegistryConfig::FileUrl(p) = &config.fixups.registry {
+                let community_file = p
+                    .join("packages")
+                    .join(package.to_lowercase())
+                    .join("fixups.toml");
+                println!("# community: {}", community_file.display());
+            } else {
+                println!("# community:");
+            }
+        }
+        print!(
+            "{}",
+            c.to_toml_string()
+                .context("re-emitting community fixup as TOML")?
+        );
+        if both_present {
+            println!();
+            if local_cfg.is_some_and(|l| l.replace_community) {
+                println!("# (community fixup above is disabled by replace_community = true)");
+            }
+        }
+    }
+
+    if let Some(l) = local_cfg {
+        if both_present {
+            let local_file = third_party_dir
+                .join("fixups")
+                .join(package.to_lowercase())
+                .join("fixups.toml");
+            println!("# local: {}", local_file.display());
+        }
+        print!(
+            "{}",
+            l.to_toml_string()
+                .context("re-emitting local fixup as TOML")?
+        );
+    }
+
     Ok(())
 }
