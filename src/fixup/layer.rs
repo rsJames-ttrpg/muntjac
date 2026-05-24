@@ -51,6 +51,48 @@ pub fn merge_into(lhs: &mut ResolvedFixup, rhs: &FixupBody) {
         .extend(rhs.runtime_env.iter().map(|(k, v)| (k.clone(), v.clone())));
 }
 
+/// Cross-layer merge. Community is contributed first; local overrides
+/// scalar/Option fields and extends list/map fields.
+///
+/// Rules:
+///   - Vec<String>: community ++ local, dedup preserved-first
+///   - BTreeMap<String, String>: extend (local key overwrites community)
+///   - Option<T>: local wins if Some, else community
+pub fn merge_resolved(community: ResolvedFixup, local: ResolvedFixup) -> ResolvedFixup {
+    ResolvedFixup {
+        extra_deps: concat_dedup(community.extra_deps, local.extra_deps),
+        omit_deps: concat_dedup(community.omit_deps, local.omit_deps),
+        replace_deps: extend_map(community.replace_deps, local.replace_deps),
+        prefer_wheel: local.prefer_wheel.or(community.prefer_wheel),
+        exclude_wheels: concat_dedup(community.exclude_wheels, local.exclude_wheels),
+        overlay: local.overlay.or(community.overlay),
+        entry_points: local.entry_points.or(community.entry_points),
+        visibility: local.visibility.or(community.visibility),
+        labels: concat_dedup(community.labels, local.labels),
+        runtime_env: extend_map(community.runtime_env, local.runtime_env),
+    }
+}
+
+/// Concatenate two Vec<String>, dedup preserving first occurrence.
+fn concat_dedup(a: Vec<String>, b: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    for s in a.into_iter().chain(b) {
+        if seen.insert(s.clone()) {
+            out.push(s);
+        }
+    }
+    out
+}
+
+fn extend_map(
+    mut a: BTreeMap<String, String>,
+    b: BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    a.extend(b);
+    a
+}
+
 /// Resolve a package's fixup for one cell. Returns the merged `ResolvedFixup`.
 /// Predicate parse failures cause that one section to be silently skipped
 /// (parse errors are reported at load time, not here).
@@ -216,6 +258,196 @@ mod tests {
         };
         let resolved = resolve_for_cell(&config, &ctx);
         assert_eq!(resolved.extra_deps, vec!["//base:dep"]);
+    }
+
+    #[test]
+    fn merge_resolved_extra_deps_community_first_dedup() {
+        let c = ResolvedFixup {
+            extra_deps: vec!["//c:base".into(), "//shared:dep".into()],
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            extra_deps: vec!["//shared:dep".into(), "//l:base".into()],
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(
+            merged.extra_deps,
+            vec!["//c:base", "//shared:dep", "//l:base"]
+        );
+    }
+
+    #[test]
+    fn merge_resolved_omit_deps_community_first_dedup() {
+        let c = ResolvedFixup {
+            omit_deps: vec!["one".into(), "two".into()],
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            omit_deps: vec!["two".into(), "three".into()],
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.omit_deps, vec!["one", "two", "three"]);
+    }
+
+    #[test]
+    fn merge_resolved_replace_deps_local_wins_on_key_collision() {
+        let mut c_rd = std::collections::BTreeMap::new();
+        c_rd.insert("foo".to_string(), "//c:foo".to_string());
+        c_rd.insert("only-community".to_string(), "//c:only".to_string());
+        let c = ResolvedFixup {
+            replace_deps: c_rd,
+            ..Default::default()
+        };
+        let mut l_rd = std::collections::BTreeMap::new();
+        l_rd.insert("foo".to_string(), "//l:foo".to_string());
+        l_rd.insert("only-local".to_string(), "//l:only".to_string());
+        let l = ResolvedFixup {
+            replace_deps: l_rd,
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(
+            merged.replace_deps.get("foo").map(|s| s.as_str()),
+            Some("//l:foo")
+        );
+        assert_eq!(
+            merged
+                .replace_deps
+                .get("only-community")
+                .map(|s| s.as_str()),
+            Some("//c:only")
+        );
+        assert_eq!(
+            merged.replace_deps.get("only-local").map(|s| s.as_str()),
+            Some("//l:only")
+        );
+    }
+
+    #[test]
+    fn merge_resolved_prefer_wheel_local_some_wins() {
+        let c = ResolvedFixup {
+            prefer_wheel: Some("sha256:aaa".into()),
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            prefer_wheel: Some("sha256:bbb".into()),
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.prefer_wheel.as_deref(), Some("sha256:bbb"));
+    }
+
+    #[test]
+    fn merge_resolved_prefer_wheel_community_kept_when_local_none() {
+        let c = ResolvedFixup {
+            prefer_wheel: Some("sha256:aaa".into()),
+            ..Default::default()
+        };
+        let l = ResolvedFixup::default();
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.prefer_wheel.as_deref(), Some("sha256:aaa"));
+    }
+
+    #[test]
+    fn merge_resolved_exclude_wheels_concat_dedup() {
+        let c = ResolvedFixup {
+            exclude_wheels: vec!["*win32*".into()],
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            exclude_wheels: vec!["*win32*".into(), "*cuda*".into()],
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.exclude_wheels, vec!["*win32*", "*cuda*"]);
+    }
+
+    #[test]
+    fn merge_resolved_overlay_local_some_wins() {
+        let c = ResolvedFixup {
+            overlay: Some(std::path::PathBuf::from("c-overlay")),
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            overlay: Some(std::path::PathBuf::from("l-overlay")),
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(
+            merged.overlay.as_deref(),
+            Some(std::path::Path::new("l-overlay"))
+        );
+    }
+
+    #[test]
+    fn merge_resolved_entry_points_local_some_wins() {
+        let c = ResolvedFixup {
+            entry_points: Some(crate::fixup::EntryPoints::Named(vec!["c-bin".into()])),
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            entry_points: Some(crate::fixup::EntryPoints::Named(vec!["l-bin".into()])),
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        match merged.entry_points {
+            Some(crate::fixup::EntryPoints::Named(names)) => {
+                assert_eq!(names, vec!["l-bin".to_string()]);
+            }
+            other => panic!("expected Named, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn merge_resolved_visibility_local_some_wins() {
+        let c = ResolvedFixup {
+            visibility: Some(vec!["//c:...".into()]),
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            visibility: Some(vec!["//l:...".into()]),
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.visibility, Some(vec!["//l:...".to_string()]));
+    }
+
+    #[test]
+    fn merge_resolved_labels_concat_dedup() {
+        let c = ResolvedFixup {
+            labels: vec!["tag-a".into(), "tag-b".into()],
+            ..Default::default()
+        };
+        let l = ResolvedFixup {
+            labels: vec!["tag-b".into(), "tag-c".into()],
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.labels, vec!["tag-a", "tag-b", "tag-c"]);
+    }
+
+    #[test]
+    fn merge_resolved_runtime_env_local_overrides_key() {
+        let mut c_re = std::collections::BTreeMap::new();
+        c_re.insert("FOO".to_string(), "c".to_string());
+        c_re.insert("BAR".to_string(), "c".to_string());
+        let c = ResolvedFixup {
+            runtime_env: c_re,
+            ..Default::default()
+        };
+        let mut l_re = std::collections::BTreeMap::new();
+        l_re.insert("FOO".to_string(), "l".to_string());
+        l_re.insert("BAZ".to_string(), "l".to_string());
+        let l = ResolvedFixup {
+            runtime_env: l_re,
+            ..Default::default()
+        };
+        let merged = super::merge_resolved(c, l);
+        assert_eq!(merged.runtime_env.get("FOO").map(|s| s.as_str()), Some("l"));
+        assert_eq!(merged.runtime_env.get("BAR").map(|s| s.as_str()), Some("c"));
+        assert_eq!(merged.runtime_env.get("BAZ").map(|s| s.as_str()), Some("l"));
     }
 
     #[test]
