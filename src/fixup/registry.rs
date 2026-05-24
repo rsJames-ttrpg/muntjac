@@ -42,6 +42,14 @@ pub fn parse_registry_config(
                 path: rest.to_string(),
             });
         }
+        // Discriminator: `.git` suffix means bare-repo git form (S7b).
+        // Anything else is a directory checkout (S7a FileUrl form).
+        if rest.ends_with(".git") {
+            return Ok(RegistryConfig::Git {
+                url: raw.to_string(),
+                rev: registry_rev.map(|s| s.to_string()),
+            });
+        }
         return Ok(RegistryConfig::FileUrl(PathBuf::from(rest)));
     }
     if let Some(rest) = raw.strip_prefix("github.com/") {
@@ -130,5 +138,26 @@ mod tests {
     fn rejects_bare_string() {
         let err = parse_registry_config("not-a-url", None).unwrap_err();
         assert!(matches!(err, crate::error::ConfigError::BadRegistry(_)));
+    }
+
+    #[test]
+    fn parses_file_url_with_dot_git_as_git_form() {
+        let got = parse_registry_config("file:///abs/path/to/bare.git", Some("abc123")).unwrap();
+        assert_eq!(
+            got,
+            RegistryConfig::Git {
+                url: "file:///abs/path/to/bare.git".into(),
+                rev: Some("abc123".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn parses_file_url_without_dot_git_stays_file_url() {
+        let got = parse_registry_config("file:///abs/path/to/checkout", None).unwrap();
+        assert_eq!(
+            got,
+            RegistryConfig::FileUrl(std::path::PathBuf::from("/abs/path/to/checkout"))
+        );
     }
 }
