@@ -11,7 +11,7 @@ pub mod validate;
 
 pub use cfg::{CfgContext, CfgPredicate, split_target_triple};
 pub use error::{CfgParseError, FixupError};
-pub use layer::{ResolvedFixup, resolve_for_cell};
+pub use layer::{EffectiveFixups, ResolvedFixup, merge_resolved, resolve_for_cell};
 pub use loader::{FixupSet, load_community, load_local};
 pub use overlay::discover_overlay_files;
 pub use registry::{RegistryConfig, parse_registry_config};

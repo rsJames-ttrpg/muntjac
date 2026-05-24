@@ -7,7 +7,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use pep508_rs::PackageName;
+
 use crate::fixup::cfg::{CfgContext, CfgPredicate};
+use crate::fixup::loader::FixupSet;
 use crate::fixup::schema::{EntryPoints, FixupBody, FixupConfig};
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -108,6 +111,42 @@ pub fn resolve_for_cell(config: &FixupConfig, ctx: &CfgContext<'_>) -> ResolvedF
         }
     }
     out
+}
+
+/// Two-layer fixup facade. Owns the community and local `FixupSet`s
+/// and exposes a single `.resolve(pkg, ctx)` entry point that hides
+/// the layering from the emitter.
+#[derive(Debug, Default, Clone)]
+pub struct EffectiveFixups {
+    pub community: FixupSet,
+    pub local: FixupSet,
+}
+
+impl EffectiveFixups {
+    /// Resolve a package's fixup for one cell. Always returns a
+    /// `ResolvedFixup` — default if neither layer has the package.
+    ///
+    /// Algorithm (per design spec §4.1):
+    ///   1. Look up local first; if it has `replace_community = true`,
+    ///      drop the community layer for this package.
+    ///   2. Fully resolve each layer via `resolve_for_cell`.
+    ///   3. Cross-layer merge via `merge_resolved`.
+    pub fn resolve(&self, pkg: &PackageName, ctx: &CfgContext<'_>) -> ResolvedFixup {
+        let local_cfg = self.local.get(pkg);
+        let community_cfg = match local_cfg {
+            Some(c) if c.replace_community => None,
+            _ => self.community.get(pkg),
+        };
+
+        let community_resolved = community_cfg
+            .map(|cfg| resolve_for_cell(cfg, ctx))
+            .unwrap_or_default();
+        let local_resolved = local_cfg
+            .map(|cfg| resolve_for_cell(cfg, ctx))
+            .unwrap_or_default();
+
+        merge_resolved(community_resolved, local_resolved)
+    }
 }
 
 #[cfg(test)]
@@ -489,5 +528,137 @@ mod tests {
             resolved.overlay.as_deref(),
             Some(std::path::Path::new("second"))
         );
+    }
+
+    fn ctx_linux() -> CfgContext<'static> {
+        use pep440_rs::Version;
+        // We need static lifetime; use leaking for test ergonomics.
+        let v: &'static Version = Box::leak(Box::new(Version::from_str("1.0").unwrap()));
+        let py: Version = Version::from_str("3.12").unwrap();
+        CfgContext {
+            package_version: v,
+            python_version: py,
+            target_os: "linux",
+            target_arch: "x86_64",
+            target_env: "gnu",
+        }
+    }
+
+    fn fixup_with(extra_deps: Vec<&str>) -> crate::fixup::FixupConfig {
+        crate::fixup::FixupConfig {
+            top: crate::fixup::FixupBody {
+                extra_deps: extra_deps.into_iter().map(String::from).collect(),
+                ..Default::default()
+            },
+            cfg_sections: vec![],
+            replace_community: false,
+        }
+    }
+
+    #[test]
+    fn effective_fixups_resolve_returns_default_when_neither_layer_has_pkg() {
+        use crate::fixup::loader::FixupSet;
+        let eff = super::EffectiveFixups {
+            community: FixupSet::default(),
+            local: FixupSet::default(),
+        };
+        let pkg = pep508_rs::PackageName::from_str("missing").unwrap();
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert!(rf.extra_deps.is_empty());
+        assert!(rf.replace_deps.is_empty());
+        assert!(rf.overlay.is_none());
+    }
+
+    #[test]
+    fn effective_fixups_resolve_community_only() {
+        use crate::fixup::loader::FixupSet;
+        let mut comm = std::collections::BTreeMap::new();
+        let pkg = pep508_rs::PackageName::from_str("pkg").unwrap();
+        comm.insert(pkg.clone(), fixup_with(vec!["//c:base"]));
+        let eff = super::EffectiveFixups {
+            community: FixupSet::from_map_for_test(comm),
+            local: FixupSet::default(),
+        };
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert_eq!(rf.extra_deps, vec!["//c:base"]);
+    }
+
+    #[test]
+    fn effective_fixups_resolve_local_only() {
+        use crate::fixup::loader::FixupSet;
+        let mut loc = std::collections::BTreeMap::new();
+        let pkg = pep508_rs::PackageName::from_str("pkg").unwrap();
+        loc.insert(pkg.clone(), fixup_with(vec!["//l:base"]));
+        let eff = super::EffectiveFixups {
+            community: FixupSet::default(),
+            local: FixupSet::from_map_for_test(loc),
+        };
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert_eq!(rf.extra_deps, vec!["//l:base"]);
+    }
+
+    #[test]
+    fn effective_fixups_resolve_both_layers_concat() {
+        use crate::fixup::loader::FixupSet;
+        let pkg = pep508_rs::PackageName::from_str("pkg").unwrap();
+        let mut comm = std::collections::BTreeMap::new();
+        comm.insert(pkg.clone(), fixup_with(vec!["//c:base"]));
+        let mut loc = std::collections::BTreeMap::new();
+        loc.insert(pkg.clone(), fixup_with(vec!["//l:base"]));
+        let eff = super::EffectiveFixups {
+            community: FixupSet::from_map_for_test(comm),
+            local: FixupSet::from_map_for_test(loc),
+        };
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert_eq!(rf.extra_deps, vec!["//c:base", "//l:base"]);
+    }
+
+    #[test]
+    fn effective_fixups_resolve_replace_community_drops_community() {
+        use crate::fixup::loader::FixupSet;
+        let pkg = pep508_rs::PackageName::from_str("pkg").unwrap();
+        let mut comm = std::collections::BTreeMap::new();
+        comm.insert(pkg.clone(), fixup_with(vec!["//c:never-merged"]));
+
+        let mut loc = std::collections::BTreeMap::new();
+        let local_cfg = crate::fixup::FixupConfig {
+            top: crate::fixup::FixupBody {
+                extra_deps: vec!["//l:only".to_string()],
+                ..Default::default()
+            },
+            cfg_sections: vec![],
+            replace_community: true,
+        };
+        loc.insert(pkg.clone(), local_cfg);
+
+        let eff = super::EffectiveFixups {
+            community: FixupSet::from_map_for_test(comm),
+            local: FixupSet::from_map_for_test(loc),
+        };
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert_eq!(rf.extra_deps, vec!["//l:only"]); // community discarded
+    }
+
+    #[test]
+    fn effective_fixups_resolve_replace_community_with_empty_local_yields_empty() {
+        use crate::fixup::loader::FixupSet;
+        let pkg = pep508_rs::PackageName::from_str("pkg").unwrap();
+        let mut comm = std::collections::BTreeMap::new();
+        comm.insert(pkg.clone(), fixup_with(vec!["//c:base"]));
+
+        let mut loc = std::collections::BTreeMap::new();
+        let local_cfg = crate::fixup::FixupConfig {
+            replace_community: true,
+            ..Default::default()
+        };
+        loc.insert(pkg.clone(), local_cfg);
+
+        let eff = super::EffectiveFixups {
+            community: FixupSet::from_map_for_test(comm),
+            local: FixupSet::from_map_for_test(loc),
+        };
+        let rf = eff.resolve(&pkg, &ctx_linux());
+        assert!(rf.extra_deps.is_empty());
+        assert!(rf.overlay.is_none());
     }
 }
