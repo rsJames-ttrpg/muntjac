@@ -102,8 +102,10 @@ fn render_starter_config(target: &Path, detection: Option<&Detection>) -> String
          # [lockfile]\n\
          # include_groups = [\"test\"]\n\n\
          [fixups]\n\
-         # Community fixup registry. Leave as \"none\" until a v0.1.0+ release exists.\n\
-         registry              = \"none\"\n\
+         registry = \"none\"\n\
+         # When a community registry exists, set to \"github.com/<owner>/muntjac-fixups\"\n\
+         # and run `muntjac fixups update` to pin a SHA. For air-gapped or\n\
+         # pre-launch usage, use a local checkout: registry = \"file:///abs/path\".\n\
          allow_local_overrides = true\n\n\
          [buck]\n\
          file_name = \"BUCK\"\n\
