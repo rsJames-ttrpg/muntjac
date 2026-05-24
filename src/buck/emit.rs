@@ -1514,6 +1514,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1628,6 +1629,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1751,6 +1753,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1786,6 +1789,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1823,6 +1827,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1865,6 +1870,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1898,6 +1904,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -1929,6 +1936,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);
@@ -2045,6 +2053,7 @@ manylinux = "2_17"
                     ..Default::default()
                 },
                 cfg_sections: vec![],
+                replace_community: false,
             },
         );
         let fixups = FixupSet::from_map_for_test(fixups_map);

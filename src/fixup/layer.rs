@@ -184,6 +184,7 @@ mod tests {
                     },
                 ),
             ],
+            replace_community: false,
         };
         let resolved = resolve_for_cell(&config, &ctx);
         assert_eq!(resolved.extra_deps, vec!["//base:dep", "//linux:dep"]);
@@ -211,6 +212,7 @@ mod tests {
                     ..Default::default()
                 },
             )],
+            replace_community: false,
         };
         let resolved = resolve_for_cell(&config, &ctx);
         assert_eq!(resolved.extra_deps, vec!["//base:dep"]);
@@ -248,6 +250,7 @@ mod tests {
                     },
                 ),
             ],
+            replace_community: false,
         };
         let resolved = resolve_for_cell(&config, &ctx);
         assert_eq!(

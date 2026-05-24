@@ -16,6 +16,9 @@ pub struct FixupConfig {
     pub top: FixupBody,
     /// Raw `(predicate_string, body)` pairs in source order.
     pub cfg_sections: Vec<(String, FixupBody)>,
+    /// File-level opt-out: drops the community fixup for this package
+    /// before merging. Validated as local-only by `load_community`.
+    pub replace_community: bool,
 }
 
 /// The body of either a top-level fixup or a single `cfg(...)` section.
@@ -54,13 +57,6 @@ pub struct FixupBody {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sdist: Option<SdistFixup>,
-
-    #[serde(skip_serializing_if = "is_false")]
-    pub replace_community: bool,
-}
-
-fn is_false(b: &bool) -> bool {
-    !b
 }
 
 /// `entry_points = true | ["name1", "name2"]`. v1: only the list form
@@ -99,9 +95,18 @@ impl FixupConfig {
         let raw: toml::Table = toml::from_str(s)?;
         let mut top_table = toml::Table::new();
         let mut cfg_sections: Vec<(String, FixupBody)> = Vec::new();
+        let mut replace_community = false;
 
         for (key, value) in raw {
-            if let Some(predicate) = key.strip_prefix("cfg(").and_then(|t| t.strip_suffix(')')) {
+            if key == "replace_community" {
+                // Top-level only; FixupBody's deny_unknown_fields rejects it
+                // when nested inside a cfg() section.
+                replace_community = value.as_bool().ok_or_else(|| {
+                    serde::de::Error::custom("replace_community must be a boolean")
+                })?;
+            } else if let Some(predicate) =
+                key.strip_prefix("cfg(").and_then(|t| t.strip_suffix(')'))
+            {
                 let body: FixupBody = value.try_into()?;
                 cfg_sections.push((predicate.to_string(), body));
             } else {
@@ -110,14 +115,21 @@ impl FixupConfig {
         }
 
         let top: FixupBody = toml::Value::Table(top_table).try_into()?;
-        Ok(FixupConfig { top, cfg_sections })
+        Ok(FixupConfig {
+            top,
+            cfg_sections,
+            replace_community,
+        })
     }
 
     /// Re-emit as canonical TOML. Round-trippable up to formatting
     /// (key ordering, default omission).
     pub fn to_toml_string(&self) -> Result<String, toml::ser::Error> {
-        // Use serde's flattening: emit top fields, then each cfg section.
-        let mut out = toml::to_string_pretty(&self.top)?;
+        let mut out = String::new();
+        if self.replace_community {
+            out.push_str("replace_community = true\n");
+        }
+        out.push_str(&toml::to_string_pretty(&self.top)?);
         for (predicate, body) in &self.cfg_sections {
             // Skip empty bodies (would emit just a header).
             let body_str = toml::to_string_pretty(body)?;
@@ -204,14 +216,40 @@ mod tests {
     fn parses_replace_community_default_false() {
         let toml = r#"extra_deps = ["//x:y"]"#;
         let cfg = FixupConfig::from_toml_str(toml).unwrap();
-        assert!(!cfg.top.replace_community);
+        assert!(!cfg.replace_community);
     }
 
     #[test]
     fn parses_replace_community_true() {
-        let toml = r#"replace_community = true"#;
+        let toml = r#"replace_community = true
+extra_deps = ["//x:y"]"#;
         let cfg = FixupConfig::from_toml_str(toml).unwrap();
-        assert!(cfg.top.replace_community);
+        assert!(cfg.replace_community);
+        assert_eq!(cfg.top.extra_deps, vec!["//x:y"]);
+    }
+
+    #[test]
+    fn replace_community_inside_cfg_section_errors_as_unknown_field() {
+        let toml = r#"
+            ["cfg(target_os = \"linux\")"]
+            replace_community = true
+        "#;
+        let err = FixupConfig::from_toml_str(toml).unwrap_err();
+        assert!(
+            err.to_string().contains("replace_community"),
+            "expected unknown-field error mentioning replace_community, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn replace_community_round_trips() {
+        let toml = "replace_community = true\nextra_deps = [\"//a:b\"]\n";
+        let cfg = FixupConfig::from_toml_str(toml).unwrap();
+        let out = cfg.to_toml_string().unwrap();
+        let cfg2 = FixupConfig::from_toml_str(&out).unwrap();
+        assert_eq!(cfg, cfg2);
+        assert!(cfg2.replace_community);
     }
 
     #[test]
