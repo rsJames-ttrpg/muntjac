@@ -607,7 +607,7 @@ registry = "https://example.com/whatever"
         for r in [
             "none",
             "file:///tmp/fixups",
-            "github.com/jackmpcollins/muntjac-fixups",
+            "github.com/rsJames-ttrpg/muntjac-fixups",
         ] {
             let toml_str = format!(
                 r#"

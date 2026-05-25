@@ -304,12 +304,12 @@ mod tests {
 
     #[test]
     fn parses_github_url_with_rev() {
-        let got = parse_registry_config("github.com/jackmpcollins/muntjac-fixups", Some("abc123"))
+        let got = parse_registry_config("github.com/rsJames-ttrpg/muntjac-fixups", Some("abc123"))
             .unwrap();
         assert_eq!(
             got,
             RegistryConfig::Git {
-                url: "github.com/jackmpcollins/muntjac-fixups".into(),
+                url: "github.com/rsJames-ttrpg/muntjac-fixups".into(),
                 rev: Some("abc123".into()),
             }
         );
