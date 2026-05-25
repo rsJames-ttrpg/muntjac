@@ -221,6 +221,32 @@ similar issue surfaces.
   - **(b) Do it right:** Post-checkout, if `rev` was a hex SHA, `gix::Repository::find_object(sha)` + checkout to that commit. Requires more gix navigation.
 - **Target:** S8 polish OR post-launch. Current behavior is wrong-but-rare; the common workflows aren't affected.
 
+### From S8b final stage review (2026-05-24, pre-tag)
+
+#### TD-S8b-01: Seed-repo CI is schema-only; doesn't validate fixups at buck2-build time
+- **Source:** S8b design spec §1.2; user direction at brainstorm time.
+- **Severity:** Minor (narrow validation; trusts that the schema-correct fixups produce correct Buck rules)
+- **What:** The muntjac-fixups CI runs `muntjac fixups show <pkg>` for each seeded package. This catches schema errors and parse failures but does NOT validate that the fixup actually produces working Buck rules at `muntjac buckify` time, let alone that a `python_binary` using the package actually builds.
+- **Why:** Real validation requires running `muntjac buckify` on a pyproject that uses each package, then `buck2 build` of a synthetic python_binary that imports it. Requires `//third-party/c:<lib>` targets to exist in the test fixture — would need to write Buck rules from scratch for libjpeg/openssl/libzmq/libxml2/libxslt. Significant work; not blocking launch narrative.
+- **Fix:** Add a `tests/buck2-build/` fixture with `BUCK` files for the `//third-party/c:<lib>` targets, run `muntjac buckify` + `buck2 build` per package in CI.
+- **Target:** post-v0.1.0; bundle with the first round of community PRs that surface real-world breakage.
+
+#### TD-S8b-02: `torch` fixup deferred
+- **Source:** S8b design spec §1.2; user direction at brainstorm time.
+- **Severity:** Minor (post-launch addition)
+- **What:** No `packages/torch/fixups.toml` in the seed. Torch is a high-profile Python package; many users will want a community fixup.
+- **Why:** Torch wheels are 600MB+ (especially CUDA variants); the cuda-discrimination story is complex (`torch-cpu`, `torch-cuda10`, `torch-cuda11`, `torch-cuda12`); CI testing of torch is expensive. Best designed once we see how community contributors approach it.
+- **Fix:** Add `packages/torch/fixups.toml` with cfg-based wheel discrimination + extra_native_libs for CUDA runtime. Possibly split into `torch-cpu` and `torch-cuda-*` variants.
+- **Target:** post-v0.1.0.
+
+#### TD-S8b-03: `opencv-python` and `scipy` fixups deferred
+- **Source:** S8b design spec §1.2; user trimmed seed list from 8 → 5.
+- **Severity:** Polish (post-launch additions)
+- **What:** No `packages/opencv-python/fixups.toml` or `packages/scipy/fixups.toml` in the seed. Both are in the original roadmap's 8-package list.
+- **Why:** opencv-python has `opencv-python` vs `opencv-python-headless` confusion; scipy ships clean wheels and mostly needs no fixup. Easy adds when an interested user PRs them.
+- **Fix:** Add both files. opencv: clarify the headless-vs-not convention; scipy: probably empty `labels` body since wheels are typically clean.
+- **Target:** post-v0.1.0 — likely first community PR.
+
 ---
 
 ## Resolved
