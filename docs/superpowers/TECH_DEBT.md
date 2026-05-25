@@ -249,6 +249,16 @@ similar issue surfaces.
 - **Fix:** Add `[package.metadata.binstall]` to `Cargo.toml` with explicit `pkg-url`, `pkg-fmt`, and per-target overrides matching the release.yml output filenames. ~10 lines.
 - **Target:** Post-v0.1.0, bundle with TD-S8a-02 (Windows binaries) so the binstall config covers all target platforms in one pass.
 
+#### TD-S8a-04: Integration test sources shipped without their fixtures
+- **Source:** S8a Task 2 code-quality review (commit `76790c0`).
+- **Severity:** Minor (narrow correctness gap, doesn't bite the common path).
+- **What:** `Cargo.toml`'s `exclude = ["tests/fixtures/**", "docs/**"]` keeps the .crate tarball under crates.io's 10 MiB limit, but it does NOT exclude the `tests/*.rs` source files. Running `cargo test` against a freshly downloaded .crate would fail because most integration tests read paths under `tests/fixtures/**` which were excluded. `cargo publish --dry-run` doesn't catch this — its verify step only compiles, doesn't execute tests.
+- **Why it matters:** Affects users who download the source crate and run its test suite (rare for a CLI; typical install path is `cargo install muntjac` which doesn't trigger tests). Doesn't affect the binary itself.
+- **Fix options:**
+  - **(a) Extend exclude:** add `tests/**` (or specific test files that depend on fixtures) to the exclude list. Simplest; removes the surface entirely.
+  - **(b) Use `include = [...]` instead of `exclude`:** explicitly list `src/**`, `Cargo.toml`, `README.md`, `LICENSE`, `CHANGELOG.md`. More durable as the repo grows.
+- **Target:** post-v0.1.0. Acceptable for launch — the common install path is `cargo install muntjac` which doesn't run tests against the packaged crate.
+
 ### From S8b final stage review (2026-05-24, pre-tag)
 
 #### TD-S8b-01: Seed-repo CI is schema-only; doesn't validate fixups at buck2-build time

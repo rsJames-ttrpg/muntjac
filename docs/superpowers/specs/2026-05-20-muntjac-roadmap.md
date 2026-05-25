@@ -188,7 +188,7 @@ Decomposed into two sub-stages during the S8 brainstorm (split rationale: separa
 
 **Shipped:** 4 commits in muntjac repo (design spec + plan + TECH_DEBT entries + roadmap mark-shipped) + 4 commits in muntjac-fixups repo (LICENSE/docs + 5 fixups + smoke fixture + CI). Seed repo tagged `seed-v0.1.0`. CI green on the seed repo.
 
-#### S8a — muntjac repo polish & v0.1.0
+#### S8a — muntjac repo polish & v0.1.0 ✅ shipped
 
 **Scope:** README rewrite (canonical project entry point). 60-second demo wired as CI fixture. `Cargo.toml.repository` update (`jackmpcollins` → `rsJames-ttrpg`). Cargo metadata polish (keywords, categories, authors). `muntjac init` template URL update to reference seed repo. Release workflow. `cargo publish --dry-run` gate. v0.1.0 tag + cargo publish. Release notes drafted.
 
@@ -201,6 +201,8 @@ Decomposed into two sub-stages during the S8 brainstorm (split rationale: separa
 **Demo:** A new user can go from `cargo install muntjac` to a working Buck-built Python binary in five minutes by following the README.
 
 **Touches:** `README.md`, `.github/workflows/release.yml`, `Cargo.toml` metadata, `src/cli/init.rs` (template URL).
+
+**Shipped:** 13 commits, tag `s8a-complete`. README rewrite (canonical entry point, badges, 60-second quickstart), 60-second demo CI workflow (all 3 runners), Cargo.toml polish (v0.1.0, authors, keywords, categories, repository → rsJames-ttrpg), LICENSE + CHANGELOG, publish-check.yml + release.yml workflows (release.yml lints standalone — runs at tag-cut), `muntjac init` template pointing at canonical seed registry, launch-post stub with three audience drafts. crates.io publish + GitHub Release creation gated on the maintainer cutting `v0.1.0` tag with `CARGO_REGISTRY_TOKEN` configured.
 
 ---
 
@@ -287,7 +289,7 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | [2026-05-24-muntjac-s7a-community-layering.md](../plans/2026-05-24-muntjac-s7a-community-layering.md) | ✅ shipped (tag `s7a-complete`, 24 commits, 316 tests) |
 | S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 16 commits, 346 tests) |
 | S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | [2026-05-24-muntjac-s8b-fixups-seed.md](../plans/2026-05-24-muntjac-s8b-fixups-seed.md) | ✅ shipped (tag `s8b-complete`, seed repo at `seed-v0.1.0`, 4 commits) |
-| S8a | (not yet written) | (not yet written) | ⬜ blocked on S8b |
+| S8a | [2026-05-25-muntjac-s8a-launch-polish-design.md](./2026-05-25-muntjac-s8a-launch-polish-design.md) | [2026-05-25-muntjac-s8a-launch-polish.md](../plans/2026-05-25-muntjac-s8a-launch-polish.md) | ✅ shipped (tag `s8a-complete`, 13 commits) |
 
 ---
 
