@@ -535,3 +535,22 @@ fn fixture_09_offline_cache_hit() {
         "--no-network buckify with cached fetch must succeed"
     );
 }
+
+#[test]
+fn fixture_10_multi_tree_golden() {
+    let fix = fixture("10-multi-tree");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // expected/ mirrors the emitted `third-party/python` subtree: shared cfg
+    // (config/BUCK + wiring.bzl) once + per-tree modern/ + legacy/ packages.
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
+    );
+}
