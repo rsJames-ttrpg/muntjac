@@ -1,0 +1,20 @@
+[platforms]
+linux-x86_64-gnu  = { target = "x86_64-unknown-linux-gnu",  manylinux = "2_17" }
+linux-aarch64-gnu = { target = "aarch64-unknown-linux-gnu", manylinux = "2_17" }
+macos-arm64       = { target = "aarch64-apple-darwin",      macos_min = "11.0" }
+
+[fixups]
+registry = "none"
+
+[buck]
+file_name = "BUCK"
+
+[tree.modern]
+manifest_path   = "modern/pyproject.toml"
+third_party_dir = "third-party/python/modern"
+python_versions = ["3.12"]
+
+[tree.legacy]
+manifest_path   = "legacy/pyproject.toml"
+third_party_dir = "third-party/python/legacy"
+python_versions = ["3.12"]

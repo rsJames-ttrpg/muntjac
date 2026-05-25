@@ -1,0 +1,13 @@
+python_binary(
+    name = "modern_demo",
+    main = "modern_demo.py",
+    modifiers = ["//third-party/python/config:py312"],
+    deps = ["//third-party/python/modern:numpy"],
+)
+
+python_binary(
+    name = "legacy_demo",
+    main = "legacy_demo.py",
+    modifiers = ["//third-party/python/config:py312"],
+    deps = ["//third-party/python/legacy:numpy"],
+)

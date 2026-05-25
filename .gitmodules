@@ -7,3 +7,6 @@
 [submodule "tests/fixtures/buck/05-local-fixup/prelude"]
 	path = tests/fixtures/buck/05-local-fixup/prelude
 	url = https://github.com/facebook/buck2-prelude.git
+[submodule "tests/fixtures/buck/10-multi-tree/prelude"]
+	path = tests/fixtures/buck/10-multi-tree/prelude
+	url = https://github.com/facebook/buck2-prelude.git
