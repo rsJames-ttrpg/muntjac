@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::Subcommand;
 use pep508_rs::PackageName;
 
@@ -42,39 +42,67 @@ fn show(package: String, globals: &Globals) -> Result<()> {
     let config =
         Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
 
-    let tree = config
-        .trees
-        .first()
-        .ok_or_else(|| anyhow!("no trees in muntjac.toml"))?;
-    let third_party_dir = cwd.join(&tree.third_party_dir);
-
     let pkg_name = PackageName::from_str(&package)
         .with_context(|| format!("normalizing package name `{}`", package))?;
 
+    let trees = crate::cli::resolve_trees(&config, globals.tree.as_deref())?;
+    let multi = trees.len() > 1;
+    for tree in trees {
+        if multi {
+            println!("# ===== tree: {} =====", tree.name);
+        }
+        let third_party_dir = cwd.join(&tree.third_party_dir);
+        show_one_tree(
+            &config,
+            &third_party_dir,
+            &tree.name,
+            &package,
+            &pkg_name,
+            globals,
+            /* bail_if_missing = */ !multi,
+        )?;
+    }
+    Ok(())
+}
+
+fn show_one_tree(
+    config: &Config,
+    third_party_dir: &std::path::Path,
+    tree_name: &str,
+    package: &str,
+    pkg_name: &pep508_rs::PackageName,
+    globals: &Globals,
+    bail_if_missing: bool,
+) -> Result<()> {
     let eff = fixup::EffectiveFixups::load(
         &config.fixups.registry,
-        &third_party_dir,
+        third_party_dir,
         config.fixups.allow_local_overrides,
         globals.no_network,
     )
-    .with_context(|| format!("loading layered fixups for tree '{}'", tree.name))?;
+    .with_context(|| format!("loading layered fixups for tree '{}'", tree_name))?;
 
-    let community_cfg = eff.community.get(&pkg_name);
-    let local_cfg = eff.local.get(&pkg_name);
+    let community_cfg = eff.community.get(pkg_name);
+    let local_cfg = eff.local.get(pkg_name);
 
     if community_cfg.is_none() && local_cfg.is_none() {
-        let community_path = match &config.fixups.registry {
-            fixup::RegistryConfig::None => "(none)".to_string(),
-            fixup::RegistryConfig::FileUrl(p) => p.join("packages").display().to_string(),
-            fixup::RegistryConfig::Git { url, .. } => format!("git: {}", url),
-        };
-        let local_path = third_party_dir.join("fixups").display().to_string();
-        anyhow::bail!(
-            "no fixup for package '{}' (checked community at {}, local at {})",
-            package,
-            community_path,
-            local_path,
-        );
+        if bail_if_missing {
+            let community_path = match &config.fixups.registry {
+                fixup::RegistryConfig::None => "(none)".to_string(),
+                fixup::RegistryConfig::FileUrl(p) => p.join("packages").display().to_string(),
+                fixup::RegistryConfig::Git { url, .. } => format!("git: {}", url),
+            };
+            let local_path = third_party_dir.join("fixups").display().to_string();
+            anyhow::bail!(
+                "no fixup for package '{}' (checked community at {}, local at {})",
+                package,
+                community_path,
+                local_path,
+            );
+        } else {
+            println!("# (no fixup for '{}' in tree '{}')", package, tree_name);
+            return Ok(());
+        }
     }
 
     let both_present = community_cfg.is_some() && local_cfg.is_some();
