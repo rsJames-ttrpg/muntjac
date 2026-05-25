@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `muntjac fixups show` — print the resolved fixup for a package.
 - `muntjac fixups update [--rev <rev>]` — fetch the community fixup registry.
 - Layered fixups: community (Git-based registry) + local (in-tree) with documented merge rules.
-- Credible-launch surface: numpy, pandas, fastapi, requests, ruff on Linux x86_64 + macOS arm64.
+- Credible-launch surface: numpy, pandas, fastapi, requests, ruff on Linux x86_64, Linux arm64, and macOS arm64.
 - Seed community fixup registry at github.com/rsJames-ttrpg/muntjac-fixups (5 packages: pillow, cryptography, lxml, pyzmq, psycopg2-binary).
 
 ### Known limitations

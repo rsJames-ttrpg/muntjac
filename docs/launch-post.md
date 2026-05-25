@@ -6,7 +6,7 @@ Three audience-tuned drafts. Maintainer picks one (or more) and posts manually a
 
 ## Short form (Buck2 Discord, Twitter/X)
 
-> muntjac v0.1.0: translate `uv.lock` into Buck2 build rules. numpy/pandas/fastapi/requests/ruff working end-to-end on Linux x86_64 + macOS arm64. Community fixup registry for native deps at github.com/rsJames-ttrpg/muntjac-fixups.
+> muntjac v0.1.0: translate `uv.lock` into Buck2 build rules. numpy/pandas/fastapi/requests/ruff working end-to-end on Linux x86_64, Linux arm64, and macOS arm64. Community fixup registry for native deps at github.com/rsJames-ttrpg/muntjac-fixups.
 >
 > `cargo install muntjac` — README has the 60-second demo. Feedback welcome.
 
@@ -30,7 +30,7 @@ Three audience-tuned drafts. Maintainer picks one (or more) and posts manually a
 >
 > **Moat:** Community fixup registry at github.com/rsJames-ttrpg/muntjac-fixups — seed includes pillow, cryptography, lxml, pyzmq, psycopg2-binary. PRs welcome.
 >
-> **Known limits:** Linux x86_64 + macOS arm64 are the credible-launch platforms. Windows + Intel macOS work via `cargo install` but no prebuilt binaries yet. See ROADMAP for v0.2+.
+> **Known limits:** Linux x86_64, Linux arm64, and macOS arm64 are the credible-launch platforms. Windows + Intel macOS work via `cargo install` but no prebuilt binaries yet. See ROADMAP for v0.2+.
 
 ---
 
