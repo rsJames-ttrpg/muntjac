@@ -1,0 +1,97 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish-crate:
+    name: publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo publish --dry-run
+        run: cargo publish --dry-run --locked
+
+      - name: cargo publish
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  build-binaries:
+    name: build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: muntjac-x86_64-unknown-linux-gnu.tar.gz
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset: muntjac-aarch64-unknown-linux-gnu.tar.gz
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            asset: muntjac-aarch64-apple-darwin.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo build --release
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: tar the binary
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -czf "dist/${{ matrix.asset }}" -C "target/${{ matrix.target }}/release" muntjac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+  github-release:
+    name: create GitHub Release
+    needs: [publish-crate, build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: extract CHANGELOG section for this tag
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          awk -v ver="$tag" '
+            /^## \[/ { if (found) exit; if ($0 ~ "\\[" ver "\\]") { found=1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          echo "--- extracted release notes ---"
+          cat release-notes.md
+
+      - name: gh release create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file release-notes.md
