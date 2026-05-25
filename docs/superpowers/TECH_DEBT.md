@@ -221,6 +221,34 @@ similar issue surfaces.
   - **(b) Do it right:** Post-checkout, if `rev` was a hex SHA, `gix::Repository::find_object(sha)` + checkout to that commit. Requires more gix navigation.
 - **Target:** S8 polish OR post-launch. Current behavior is wrong-but-rare; the common workflows aren't affected.
 
+### From S8a brainstorm (2026-05-25)
+
+#### TD-S8a-01: Fixtures 04 + 05 gated to `ubuntu-latest` in CI
+- **Source:** S8a brainstorm; `.github/workflows/ci.yml` lines 105, 122 — both fixture-04 (prebake) and fixture-05 (overlay) steps use `if: matrix.runner == 'ubuntu-latest'`.
+- **Severity:** Minor (real coverage gap, masked by per-arch conditionals)
+- **What:** The CI matrix runs `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`, but the prebake and overlay fixture steps only execute on `ubuntu-latest`. macOS + Linux arm64 push without exercising prebake or overlay paths end-to-end. The pattern itself is also a smell — arch-conditional polymorphism inside a single matrix workflow.
+- **Why it matters:** Prebake involves PEP 517 invocation against a real Python; overlay invokes `zip`/`unzip` and the genrule's shell logic. Both are sensitive to platform differences (macOS BSD zip vs GNU zip, Python version pinning). A regression that only fires on macOS or arm64 would slip past CI.
+- **Fix:**
+  - **Option A:** Unconditionally run prebake + overlay on all three runners. Requires zip/unzip availability on macOS (Apple ships `zip` by default; verify). Adds ~30s per non-ubuntu runner.
+  - **Option B:** Split into a dedicated `fixtures-buck2.yml` workflow with its own matrix choice, leaving `ci.yml` lean. Cleaner separation per [[feedback_ci_no_arch_polymorphism]].
+- **Target:** Post-launch (S8a explicitly does not fix this — instead, the *new* demo-CI fixture introduced in S8a runs on all three runners as the example for how to do it right going forward).
+
+#### TD-S8a-02: Windows + macos-x86_64 prebuilt binaries
+- **Source:** S8a brainstorm.
+- **Severity:** Polish (post-launch addition)
+- **What:** v0.1.0 release ships prebuilt binaries for `linux-x86_64-gnu`, `linux-aarch64-gnu`, `macos-aarch64`. Windows + Intel macOS users must `cargo install muntjac` (compiles from source) or build from git.
+- **Why:** Credible-launch surface is Linux x86_64 + macOS arm64 (mirroring numpy/pandas/fastapi/requests/ruff). Windows is not currently a tested platform; Intel macOS has decreasing install base + needs a separate `macos-13` runner.
+- **Fix:** Add `windows-latest` + `macos-13` jobs to `release.yml`'s cross-compile matrix. Verify muntjac actually builds on Windows (untested — `gix`, `reqwest`, path handling may surface issues). Add `[[bin]]`-level Windows-specific entry points if needed.
+- **Target:** Post-v0.1.0. Likely first request from a Windows-using contributor.
+
+#### TD-S8a-03: `cargo-binstall` metadata not configured
+- **Source:** S8a brainstorm.
+- **Severity:** Polish
+- **What:** No `[package.metadata.binstall]` section in `Cargo.toml`. `cargo-binstall muntjac` will work via auto-detection of the GitHub Release artifacts (which use a conventional name pattern), but a config block would lock the pattern and document it.
+- **Why:** binstall is the modern "install Rust binary without compiling" path. Auto-detection works but is fragile if the release artifact naming convention drifts.
+- **Fix:** Add `[package.metadata.binstall]` to `Cargo.toml` with explicit `pkg-url`, `pkg-fmt`, and per-target overrides matching the release.yml output filenames. ~10 lines.
+- **Target:** Post-v0.1.0, bundle with TD-S8a-02 (Windows binaries) so the binstall config covers all target platforms in one pass.
+
 ### From S8b final stage review (2026-05-24, pre-tag)
 
 #### TD-S8b-01: Seed-repo CI is schema-only; doesn't validate fixups at buck2-build time
