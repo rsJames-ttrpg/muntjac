@@ -150,6 +150,10 @@ pub struct BuckConfig {
     pub file_name: String,
     #[serde(default)]
     pub vendor: bool,
+    /// Where the shared cfg (config/ + wiring.bzl) is written. `None` →
+    /// derived as the longest common ancestor of trees' third_party_dirs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg_dir: Option<PathBuf>,
 }
 
 impl Default for BuckConfig {
@@ -157,6 +161,7 @@ impl Default for BuckConfig {
         Self {
             file_name: default_buck_file_name(),
             vendor: false,
+            cfg_dir: None,
         }
     }
 }
@@ -171,7 +176,7 @@ pub struct LockfileConfig {
     pub include_groups: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PythonVersion(pub u8, pub u8);
 
 impl<'de> Deserialize<'de> for PythonVersion {
@@ -311,6 +316,42 @@ impl Config {
                 self.lockfile.include_groups.len()
             );
         }
+    }
+}
+
+impl Config {
+    /// Resolve where the shared cfg (config/ + wiring.bzl) is written.
+    /// Explicit `[buck] cfg_dir` wins; else the longest common path-ancestor
+    /// of all trees' third_party_dirs. For a single tree this is that tree's
+    /// own third_party_dir, keeping output byte-identical to pre-S11.
+    pub fn cfg_dir(&self) -> PathBuf {
+        if let Some(explicit) = &self.buck.cfg_dir {
+            return explicit.clone();
+        }
+        let mut dirs = self.trees.iter().map(|t| t.third_party_dir.as_path());
+        let first = dirs.next().expect("validated: at least one tree");
+        let mut common: Vec<std::path::Component> = first.components().collect();
+        for d in dirs {
+            let comps: Vec<_> = d.components().collect();
+            let keep = common
+                .iter()
+                .zip(comps.iter())
+                .take_while(|(a, b)| a == b)
+                .count();
+            common.truncate(keep);
+        }
+        common.iter().collect()
+    }
+
+    /// Union of every tree's python_versions, sorted and deduped.
+    pub fn python_versions_union(&self) -> Vec<PythonVersion> {
+        let mut set: std::collections::BTreeSet<PythonVersion> = std::collections::BTreeSet::new();
+        for t in &self.trees {
+            for v in &t.python_versions {
+                set.insert(v.clone());
+            }
+        }
+        set.into_iter().collect()
     }
 }
 
@@ -496,6 +537,84 @@ python_versions = ["3.11"]
         let names: Vec<&str> = config.trees.iter().map(|t| t.name.as_str()).collect();
         // BTreeMap iteration is sorted, so we expect alphabetical.
         assert_eq!(names, vec!["legacy", "modern"]);
+    }
+
+    #[test]
+    fn cfg_dir_single_tree_is_third_party_dir() {
+        let toml = r#"
+manifest_path = "../pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert_eq!(
+            config.cfg_dir(),
+            std::path::PathBuf::from("third-party/python")
+        );
+    }
+
+    #[test]
+    fn cfg_dir_multi_tree_is_common_ancestor() {
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.modern]
+manifest_path = "pyproject.toml"
+third_party_dir = "third-party/python/modern"
+python_versions = ["3.12"]
+[tree.legacy]
+manifest_path = "legacy/pyproject.toml"
+third_party_dir = "third-party/python/legacy"
+python_versions = ["3.12"]
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert_eq!(
+            config.cfg_dir(),
+            std::path::PathBuf::from("third-party/python")
+        );
+    }
+
+    #[test]
+    fn cfg_dir_explicit_override_wins() {
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[buck]
+cfg_dir = "buck/cfg"
+[tree.a]
+manifest_path = "a/pyproject.toml"
+third_party_dir = "apps/a/tp"
+python_versions = ["3.12"]
+[tree.b]
+manifest_path = "b/pyproject.toml"
+third_party_dir = "apps/b/tp"
+python_versions = ["3.12"]
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert_eq!(config.cfg_dir(), std::path::PathBuf::from("buck/cfg"));
+    }
+
+    #[test]
+    fn python_versions_union_dedupes_and_sorts() {
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.modern]
+manifest_path = "pyproject.toml"
+third_party_dir = "tp/modern"
+python_versions = ["3.12", "3.11"]
+[tree.legacy]
+manifest_path = "legacy/pyproject.toml"
+third_party_dir = "tp/legacy"
+python_versions = ["3.11"]
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert_eq!(
+            config.python_versions_union(),
+            vec![PythonVersion(3, 11), PythonVersion(3, 12)]
+        );
     }
 
     #[test]
