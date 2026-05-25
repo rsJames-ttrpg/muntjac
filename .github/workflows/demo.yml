@@ -1,0 +1,117 @@
+name: demo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  demo:
+    name: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install cp312 python
+        run: |
+          set -euo pipefail
+          # uv ships a known-good cp312 across runners.
+          if ! command -v uv >/dev/null 2>&1; then
+            python3 -m pip install --user uv || pipx install uv
+          fi
+          uv python install 3.12
+          UV_PY_BIN="$(uv python find 3.12)"
+          # Symlink so the prelude's system_python_toolchain finds `python3.12`.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          else
+            sudo ln -sf "$UV_PY_BIN" /usr/local/bin/python3.12
+          fi
+          python3.12 --version
+
+      - name: install buck2
+        run: |
+          set -euo pipefail
+          BUCK2_RELEASE="2026-05-18"
+          case "${{ matrix.runner }}" in
+            ubuntu-latest)       ASSET="buck2-x86_64-unknown-linux-gnu.zst"   ;;
+            ubuntu-24.04-arm)    ASSET="buck2-aarch64-unknown-linux-gnu.zst"  ;;
+            macos-latest)        ASSET="buck2-aarch64-apple-darwin.zst"       ;;
+            *) echo "unknown runner ${{ matrix.runner }}"; exit 1 ;;
+          esac
+          mkdir -p "$HOME/.local/bin"
+          curl -L "https://github.com/facebook/buck2/releases/download/${BUCK2_RELEASE}/${ASSET}" \
+              -o /tmp/buck2.zst
+          # zstd may not be pre-installed on macOS GH runners; install if needed
+          if ! command -v zstd >/dev/null 2>&1; then
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              brew install zstd
+            else
+              sudo apt-get update && sudo apt-get install -y zstd
+            fi
+          fi
+          zstd -d /tmp/buck2.zst -o "$HOME/.local/bin/buck2"
+          chmod +x "$HOME/.local/bin/buck2"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buck2" --version
+
+      - name: install muntjac under test
+        run: cargo install --path . --locked
+
+      - name: run the README demo end-to-end
+        run: |
+          set -euo pipefail
+
+          # Fixture 02 provides battle-tested Buck2 scaffolding (prelude submodule,
+          # toolchains/, .buckconfig, PACKAGE). We copy those in to represent
+          # "the user's existing Buck2 project setup" — those files are NOT
+          # muntjac's responsibility to scaffold (see spec §5.2 prelude note,
+          # and TD item for `muntjac init` scaffolding `.buckconfig`).
+          FIXTURE="$(pwd)/tests/fixtures/buck/02-numpy-pandas"
+          DEMO=$(mktemp -d)
+          cd "$DEMO"
+
+          # Copy Buck2 scaffolding (NOT the muntjac state — we're testing init).
+          cp -r "$FIXTURE/prelude"     ./prelude
+          cp -r "$FIXTURE/toolchains"  ./toolchains
+          cp    "$FIXTURE/.buckconfig" ./.buckconfig
+          cp    "$FIXTURE/PACKAGE"     ./PACKAGE
+
+          # Fresh uv project (the README's starting point).
+          uv init --bare --name muntjac-demo
+          uv add 'numpy>=2.1,<2.3'
+
+          # muntjac flow: init → vendor → buckify.
+          muntjac init
+          muntjac vendor
+          muntjac buckify
+
+          # Write a smoke target. python_binary depending on numpy; modifiers
+          # point at the config target muntjac emits for cp312.
+          mkdir -p app
+          cat > app/main.py <<'PY'
+          import numpy as np
+          arr = np.zeros(3)
+          print("DEMO_OK shape={} dtype={}".format(arr.shape, arr.dtype))
+          PY
+          cat > app/BUCK <<'BUCK'
+          python_binary(
+              name = "main",
+              main = "main.py",
+              modifiers = ["//third-party/python/config:py312"],
+              deps = ["//third-party/python:numpy"],
+          )
+          BUCK
+
+          buck2 run //app:main 2>&1 | tee /tmp/demo-out.txt
+          grep -F "DEMO_OK shape=(3,)" /tmp/demo-out.txt
