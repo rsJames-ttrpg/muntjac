@@ -101,6 +101,31 @@ jobs:
           # Sanity-check the output contains the expected array.
           grep -F "[0. 0. 0.]" /tmp/numpy-out.txt
 
+      - name: muntjac buckify (10-multi-tree fixture)
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/10-multi-tree
+          # Initialize prelude submodule in case checkout step didn't.
+          git submodule update --init --recursive --depth 1
+          cargo run --release --manifest-path ../../../../Cargo.toml -- buckify
+          # Shared cfg emitted once at the common-ancestor cfg_dir.
+          test -f third-party/python/config/BUCK
+          test -f third-party/python/wiring.bzl
+          # Per-tree packages.
+          test -f third-party/python/modern/BUCK
+          test -f third-party/python/modern/muntjac.bzl
+          test -f third-party/python/legacy/BUCK
+          test -f third-party/python/legacy/muntjac.bzl
+
+      - name: buck2 build + run both trees (10-multi-tree)
+        run: |
+          set -euo pipefail
+          cd tests/fixtures/buck/10-multi-tree
+          buck2 run //tests/smoke:modern_demo 2>&1 | tee /tmp/modern-out.txt
+          grep -E "MODERN numpy 2\." /tmp/modern-out.txt
+          buck2 run //tests/smoke:legacy_demo 2>&1 | tee /tmp/legacy-out.txt
+          grep -E "LEGACY numpy 1\." /tmp/legacy-out.txt
+
       - name: muntjac buckify (04-pure-python-sdist fixture)
         if: matrix.runner == 'ubuntu-latest'
         run: |
