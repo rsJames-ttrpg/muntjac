@@ -48,7 +48,7 @@ fn emit_buck(input: &EmitInput) -> String {
 
     for pkg in sorted_pkgs {
         writeln!(s).unwrap();
-        write_pypi_package(&mut s, pkg, &input.third_party_dir, &input.cfg_dir);
+        write_pypi_package(&mut s, pkg, &input.cfg_dir);
     }
     s
 }
@@ -620,16 +620,7 @@ fn emit_wiring_bzl(input: &SharedCfgInput) -> String {
     s
 }
 
-// `_pkg_third_party_dir` is the package-location root; today every reference
-// rendered here is a cfg reference (the config_setting select keys), which use
-// `cfg_dir`. The param is kept for symmetry with the call site and future
-// package-location refs.
-fn write_pypi_package(
-    s: &mut String,
-    pkg: &EmitPackage,
-    _pkg_third_party_dir: &str,
-    cfg_dir: &str,
-) {
+fn write_pypi_package(s: &mut String, pkg: &EmitPackage, cfg_dir: &str) {
     writeln!(s, "pypi_package(").unwrap();
     writeln!(s, "    name = \"{}\",", pkg.name).unwrap();
     writeln!(s, "    version = \"{}\",", pkg.version).unwrap();

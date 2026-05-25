@@ -841,6 +841,47 @@ mod tests {
     }
 
     #[test]
+    fn build_shared_cfg_input_unions_versions_across_trees() {
+        use crate::config::Config;
+        use std::str::FromStr;
+        // Two trees with disjoint python_versions; shared cfg must cover the union.
+        let config = Config::from_str(
+            r#"
+[platforms]
+linux-x86_64-gnu = { target = "x86_64-unknown-linux-gnu", manylinux = "2_17" }
+macos-arm64      = { target = "aarch64-apple-darwin",      macos_min = "11.0" }
+[tree.modern]
+manifest_path = "modern/pyproject.toml"
+third_party_dir = "third-party/python/modern"
+python_versions = ["3.12"]
+[tree.legacy]
+manifest_path = "legacy/pyproject.toml"
+third_party_dir = "third-party/python/legacy"
+python_versions = ["3.11"]
+"#,
+        )
+        .unwrap();
+
+        let sci = build_shared_cfg_input(&config);
+
+        // cfg_dir is the common ancestor of the two tree dirs.
+        assert_eq!(sci.cfg_dir, "third-party/python");
+        // platforms are the (sorted) shared platform keys.
+        assert_eq!(sci.platforms, vec!["linux-x86_64-gnu", "macos-arm64"]);
+        // configs cover BOTH python versions × BOTH platforms = 4 cells, sorted.
+        let names: Vec<String> = sci.configs.iter().map(|c| c.as_str().to_string()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "py311-linux-x86_64-gnu",
+                "py311-macos-arm64",
+                "py312-linux-x86_64-gnu",
+                "py312-macos-arm64",
+            ]
+        );
+    }
+
+    #[test]
     fn build_emit_input_errors_on_no_wheel() {
         use crate::config::{Config, Platform, PythonVersion, Tree};
         use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
