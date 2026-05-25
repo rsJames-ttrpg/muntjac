@@ -7,7 +7,8 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 
 use crate::buck::{
-    BuckEmitter, BuildEmitContext, StringTemplateEmitter, build_emit_input, write_outputs,
+    BuckEmitter, BuildEmitContext, StringTemplateEmitter, build_emit_input, build_shared_cfg_input,
+    emit_shared_cfg, write_outputs, write_shared_cfg,
 };
 use crate::cli::Globals;
 use crate::config::Config;
@@ -22,17 +23,21 @@ pub fn run(globals: &Globals) -> Result<()> {
         Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
 
     let emitter = StringTemplateEmitter;
-    let cfg_dir = cfg_path.parent().unwrap_or(Path::new("."));
 
-    for tree in &config.trees {
-        if let Some(filter) = &globals.tree {
-            if &tree.name != filter {
-                continue;
-            }
-        }
+    // 1. Shared cfg (constraint_settings + config_settings + wiring.bzl),
+    //    emitted once at the shared cfg_dir.
+    let cfg_dir_rel = config.shared_cfg_dir();
+    let shared = emit_shared_cfg(&build_shared_cfg_input(&config));
+    write_shared_cfg(&shared, &cwd.join(&cfg_dir_rel))?;
+    let cfg_dir_str = cfg_dir_rel.to_string_lossy().into_owned();
 
+    // 2. Per-tree package files (BUCK + muntjac.bzl).
+    for tree in crate::cli::resolve_trees(&config, globals.tree.as_deref())? {
         // Resolve uv.lock relative to the tree's manifest directory.
-        let manifest_dir = cfg_dir.join(tree.manifest_path.parent().unwrap_or(Path::new("")));
+        let manifest_dir = cfg_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(tree.manifest_path.parent().unwrap_or(Path::new("")));
         let lockfile_path = manifest_dir.join("uv.lock");
         let lock_bytes = fs::read_to_string(&lockfile_path)
             .with_context(|| format!("reading {}", lockfile_path.display()))?;
@@ -66,6 +71,7 @@ pub fn run(globals: &Globals) -> Result<()> {
                 manifest: manifest.as_ref(),
                 fixups: Some(&fixups),
                 abs_third_party_dir: Some(&canonical_third_party_dir),
+                cfg_dir: Some(&cfg_dir_str),
             },
         )?;
         let output = emitter.emit(&input);

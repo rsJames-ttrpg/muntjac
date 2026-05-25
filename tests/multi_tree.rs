@@ -20,7 +20,6 @@ python_versions = ["3.12"]
 "#;
 
 #[test]
-#[ignore = "enabled in S11 Task 5 once resolve_trees is wired into buckify"]
 fn buckify_unknown_tree_errors_with_available_names() {
     let dir = tempdir().unwrap();
     fs::write(dir.path().join("muntjac.toml"), TWO_TREE_TOML).unwrap();

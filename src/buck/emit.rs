@@ -11,6 +11,10 @@ use crate::wheel::{PickResult, build_compatible_tags, pick_wheel};
 pub struct EmitInput {
     pub tree: String,
     pub third_party_dir: String,
+    /// Cell-relative path to the shared cfg package (config_settings +
+    /// wiring.bzl). For a single tree this equals `third_party_dir`, keeping
+    /// output byte-identical to pre-S11.
+    pub cfg_dir: String,
     pub configs: Vec<ConfigName>,
     pub packages: Vec<EmitPackage>,
 }
@@ -89,6 +93,20 @@ impl std::fmt::Display for ConfigName {
 pub struct EmitOutput {
     pub buck: String,
     pub muntjac_bzl: String,
+}
+
+/// Inputs for emitting the shared cfg package (constraint_settings,
+/// config_settings, wiring.bzl) once at the shared `cfg_dir`.
+#[derive(Debug, Clone)]
+pub struct SharedCfgInput {
+    pub cfg_dir: String,
+    pub configs: Vec<ConfigName>,
+    /// Platform keys (sorted) for the host-modifier mapping in wiring.bzl.
+    pub platforms: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SharedCfgOutput {
     pub config_buck: String,
     pub wiring_bzl: String,
 }
@@ -117,6 +135,9 @@ pub struct BuildEmitContext<'a> {
     /// Absolute path to the resolved `third_party_dir` for overlay walk
     /// and other filesystem ops.
     pub abs_third_party_dir: Option<&'a std::path::Path>,
+    /// S11: cfg-label root (cell-relative). `None` falls back to the tree's
+    /// `third_party_dir` for the single-tree path, keeping output identical.
+    pub cfg_dir: Option<&'a str>,
 }
 
 /// Compose the S1/S2 pipeline into an `EmitInput` for a single tree.
@@ -563,9 +584,32 @@ pub fn build_emit_input(
     Ok(EmitInput {
         tree: tree.name.clone(),
         third_party_dir: tree.third_party_dir.to_string_lossy().into_owned(),
+        cfg_dir: ctx
+            .cfg_dir
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| tree.third_party_dir.to_string_lossy().into_owned()),
         configs,
         packages,
     })
+}
+
+/// Build the shared cfg input from the whole config (all platforms × the
+/// union of every tree's python versions). Emitted once at `shared_cfg_dir`.
+pub fn build_shared_cfg_input(config: &Config) -> SharedCfgInput {
+    let cfg_dir = config.shared_cfg_dir().to_string_lossy().into_owned();
+    let mut configs: Vec<ConfigName> = Vec::new();
+    for plat_name in config.platforms.keys() {
+        for py in config.python_versions_union() {
+            configs.push(ConfigName::new(&format!("{}.{}", py.0, py.1), plat_name));
+        }
+    }
+    configs.sort();
+    let platforms: Vec<String> = config.platforms.keys().cloned().collect();
+    SharedCfgInput {
+        cfg_dir,
+        configs,
+        platforms,
+    }
 }
 
 /// Apply a `ResolvedFixup`'s dep-side ops to a package's raw dep list.
@@ -628,6 +672,7 @@ mod tests {
         let inp = EmitInput {
             tree: "default".into(),
             third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
             configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
             packages: vec![EmitPackage {
                 name: "requests".into(),
@@ -1456,6 +1501,7 @@ manylinux = "2_17"
                 manifest: Some(&manifest),
                 fixups: None,
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .unwrap_err();
@@ -1566,6 +1612,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input with fixups");
@@ -1698,6 +1745,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input succeeds");
@@ -1831,6 +1879,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input with prefer_wheel");
@@ -1968,6 +2017,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect_err("should fail when prefer_wheel sha is absent");
@@ -2017,6 +2067,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect_err("should fail when exclude_wheels empties the wheel set");
@@ -2068,6 +2119,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input with prefer_wheel + extra_deps");
@@ -2124,6 +2176,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input with per-package fixup fields");
@@ -2171,6 +2224,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect_err("entry_points = true must bail");
@@ -2216,6 +2270,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect_err("invalid extra_deps target must bail");
@@ -2346,6 +2401,7 @@ manylinux = "2_17"
                 manifest: None,
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
+                cfg_dir: None,
             },
         )
         .expect("build_emit_input with overlay");

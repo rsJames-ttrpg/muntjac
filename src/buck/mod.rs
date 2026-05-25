@@ -9,7 +9,7 @@ pub mod write;
 
 pub use emit::{
     BuckEmitter, BuildEmitContext, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel,
-    build_emit_input,
+    SharedCfgInput, SharedCfgOutput, build_emit_input, build_shared_cfg_input,
 };
-pub use string_writer::StringTemplateEmitter;
-pub use write::write_outputs;
+pub use string_writer::{StringTemplateEmitter, emit_shared_cfg};
+pub use write::{write_outputs, write_shared_cfg};
