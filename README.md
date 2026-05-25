@@ -70,6 +70,29 @@ vendor    = false
 
 Full schema reference: [design spec §3 — configuration](docs/superpowers/specs/2026-05-20-muntjac-design.md).
 
+## Multi-tree (incompatible dependency universes)
+
+When parts of your monorepo can't share one resolution — say a legacy service needs `numpy<2` and a new one needs `numpy>=2` — declare one `[tree.<name>]` block per universe. `[platforms]` and `[fixups]` stay shared across all trees:
+
+```toml
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+
+[tree.modern]
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python/modern"
+python_versions = ["3.12"]
+
+[tree.legacy]
+manifest_path   = "legacy/pyproject.toml"
+third_party_dir = "third-party/python/legacy"
+python_versions = ["3.12"]
+```
+
+Each tree is an island — the same package at conflicting versions coexists via distinct Buck target paths (`//third-party/python/modern:numpy` vs `//third-party/python/legacy:numpy`). `muntjac buckify` and `muntjac vendor` process all trees by default; `--tree <name>` scopes to one. `muntjac fixups show <pkg>` prints a per-tree block. First-party rules pick a universe by which target path they depend on.
+
+The Buck cfg machinery (`config/` + `wiring.bzl`) is emitted once at a shared `cfg_dir` — by default the longest common ancestor of the trees' `third_party_dir`s (here `third-party/python`), overridable via `[buck] cfg_dir`.
+
 ## Community fixups
 
 Most Python packages work out of the box. Some — packages with C extensions linking libjpeg, openssl, libzmq — need a *fixup* that wires the wheel up to the right `//third-party/c:*` targets.
