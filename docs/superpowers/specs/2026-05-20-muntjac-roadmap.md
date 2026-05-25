@@ -172,7 +172,7 @@ Decomposed into two sub-stages during the S7a brainstorm (split rationale: capab
 
 Decomposed into two sub-stages during the S8 brainstorm (split rationale: separate repos — S8b lands in a new `muntjac-fixups` repo, S8a stays in muntjac).
 
-#### S8b — `muntjac-fixups` seed repo
+#### S8b — `muntjac-fixups` seed repo ✅ shipped
 
 **Scope:** New repo at `github.com/rsJames-ttrpg/muntjac-fixups`. 5 seeded packages (pillow, cryptography, lxml, pyzmq, psycopg2-binary; torch + opencv + scipy deferred per launch trim). README, CONTRIBUTING.md, MIT LICENSE. Schema-only CI via `muntjac fixups show`. `tests/schema-smoke/` synthetic fixture.
 
@@ -185,6 +185,8 @@ Decomposed into two sub-stages during the S8 brainstorm (split rationale: separa
 **Demo:** `muntjac fixups show pillow` (against the schema-smoke fixture) prints the seeded pillow fixup as canonical TOML.
 
 **Touches:** `muntjac-fixups` repo (separate); `docs/superpowers/specs/2026-05-24-muntjac-s8b-fixups-seed-design.md`; `docs/superpowers/TECH_DEBT.md` (TD-S8b-01/02/03 entries).
+
+**Shipped:** 4 commits in muntjac repo (design spec + plan + TECH_DEBT entries + roadmap mark-shipped) + 4 commits in muntjac-fixups repo (LICENSE/docs + 5 fixups + smoke fixture + CI). Seed repo tagged `seed-v0.1.0`. CI green on the seed repo.
 
 #### S8a — muntjac repo polish & v0.1.0
 
@@ -284,7 +286,7 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S6 | [2026-05-23-muntjac-s6-local-fixups-design.md](./2026-05-23-muntjac-s6-local-fixups-design.md) | [2026-05-23-muntjac-s6-local-fixups.md](../plans/2026-05-23-muntjac-s6-local-fixups.md) | ✅ shipped (tag `s6-complete`, 28 commits, 262 tests) |
 | S7a | [2026-05-24-muntjac-s7a-community-layering-design.md](./2026-05-24-muntjac-s7a-community-layering-design.md) | [2026-05-24-muntjac-s7a-community-layering.md](../plans/2026-05-24-muntjac-s7a-community-layering.md) | ✅ shipped (tag `s7a-complete`, 24 commits, 316 tests) |
 | S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 16 commits, 346 tests) |
-| S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | (not yet written) | ⬜ next |
+| S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | [2026-05-24-muntjac-s8b-fixups-seed.md](../plans/2026-05-24-muntjac-s8b-fixups-seed.md) | ✅ shipped (tag `s8b-complete`, seed repo at `seed-v0.1.0`, 4 commits) |
 | S8a | (not yet written) | (not yet written) | ⬜ blocked on S8b |
 
 ---
