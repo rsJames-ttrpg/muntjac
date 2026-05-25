@@ -62,10 +62,11 @@ Target ~150–250 lines, in this order:
    - Title: `# muntjac`
    - Tagline: `Translate uv.lock into Buck2 build rules.`
    - Badges: CI status (existing ci.yml), crates.io version, license
-2. **What is muntjac?** — 3 paragraphs:
+2. **What is muntjac?** — 4 paragraphs:
    - (a) Problem: `uv` doesn't speak Buck. Hand-writing `pypi_package` rules per dep is brittle.
    - (b) Solution: muntjac reads `uv.lock` + a `muntjac.toml` config, emits `BUCK` + `muntjac.bzl` + `wiring.bzl` + `config/BUCK`. PEP 503 normalization, marker eval per platform, PEP 517 sdist prebake, native-extension fixups all handled.
    - (c) Moat: community fixup registry at `github.com/rsJames-ttrpg/muntjac-fixups` so users don't write the libjpeg / openssl / libzmq incantations every time.
+   - (d) Developer experience: muntjac is designed to flatten Buck2's learning curve for Python teams. Keep using `uv add` / `uv lock` / `uv sync` for day-to-day dependency work — muntjac re-derives Buck rules from `uv.lock` on demand. The mental model stays "edit pyproject.toml → re-buckify"; you never hand-edit `pypi_package` rules, never look up wheel filenames, never debug marker eval by hand. uv-native ergonomics in, Buck-native targets out.
 3. **Quickstart** — verbatim demo block (5 lines, copy-pasteable):
    ```sh
    cargo install muntjac
@@ -436,6 +437,8 @@ New file `docs/launch-post.md` with three audience-tuned drafts:
 > **muntjac** is a Rust CLI that translates `uv.lock` (Python's modern lockfile) into Buck2 build rules. v0.1.0 ships today.
 >
 > **Why:** Buck2 users with Python in their monorepo have had to either hand-write `pypi_package` rules or use Reindeer (which is Cargo-specific). muntjac fills the uv-to-Buck gap, with first-class support for the parts that hurt: PEP 503 normalization, marker evaluation per platform, PEP 517 sdist prebake, native-extension fixups.
+>
+> **DX:** Keep `uv add` / `uv lock` / `uv sync` for local dev — muntjac re-derives Buck rules from `uv.lock` on demand. No hand-written `pypi_package` rules, no wheel-filename debugging, no marker-eval-by-hand. Flattens Buck2's learning curve for Python teams: uv-native ergonomics in, Buck-native targets out.
 >
 > **Demo:**
 > ```
