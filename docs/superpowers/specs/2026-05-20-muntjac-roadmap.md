@@ -206,21 +206,31 @@ Decomposed into two sub-stages during the S8 brainstorm (split rationale: separa
 
 ---
 
-## Phase 2 — post-launch (v0.2.0+)
+## Phase 2 — pre-announce build-out (v0.2.0 → v0.4.0)
 
-Not blocking v0.1.0; sequenced once Phase 1 has shipped and feedback is in hand.
+**Re-sequenced 2026-05-25.** Originally framed as post-launch / feedback-driven. The maintainer decided to **dogfood muntjac on a real personal project before the public announcement**, and that migration needs multi-tree (S11). Rather than ship multi-tree alone, all three Phase 2 stages move ahead of the announcement: the maintainer ships vendor mode, audit/unused, and multi-tree, migrates their own project onto the full set, and only then announces.
 
-### S9 — Vendor mode
+So v0.1.0 is *published* (live on crates.io) but *unannounced*. The public launch targets **v0.4.0**.
 
-`muntjac vendor --mode=committed` downloads wheels into `third-party/python/vendor/` and the emitter replaces `http_file(urls=…)` with relative source refs. Buck builds become air-gapped.
+**Build order: S11 → S9 → S10** (stage numbers keep their canonical identities — the CLI stubs and TECH_DEBT entries reference `S9`/`S10`/`S11` — only the build order changes). Rationale:
 
-### S10 — Audit + unused
+- **S11 first:** the deepest structural change. Every command grows tree-awareness, the emitter namespaces output per tree, config gains `[tree.<name>]`. Building it first means S9 and S10 are born tree-aware instead of retrofitted.
+- **S9 second:** vendoring lands as *per-tree* vendor dirs, so it wants S11 already in place.
+- **S10 last:** `muntjac unused` is defined as "vendored wheels not referenced by **any tree**" — it presumes both vendoring (S9) and trees (S11).
 
-`muntjac audit` cross-checks `uv.lock` against the pypa/advisory-database OSV dump. `muntjac unused` reports vendored wheels not referenced by any tree (analog of reindeer's `vendor --cleanup`).
+**Release cadence:** cut each stage to crates.io as it lands (v0.2.0 / v0.3.0 / v0.4.0) to keep `release.yml` exercised and provide clean rollback points, but hold the public **announcement** until after S10 + the dogfood migration. The `CHANGELOG.md` + `docs/launch-post.md` version refresh (currently naming v0.1.0) happens once, at the end, targeting v0.4.0.
 
-### S11 — Multi-tree
+### S11 — Multi-tree → v0.2.0 (next)
 
-`[tree.<name>]` blocks parse, `--tree` flag scopes commands, each tree gets its own `third_party_dir`. The regime-3 escape hatch (incompatible dep universes per Python era).
+`[tree.<name>]` blocks parse, `--tree` flag scopes commands, each tree gets its own `uv.lock` + `third_party_dir`. The regime-3 escape hatch (incompatible dep universes per Python era). Gates the maintainer's dogfood migration.
+
+### S9 — Vendor mode → v0.3.0
+
+`muntjac vendor --mode=committed` downloads wheels into each tree's `<third_party_dir>/vendor/` and the emitter replaces `http_file(urls=…)` with relative source refs. Buck builds become air-gapped. Built tree-aware on top of S11.
+
+### S10 — Audit + unused → v0.4.0
+
+`muntjac audit` cross-checks `uv.lock` against the pypa/advisory-database OSV dump. `muntjac unused` reports vendored wheels not referenced by any tree (analog of reindeer's `vendor --cleanup`). Depends on both vendoring (S9) and trees (S11). Last stage before the public announcement.
 
 ---
 
@@ -258,16 +268,27 @@ Not blocking v0.1.0; sequenced once Phase 1 has shipped and feedback is in hand.
                   S8a (muntjac README + cargo publish + v0.1.0)
                                │
                                ▼
-            ────────── v0.1.0 SHIPPED ──────────
+        ──────── v0.1.0 PUBLISHED (unannounced) ────────
                                │
-              ┌────────────────┼────────────────┐
-              ▼                ▼                ▼
-      S9 (vendor mode)  S10 (audit/unused)  S11 (multi-tree)
+                               ▼
+                  S11 (multi-tree) ──────────────→ v0.2.0
+                               │
+                               ▼
+                  S9 (vendor mode) ─────────────→ v0.3.0
+                               │
+                               ▼
+                  S10 (audit + unused) ─────────→ v0.4.0
+                               │
+                               ▼
+              dogfood: migrate maintainer's own project
+                               │
+                               ▼
+            ────────── v0.4.0 ANNOUNCED (public launch) ──────────
 ```
 
 S1 and S2 can be developed in parallel after S0; they each feed S3.
 
-All other stages are strictly sequential — each depends on the artifact the prior stage produces.
+All other stages are strictly sequential — each depends on the artifact the prior stage produces. Phase 2 was re-sequenced (2026-05-25) from three parallel post-launch branches into a strict S11 → S9 → S10 pre-announce chain; see the Phase 2 section for the dependency rationale.
 
 ---
 
@@ -290,6 +311,9 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 16 commits, 346 tests) |
 | S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | [2026-05-24-muntjac-s8b-fixups-seed.md](../plans/2026-05-24-muntjac-s8b-fixups-seed.md) | ✅ shipped (tag `s8b-complete`, seed repo at `seed-v0.1.0`, 4 commits) |
 | S8a | [2026-05-25-muntjac-s8a-launch-polish-design.md](./2026-05-25-muntjac-s8a-launch-polish-design.md) | [2026-05-25-muntjac-s8a-launch-polish.md](../plans/2026-05-25-muntjac-s8a-launch-polish.md) | ✅ shipped (tag `s8a-complete`, 16 commits) |
+| S11 | (not yet written) | (not yet written) | ⬜ next (build order 1/3 → v0.2.0) |
+| S9 | (not yet written) | (not yet written) | ⬜ planned (build order 2/3 → v0.3.0) |
+| S10 | (not yet written) | (not yet written) | ⬜ planned (build order 3/3 → v0.4.0; then announce) |
 
 ---
 
