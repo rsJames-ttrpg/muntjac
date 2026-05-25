@@ -1,12 +1,18 @@
 [package]
-name = "muntjac"
-version = "0.1.0-dev"
-edition = "2024"
-rust-version = "1.85"
-description = "Translate uv.lock into Buck2 build rules"
-license = "MIT"
-repository = "https://github.com/jackmpcollins/muntjac"
-readme = "README.md"
+name          = "muntjac"
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.85"
+description   = "Translate uv.lock into Buck2 build rules"
+authors       = ["Jack Mayo <jackomayo@gmail.com>"]
+license       = "MIT"
+readme        = "README.md"
+repository    = "https://github.com/rsJames-ttrpg/muntjac"
+homepage      = "https://github.com/rsJames-ttrpg/muntjac"
+documentation = "https://docs.rs/muntjac"
+keywords      = ["buck2", "python", "uv", "lockfile", "build-system"]
+categories    = ["development-tools::build-utils", "command-line-utilities"]
+exclude       = ["tests/fixtures/**", "docs/**"]
 
 [[bin]]
 name = "muntjac"
