@@ -110,9 +110,9 @@ See [muntjac-fixups README](https://github.com/rsJames-ttrpg/muntjac-fixups#read
 
 ## Status
 
-v0.1.0. Linux x86_64 + macOS arm64 are the credible-launch platforms — numpy, pandas, fastapi, requests, and ruff are confirmed working end-to-end. Linux arm64 is supported and tested in CI. Windows + Intel macOS work via `cargo install muntjac` (compiles from source); prebuilt binaries are planned post-v0.1.0.
+v0.2.0. Linux x86_64 + macOS arm64 are the credible-launch platforms — numpy, pandas, fastapi, requests, and ruff are confirmed working end-to-end. Linux arm64 is supported and tested in CI. Multi-tree (incompatible dependency universes) is supported as of v0.2.0. Windows + Intel macOS work via `cargo install muntjac` (compiles from source); prebuilt binaries are planned post-launch.
 
-See [roadmap](docs/superpowers/specs/2026-05-20-muntjac-roadmap.md) for v0.2+ plans (vendor mode, audit, multi-tree).
+See [roadmap](docs/superpowers/specs/2026-05-20-muntjac-roadmap.md) for upcoming plans (vendor mode, audit/unused).
 
 ## Contributing
 

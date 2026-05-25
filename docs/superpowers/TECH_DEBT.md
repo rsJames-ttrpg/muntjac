@@ -285,6 +285,40 @@ similar issue surfaces.
 - **Fix:** Add both files. opencv: clarify the headless-vs-not convention; scipy: probably empty `labels` body since wheels are typically clean.
 - **Target:** post-v0.1.0 — likely first community PR.
 
+### From S11 final stage review (2026-05-25, post-tag)
+
+#### TD-S11-01: `assert_files_match` is a one-directional golden-subset check
+- **Source:** S11 final cross-cutting review.
+- **Severity:** Important (a real blind spot for the cfg-once-vs-per-tree invariant)
+- **What:** `tests/buckify.rs::assert_files_match(out_dir, golden_dir)` walks `golden_dir` and asserts every file exists + byte-matches in `out_dir`. It never asserts the *absence* of extra files. A multi-tree regression that emitted a stray per-tree `config/` or a duplicate `wiring.bzl` into each tree dir (instead of once at `cfg_dir`) would pass both the golden snapshot AND the CI `test -f` checks (CI only does positive existence checks). This is exactly the blind spot the S11 cfg-once split could regress into.
+- **Why it matters:** The load-bearing S11 invariant ("cfg machinery emitted ONCE at cfg_dir, not per-tree") is not negatively asserted anywhere — a future change could start emitting per-tree cfg again and every test would stay green.
+- **Fix:** Either (a) make `assert_files_match` bidirectional (walk `out_dir` too, fail on files not in the golden), or (b) add explicit negative assertions to the CI 10-multi-tree step: `test ! -e third-party/python/modern/config && test ! -e third-party/python/legacy/config && test ! -e third-party/python/modern/wiring.bzl && test ! -e third-party/python/legacy/wiring.bzl`. Option (a) closes it for all fixtures at once.
+- **Target:** S9 or whenever next touching the emitter/test harness. Highest-value of the S11 follow-ups.
+
+#### TD-S11-02: `muntjac vendor` multi-tree has no end-to-end fixture
+- **Source:** S11 final cross-cutting review.
+- **Severity:** Minor (low risk; structurally argued safe)
+- **What:** Only `buckify` gets the `10-multi-tree` buck2-build coverage. `vendor` multi-tree rests on the single-tree smoke (fixture 04) plus the verbatim-extraction argument: `vendor::run` is a plain `resolve_trees` loop over the *unchanged* `vendor_tree`, which writes into each tree's own `<third_party_dir>/prebake/` with no cross-tree shared state and no `cfg_dir` involvement.
+- **Why it matters:** If vendor later gains tree-interacting behavior (e.g. S9's committed-vendor mode sharing a vendor dir), the absence of a multi-tree vendor fixture means a regression could slip.
+- **Fix:** Add a multi-tree vendor smoke (e.g. extend `10-multi-tree` with an sdist-only dep per tree, or a dedicated fixture) asserting each tree's `prebake/.manifest.toml` is written independently.
+- **Target:** S9 (when committed-vendor mode makes vendor tree-aware in a load-bearing way).
+
+#### TD-S11-03: duplicate `fixture_10_` test-name prefix in `tests/buckify.rs`
+- **Source:** S11 final cross-cutting review.
+- **Severity:** Polish
+- **What:** `fixture_10_determinism_two_runs_byte_identical` (which actually drives the *01-pure-python* fixture) and `fixture_10_multi_tree_golden` share the `fixture_10_` prefix despite testing different fixtures. The `fixture_NN_` prefix otherwise reads as a unique per-fixture sequence number.
+- **Why it matters:** Mild reader confusion; the determinism test's `10` prefix never mapped to a `10-*` fixture dir.
+- **Fix:** Rename the determinism test to drop the misleading `fixture_10_` prefix (e.g. `determinism_two_runs_byte_identical`).
+- **Target:** Any time.
+
+#### TD-S11-04: no-common-ancestor `cfg_dir` correctness relies entirely on `validate()`
+- **Source:** S11 final cross-cutting review.
+- **Severity:** Polish (well-tested today; flagged for future-proofing)
+- **What:** The component-zip longest-common-ancestor derivation in `Config::shared_cfg_dir` yields an empty `PathBuf` when trees share no prefix; correctness then depends on `validate()`'s `CfgDirNotDerivable` rejecting it. This is well-tested, but it's the one place where a future config-shape change (e.g. accepting non-normalized `..` components in `third_party_dir`) could interact subtly with the LCA logic.
+- **Why it matters:** Low-probability latent interaction if `third_party_dir` validation ever loosens.
+- **Fix:** None needed now. If `third_party_dir` ever accepts non-normalized paths, normalize before the LCA computation.
+- **Target:** Only if `third_party_dir` path-validation changes.
+
 ---
 
 ## Resolved

@@ -95,7 +95,7 @@ A derived accessor (e.g. `Config::cfg_dir() -> PathBuf`) resolves the shared-cfg
 Examples:
 - Single tree `third_party_dir = "third-party/python"` → `cfg_dir = "third-party/python"` (unchanged).
 - Trees at `third-party/python/{modern,legacy}` → common ancestor `third-party/python` → `cfg_dir = "third-party/python"`.
-- Trees at unrelated paths (`apps/a/tp`, `apps/b/tp`) → common ancestor `apps` (or repo root); set `[buck] cfg_dir` explicitly if that's undesirable.
+- Trees at unrelated paths (`apps/a/tp`, `services/b/tp`) → **no** common ancestor → the `CfgDirNotDerivable` validation error (see §2.4); set `[buck] cfg_dir` explicitly to resolve. (When trees do share a parent, e.g. `apps/a/tp` + `apps/b/tp` → `apps`, that derived ancestor is used.)
 
 ### 2.3 python_versions union
 
@@ -107,6 +107,7 @@ In `Config::validate` (typed `ConfigError`, `thiserror`-derived, byte-locked mes
 
 - **`DuplicateTreeDir`** — two trees with the same `third_party_dir`. They'd clobber each other's `BUCK`/`muntjac.bzl`. Message names the dir and the colliding tree names.
 - **`TreeDirIsCfgDir`** — a tree whose `third_party_dir` equals the resolved `cfg_dir`. The tree's package output would collide with the shared `config/` + `wiring.bzl`. **Fires only when there's more than one tree** — in the single-tree case `cfg_dir == third_party_dir` by construction and is correct (cfg and package share the dir, as today).
+- **`CfgDirNotDerivable`** (added during implementation, from the Task 1 code review) — multiple trees with **no** common path-ancestor and no explicit `[buck] cfg_dir`. The derived `cfg_dir` would be empty (project root), so the shared cfg would land at the repo root. Rejected with guidance to set `[buck] cfg_dir`. Fires only when `trees.len() > 1` (single tree always has a non-empty derived dir).
 - **Unknown `--tree`** — not a `validate` rule but a runtime resolution error (see §4); lists available tree names.
 
 ---
