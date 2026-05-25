@@ -324,7 +324,7 @@ impl Config {
     /// Explicit `[buck] cfg_dir` wins; else the longest common path-ancestor
     /// of all trees' third_party_dirs. For a single tree this is that tree's
     /// own third_party_dir, keeping output byte-identical to pre-S11.
-    pub fn cfg_dir(&self) -> PathBuf {
+    pub fn shared_cfg_dir(&self) -> PathBuf {
         if let Some(explicit) = &self.buck.cfg_dir {
             return explicit.clone();
         }
@@ -357,6 +357,37 @@ impl Config {
 
 impl Config {
     pub fn validate(&self) -> Result<(), crate::error::ConfigError> {
+        // Reject two trees sharing a third_party_dir (they'd clobber output).
+        {
+            let mut by_dir: std::collections::BTreeMap<PathBuf, Vec<String>> =
+                std::collections::BTreeMap::new();
+            for t in &self.trees {
+                by_dir
+                    .entry(t.third_party_dir.clone())
+                    .or_default()
+                    .push(t.name.clone());
+            }
+            if let Some((dir, names)) = by_dir.iter().find(|(_, v)| v.len() > 1) {
+                return Err(crate::error::ConfigError::DuplicateTreeDir {
+                    dir: dir.display().to_string(),
+                    trees: names.clone(),
+                });
+            }
+        }
+        // Multi-tree only: the shared cfg_dir must be derivable + not collide
+        // with a tree's own dir.
+        if self.trees.len() > 1 {
+            let cfg_dir = self.shared_cfg_dir();
+            if cfg_dir.as_os_str().is_empty() {
+                return Err(crate::error::ConfigError::CfgDirNotDerivable);
+            }
+            if let Some(t) = self.trees.iter().find(|t| t.third_party_dir == cfg_dir) {
+                return Err(crate::error::ConfigError::TreeDirIsCfgDir {
+                    tree: t.name.clone(),
+                    dir: t.third_party_dir.display().to_string(),
+                });
+            }
+        }
         for (name, platform) in &self.platforms {
             validate_target_triple(name, &platform.target)?;
             validate_platform_baseline(name, platform)?;
@@ -550,7 +581,7 @@ macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
 "#;
         let config: Config = toml.parse().unwrap();
         assert_eq!(
-            config.cfg_dir(),
+            config.shared_cfg_dir(),
             std::path::PathBuf::from("third-party/python")
         );
     }
@@ -571,7 +602,7 @@ python_versions = ["3.12"]
 "#;
         let config: Config = toml.parse().unwrap();
         assert_eq!(
-            config.cfg_dir(),
+            config.shared_cfg_dir(),
             std::path::PathBuf::from("third-party/python")
         );
     }
@@ -593,7 +624,10 @@ third_party_dir = "apps/b/tp"
 python_versions = ["3.12"]
 "#;
         let config: Config = toml.parse().unwrap();
-        assert_eq!(config.cfg_dir(), std::path::PathBuf::from("buck/cfg"));
+        assert_eq!(
+            config.shared_cfg_dir(),
+            std::path::PathBuf::from("buck/cfg")
+        );
     }
 
     #[test]
@@ -615,6 +649,102 @@ python_versions = ["3.11"]
             config.python_versions_union(),
             vec![PythonVersion(3, 11), PythonVersion(3, 12)]
         );
+    }
+
+    #[test]
+    fn rejects_duplicate_tree_dir() {
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.a]
+manifest_path = "a/pyproject.toml"
+third_party_dir = "tp/shared"
+python_versions = ["3.12"]
+[tree.b]
+manifest_path = "b/pyproject.toml"
+third_party_dir = "tp/shared"
+python_versions = ["3.12"]
+"#;
+        let err = toml.parse::<Config>().unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::ConfigError::DuplicateTreeDir { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_tree_dir_equal_to_cfg_dir_when_multi_tree() {
+        // cfg_dir derives to "tp" (common ancestor of tp + tp/legacy); tree "a"
+        // sits exactly at "tp", colliding with the shared cfg location.
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.a]
+manifest_path = "a/pyproject.toml"
+third_party_dir = "tp"
+python_versions = ["3.12"]
+[tree.legacy]
+manifest_path = "legacy/pyproject.toml"
+third_party_dir = "tp/legacy"
+python_versions = ["3.12"]
+"#;
+        let err = toml.parse::<Config>().unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::ConfigError::TreeDirIsCfgDir { .. }
+        ));
+    }
+
+    #[test]
+    fn single_tree_cfg_dir_equals_third_party_dir_is_ok() {
+        let toml = r#"
+manifest_path = "../pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+"#;
+        assert!(toml.parse::<Config>().is_ok());
+    }
+
+    #[test]
+    fn rejects_underivable_cfg_dir_no_common_ancestor() {
+        // Two trees with no shared path prefix → empty derived cfg_dir → must error
+        // (would otherwise emit the shared cfg at the project root).
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.a]
+manifest_path = "a/pyproject.toml"
+third_party_dir = "apps/a/tp"
+python_versions = ["3.12"]
+[tree.b]
+manifest_path = "b/pyproject.toml"
+third_party_dir = "services/b/tp"
+python_versions = ["3.12"]
+"#;
+        let err = toml.parse::<Config>().unwrap_err();
+        assert!(matches!(err, crate::error::ConfigError::CfgDirNotDerivable));
+    }
+
+    #[test]
+    fn explicit_cfg_dir_rescues_no_common_ancestor() {
+        // Same no-common-ancestor trees, but an explicit [buck] cfg_dir makes it valid.
+        let toml = r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[buck]
+cfg_dir = "buck/cfg"
+[tree.a]
+manifest_path = "a/pyproject.toml"
+third_party_dir = "apps/a/tp"
+python_versions = ["3.12"]
+[tree.b]
+manifest_path = "b/pyproject.toml"
+third_party_dir = "services/b/tp"
+python_versions = ["3.12"]
+"#;
+        assert!(toml.parse::<Config>().is_ok());
     }
 
     #[test]

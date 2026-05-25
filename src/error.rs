@@ -15,6 +15,19 @@ pub enum ConfigError {
     )]
     IncompatibleShape,
 
+    #[error("trees {trees:?} share third_party_dir `{dir}`; each tree needs a distinct directory")]
+    DuplicateTreeDir { dir: String, trees: Vec<String> },
+
+    #[error(
+        "tree `{tree}`'s third_party_dir `{dir}` collides with the shared cfg_dir; move the tree under a subdirectory or set [buck] cfg_dir explicitly"
+    )]
+    TreeDirIsCfgDir { tree: String, dir: String },
+
+    #[error(
+        "cannot derive a shared cfg_dir: trees have no common parent directory; set [buck] cfg_dir explicitly"
+    )]
+    CfgDirNotDerivable,
+
     #[error("invalid platform `{name}`: {reason}")]
     BadPlatform { name: String, reason: String },
 
@@ -142,6 +155,39 @@ mod tests {
         assert_eq!(
             e.to_string(),
             "registry path must be absolute (got `./registry`); use a full file:// URL or set registry to a path relative to muntjac.toml"
+        );
+    }
+
+    #[test]
+    fn duplicate_tree_dir_message_is_exact() {
+        let e = ConfigError::DuplicateTreeDir {
+            dir: "tp/shared".into(),
+            trees: vec!["a".into(), "b".into()],
+        };
+        assert_eq!(
+            e.to_string(),
+            "trees [\"a\", \"b\"] share third_party_dir `tp/shared`; each tree needs a distinct directory"
+        );
+    }
+
+    #[test]
+    fn tree_dir_is_cfg_dir_message_is_exact() {
+        let e = ConfigError::TreeDirIsCfgDir {
+            tree: "a".into(),
+            dir: "tp".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "tree `a`'s third_party_dir `tp` collides with the shared cfg_dir; move the tree under a subdirectory or set [buck] cfg_dir explicitly"
+        );
+    }
+
+    #[test]
+    fn cfg_dir_not_derivable_message_is_exact() {
+        let e = ConfigError::CfgDirNotDerivable;
+        assert_eq!(
+            e.to_string(),
+            "cannot derive a shared cfg_dir: trees have no common parent directory; set [buck] cfg_dir explicitly"
         );
     }
 
