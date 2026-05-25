@@ -26,19 +26,14 @@ pub fn run(globals: &Globals) -> Result<()> {
     let config = Config::from_str(&config_text)
         .with_context(|| format!("parsing {}", config_path.display()))?;
 
-    // Resolve the target tree, mirroring src/cli/buckify.rs's iteration.
-    let tree: &Tree = match &globals.tree {
-        Some(name) => config
-            .trees
-            .iter()
-            .find(|t| &t.name == name)
-            .ok_or_else(|| anyhow::anyhow!("tree `{}` not found in muntjac.toml", name))?,
-        None => config
-            .trees
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("muntjac.toml has no trees"))?,
-    };
+    for tree in crate::cli::resolve_trees(&config, globals.tree.as_deref())? {
+        vendor_tree(globals, &workdir, &config_path, tree)
+            .with_context(|| format!("vendoring tree '{}'", tree.name))?;
+    }
+    Ok(())
+}
 
+fn vendor_tree(globals: &Globals, workdir: &Path, config_path: &Path, tree: &Tree) -> Result<()> {
     let third_party_dir = workdir.join(&tree.third_party_dir);
 
     // Step 1: lock freshness. Resolve uv.lock relative to the tree's manifest
@@ -140,7 +135,7 @@ pub fn run(globals: &Globals) -> Result<()> {
                     "prebaked: {} {} → {}",
                     pkg_name,
                     pkg_version,
-                    pathdiff::diff_paths(&final_path, &workdir)
+                    pathdiff::diff_paths(&final_path, workdir)
                         .unwrap_or_else(|| final_path.clone())
                         .display()
                 );
