@@ -22,6 +22,8 @@ fn init_creates_starter_in_empty_dir() {
     assert!(cfg.contains("[platforms.linux-x86_64-gnu]"));
     assert!(cfg.contains("[fixups]"));
     assert!(cfg.contains("# Uncomment to include PEP 735 dependency groups"));
+    // S8a: init template references the canonical community registry by name.
+    assert!(cfg.contains("github.com/rsJames-ttrpg/muntjac-fixups"));
     assert!(cfg.contains("# [lockfile]"));
 
     assert!(dir.path().join("third-party/python/BUCK").exists());

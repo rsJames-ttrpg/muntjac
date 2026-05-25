@@ -103,9 +103,10 @@ fn render_starter_config(target: &Path, detection: Option<&Detection>) -> String
          # include_groups = [\"test\"]\n\n\
          [fixups]\n\
          registry = \"none\"\n\
-         # When a community registry exists, set to \"github.com/<owner>/muntjac-fixups\"\n\
-         # and run `muntjac fixups update` to pin a SHA. For air-gapped or\n\
-         # pre-launch usage, use a local checkout: registry = \"file:///abs/path\".\n\
+         # Pin a community fixup registry (recommended for native deps). Example:\n\
+         #   registry = \"github.com/rsJames-ttrpg/muntjac-fixups\"\n\
+         # Then run `muntjac fixups update` to fetch and pin the latest SHA.\n\
+         # For local checkout / offline use: registry = \"file:///abs/path\".\n\
          allow_local_overrides = true\n\n\
          [buck]\n\
          file_name = \"BUCK\"\n\
