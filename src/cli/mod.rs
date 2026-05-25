@@ -1,3 +1,4 @@
+use crate::config::{Config, Tree};
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
@@ -59,6 +60,25 @@ impl Globals {
     }
 }
 
+/// Resolve which trees a command operates on. `None` → all trees;
+/// `Some(name)` → just that tree, or an error naming available trees.
+pub fn resolve_trees<'a>(config: &'a Config, tree_filter: Option<&str>) -> Result<Vec<&'a Tree>> {
+    match tree_filter {
+        None => Ok(config.trees.iter().collect()),
+        Some(name) => match config.trees.iter().find(|t| t.name == name) {
+            Some(t) => Ok(vec![t]),
+            None => {
+                let available: Vec<&str> = config.trees.iter().map(|t| t.name.as_str()).collect();
+                anyhow::bail!(
+                    "tree `{}` not found in muntjac.toml; available: {}",
+                    name,
+                    available.join(", ")
+                )
+            }
+        },
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Write a starter muntjac.toml and third-party/python/ skeleton.
@@ -110,5 +130,52 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Audit => stub::run("audit", "S10"),
         Command::Fixups { op } => fixups::run(op, &cli.globals),
         Command::Unused => stub::run("unused", "S10"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn cfg() -> Config {
+        Config::from_str(
+            r#"
+[platforms]
+macos-arm64 = { target = "aarch64-apple-darwin", macos_min = "11.0" }
+[tree.modern]
+manifest_path = "m/pyproject.toml"
+third_party_dir = "tp/modern"
+python_versions = ["3.12"]
+[tree.legacy]
+manifest_path = "l/pyproject.toml"
+third_party_dir = "tp/legacy"
+python_versions = ["3.12"]
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn resolve_trees_none_returns_all() {
+        let c = cfg();
+        assert_eq!(resolve_trees(&c, None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn resolve_trees_filters_by_name() {
+        let c = cfg();
+        let got = resolve_trees(&c, Some("modern")).unwrap();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name, "modern");
+    }
+
+    #[test]
+    fn resolve_trees_unknown_errors() {
+        let c = cfg();
+        let err = resolve_trees(&c, Some("ghost")).unwrap_err().to_string();
+        assert!(err.contains("ghost"));
+        assert!(err.contains("modern"));
+        assert!(err.contains("legacy"));
     }
 }
