@@ -220,9 +220,11 @@ So v0.1.0 is *published* (live on crates.io) but *unannounced*. The public launc
 
 **Release cadence:** cut each stage to crates.io as it lands (v0.2.0 / v0.3.0 / v0.4.0) to keep `release.yml` exercised and provide clean rollback points, but hold the public **announcement** until after S10 + the dogfood migration. The `CHANGELOG.md` + `docs/launch-post.md` version refresh (currently naming v0.1.0) happens once, at the end, targeting v0.4.0.
 
-### S11 — Multi-tree → v0.2.0 (next)
+### S11 — Multi-tree → v0.2.0 ✅ shipped
 
 `[tree.<name>]` blocks parse, `--tree` flag scopes commands, each tree gets its own `uv.lock` + `third_party_dir`. The regime-3 escape hatch (incompatible dep universes per Python era). Gates the maintainer's dogfood migration.
+
+**Shipped:** 15 commits, tag `s11-complete`. The cfg machinery (constraint_settings, config_settings, wiring.bzl) is now emitted ONCE at a shared `cfg_dir` (longest common ancestor of trees' third_party_dirs, `[buck] cfg_dir` override) instead of per-tree, so the root PACKAGE's single `set_cfg_modifiers` call composes. Emitter split into shared-cfg + per-tree package emission; `resolve_trees` helper unifies `--tree` scoping (buckify + vendor process all trees, unknown `--tree` errors); `fixups show` prints per-tree blocks. Validation rejects tree-dir collisions (`DuplicateTreeDir`, `TreeDirIsCfgDir`, `CfgDirNotDerivable`). New `10-multi-tree` fixture builds numpy 2.x + 1.26.x in one Buck project via distinct target paths (CI buck2-builds both on all 3 runners). Single-tree output byte-identical (fixtures 01-09 unchanged). Bumped to v0.2.0; cargo publish to crates.io is the maintainer's tag-cut action (cut-each-announce-once cadence; public announce still waits for S10).
 
 ### S9 — Vendor mode → v0.3.0
 
@@ -311,7 +313,7 @@ Filled in as specs are written. Hyperlinks become real once the file exists.
 | S7b | [2026-05-24-muntjac-s7b-git-registry-design.md](./2026-05-24-muntjac-s7b-git-registry-design.md) | [2026-05-24-muntjac-s7b-git-registry.md](../plans/2026-05-24-muntjac-s7b-git-registry.md) | ✅ shipped (tag `s7b-complete`, 16 commits, 346 tests) |
 | S8b | [2026-05-24-muntjac-s8b-fixups-seed-design.md](./2026-05-24-muntjac-s8b-fixups-seed-design.md) | [2026-05-24-muntjac-s8b-fixups-seed.md](../plans/2026-05-24-muntjac-s8b-fixups-seed.md) | ✅ shipped (tag `s8b-complete`, seed repo at `seed-v0.1.0`, 4 commits) |
 | S8a | [2026-05-25-muntjac-s8a-launch-polish-design.md](./2026-05-25-muntjac-s8a-launch-polish-design.md) | [2026-05-25-muntjac-s8a-launch-polish.md](../plans/2026-05-25-muntjac-s8a-launch-polish.md) | ✅ shipped (tag `s8a-complete`, 16 commits) |
-| S11 | (not yet written) | (not yet written) | ⬜ next (build order 1/3 → v0.2.0) |
+| S11 | [2026-05-25-muntjac-s11-multi-tree-design.md](./2026-05-25-muntjac-s11-multi-tree-design.md) | [2026-05-25-muntjac-s11-multi-tree.md](../plans/2026-05-25-muntjac-s11-multi-tree.md) | ✅ shipped (tag `s11-complete`, 15 commits) |
 | S9 | (not yet written) | (not yet written) | ⬜ planned (build order 2/3 → v0.3.0) |
 | S10 | (not yet written) | (not yet written) | ⬜ planned (build order 3/3 → v0.4.0; then announce) |
 
