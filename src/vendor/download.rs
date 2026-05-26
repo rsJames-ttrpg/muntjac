@@ -8,6 +8,13 @@ use sha2::{Digest, Sha256};
 
 use crate::error::VendorError;
 
+/// Download `url` to `dest`, streaming bytes through a sha256 hasher.
+///
+/// On success: `dest` contains the wheel bytes and its sha256 matches
+/// `expected_sha256` (with optional `sha256:` prefix).
+/// On any failure (network, 404, hash mismatch, I/O, rename): both the
+/// in-flight tempfile and `dest` are removed before returning a
+/// `VendorError::{Download,HashMismatch}` naming the package.
 pub fn download_wheel(
     url: &url::Url,
     dest: &Path,
@@ -61,8 +68,10 @@ pub fn download_wheel(
 
     match result {
         Ok(()) => {
-            fs::rename(&tmp, dest)
-                .map_err(|e| boxed_download(package, version, url, Box::new(e)))?;
+            if let Err(e) = fs::rename(&tmp, dest) {
+                let _ = fs::remove_file(&tmp);
+                return Err(boxed_download(package, version, url, Box::new(e)));
+            }
             Ok(())
         }
         Err(e) => {
