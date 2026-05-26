@@ -81,6 +81,9 @@ pub fn run(globals: &Globals, args: crate::cli::BuckifyArgs) -> Result<()> {
                 vendor_mode,
             },
         )?;
+
+        crate::buck::check_vendor_wheels_present(&input, &third_party_dir.join("vendor"))?;
+
         let output = emitter.emit(&input);
 
         write_outputs(&output, &third_party_dir)?;

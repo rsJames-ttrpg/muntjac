@@ -723,6 +723,43 @@ fn apply_exclude_wheels(wheels: &[Wheel], patterns: &[String]) -> Vec<Wheel> {
         .collect()
 }
 
+/// Verify every `vendor:<filename>` URL emitted in `input` corresponds to an
+/// existing file in `vendor_dir`. Aggregates ALL missing into one
+/// `BuckifyError::MissingVendorWheels` before returning so the user sees the
+/// full list at once.
+///
+/// No-op when `input.vendor_mode == false`.
+pub fn check_vendor_wheels_present(
+    input: &EmitInput,
+    vendor_dir: &std::path::Path,
+) -> Result<(), crate::error::BuckifyError> {
+    if !input.vendor_mode {
+        return Ok(());
+    }
+    let mut missing: Vec<(String, String, String)> = Vec::new();
+    let mut seen_filenames: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for pkg in &input.packages {
+        for wheel in pkg.wheels.values() {
+            if let Some(rel) = wheel.url.strip_prefix("vendor:") {
+                if !seen_filenames.insert(rel.to_string()) {
+                    continue;
+                }
+                if !vendor_dir.join(rel).is_file() {
+                    missing.push((pkg.name.clone(), pkg.version.clone(), rel.to_string()));
+                }
+            }
+        }
+    }
+    if missing.is_empty() {
+        return Ok(());
+    }
+    missing.sort();
+    Err(crate::error::BuckifyError::MissingVendorWheels {
+        tree: input.tree.clone(),
+        missing,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2690,6 +2727,126 @@ vendor = true
         assert_eq!(wheel.hash, "sha256:cafef00d");
         // EmitInput should propagate the vendor_mode flag.
         assert!(input.vendor_mode);
+    }
+
+    #[test]
+    fn check_vendor_wheels_aggregates_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendor_dir = tmp.path();
+        std::fs::write(vendor_dir.join("present-1.0-py3-none-any.whl"), b"").unwrap();
+
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
+            configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
+            packages: vec![
+                EmitPackage {
+                    name: "present".into(),
+                    version: "1.0".into(),
+                    deps: EmitDeps::Uniform(vec![]),
+                    wheels: [(
+                        ConfigName::new("3.12", "linux-x86_64-gnu"),
+                        EmitWheel {
+                            url: "vendor:present-1.0-py3-none-any.whl".into(),
+                            hash: "sha256:00".into(),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                    overlay: None,
+                    entry_points: vec![],
+                    visibility: None,
+                    labels: vec![],
+                    runtime_env: Default::default(),
+                },
+                EmitPackage {
+                    name: "missing".into(),
+                    version: "2.0".into(),
+                    deps: EmitDeps::Uniform(vec![]),
+                    wheels: [(
+                        ConfigName::new("3.12", "linux-x86_64-gnu"),
+                        EmitWheel {
+                            url: "vendor:missing-2.0-py3-none-any.whl".into(),
+                            hash: "sha256:00".into(),
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                    overlay: None,
+                    entry_points: vec![],
+                    visibility: None,
+                    labels: vec![],
+                    runtime_env: Default::default(),
+                },
+            ],
+            vendor_mode: true,
+        };
+
+        let err = check_vendor_wheels_present(&input, vendor_dir).unwrap_err();
+        match err {
+            crate::error::BuckifyError::MissingVendorWheels { tree, missing } => {
+                assert_eq!(tree, "default");
+                assert_eq!(missing.len(), 1);
+                assert_eq!(
+                    missing[0],
+                    (
+                        "missing".into(),
+                        "2.0".into(),
+                        "missing-2.0-py3-none-any.whl".into()
+                    )
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn check_vendor_wheels_passes_when_all_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("present-1.0-py3-none-any.whl"), b"").unwrap();
+
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
+            configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
+            packages: vec![EmitPackage {
+                name: "present".into(),
+                version: "1.0".into(),
+                deps: EmitDeps::Uniform(vec![]),
+                wheels: [(
+                    ConfigName::new("3.12", "linux-x86_64-gnu"),
+                    EmitWheel {
+                        url: "vendor:present-1.0-py3-none-any.whl".into(),
+                        hash: "sha256:00".into(),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                overlay: None,
+                entry_points: vec![],
+                visibility: None,
+                labels: vec![],
+                runtime_env: Default::default(),
+            }],
+            vendor_mode: true,
+        };
+
+        assert!(check_vendor_wheels_present(&input, tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn check_vendor_wheels_noop_when_not_vendor_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
+            configs: vec![],
+            packages: vec![],
+            vendor_mode: false,
+        };
+        assert!(check_vendor_wheels_present(&input, tmp.path()).is_ok());
     }
 
     #[test]
