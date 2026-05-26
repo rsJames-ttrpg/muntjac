@@ -60,6 +60,42 @@ impl Globals {
     }
 }
 
+/// Per-invocation override for `[buck] vendor`. Affects this invocation only;
+/// never writes back to the config. `Committed` ⇔ `vendor = true`,
+/// `PrebakeOnly` ⇔ `vendor = false`.
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeFlag {
+    Committed,
+    PrebakeOnly,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct VendorArgs {
+    /// Override `[buck] vendor` for this invocation.
+    #[arg(long, value_enum, value_name = "MODE")]
+    pub mode: Option<ModeFlag>,
+
+    /// Skip the sync-prune step in committed mode (keeps stale wheels).
+    #[arg(long)]
+    pub no_prune: bool,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct BuckifyArgs {
+    /// Override `[buck] vendor` for this invocation.
+    #[arg(long, value_enum, value_name = "MODE")]
+    pub mode: Option<ModeFlag>,
+}
+
+/// Resolve the effective vendor mode: CLI override wins; else read `[buck] vendor`.
+pub fn resolve_vendor_mode(config: &Config, mode_override: Option<ModeFlag>) -> bool {
+    match mode_override {
+        Some(ModeFlag::Committed) => true,
+        Some(ModeFlag::PrebakeOnly) => false,
+        None => config.buck.vendor,
+    }
+}
+
 /// Resolve which trees a command operates on. `None` → all trees;
 /// `Some(name)` → just that tree, or an error naming available trees.
 pub fn resolve_trees<'a>(config: &'a Config, tree_filter: Option<&str>) -> Result<Vec<&'a Tree>> {
@@ -97,10 +133,13 @@ pub enum Command {
         op: Option<debug::DebugOp>,
     },
 
-    /// Prebake pure-python sdists into wheels. Wheel caching → S9.
-    Vendor,
+    /// Vendor wheels for the project. In prebake-only mode (default), prebakes
+    /// pure-python sdists into `<third_party_dir>/prebake/`. In committed mode
+    /// (`[buck] vendor = true` or `--mode=committed`), additionally downloads
+    /// all registry wheels into `<third_party_dir>/vendor/`.
+    Vendor(VendorArgs),
     /// Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl.
-    Buckify,
+    Buckify(BuckifyArgs),
     /// Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10).
     Audit,
     /// Manage fixups (show).
@@ -125,8 +164,8 @@ pub fn run(cli: Cli) -> Result<()> {
             op: ConfigOp::Check(args),
         } => config_check::run(args, &cli.globals),
         Command::Debug { op } => debug::run(op, &cli.globals),
-        Command::Vendor => vendor::run(&cli.globals),
-        Command::Buckify => buckify::run(&cli.globals),
+        Command::Vendor(args) => vendor::run(&cli.globals, args),
+        Command::Buckify(args) => buckify::run(&cli.globals, args),
         Command::Audit => stub::run("audit", "S10"),
         Command::Fixups { op } => fixups::run(op, &cli.globals),
         Command::Unused => stub::run("unused", "S10"),
@@ -177,5 +216,70 @@ python_versions = ["3.12"]
         assert!(err.contains("ghost"));
         assert!(err.contains("modern"));
         assert!(err.contains("legacy"));
+    }
+
+    #[test]
+    fn resolve_vendor_mode_uses_config_when_no_override() {
+        let toml = r#"
+manifest_path = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+linux-x86_64-gnu = { target = "x86_64-unknown-linux-gnu", manylinux = "2_17" }
+[buck]
+vendor = true
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert!(resolve_vendor_mode(&config, None));
+    }
+
+    #[test]
+    fn resolve_vendor_mode_override_committed_beats_config_false() {
+        let toml = r#"
+manifest_path = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+linux-x86_64-gnu = { target = "x86_64-unknown-linux-gnu", manylinux = "2_17" }
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert!(resolve_vendor_mode(&config, Some(ModeFlag::Committed)));
+    }
+
+    #[test]
+    fn resolve_vendor_mode_override_prebake_only_beats_config_true() {
+        let toml = r#"
+manifest_path = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+linux-x86_64-gnu = { target = "x86_64-unknown-linux-gnu", manylinux = "2_17" }
+[buck]
+vendor = true
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert!(!resolve_vendor_mode(&config, Some(ModeFlag::PrebakeOnly)));
+    }
+
+    #[test]
+    fn cli_parses_vendor_mode_and_no_prune() {
+        let cli = Cli::try_parse_from(["muntjac", "vendor", "--mode", "committed", "--no-prune"])
+            .unwrap();
+        match cli.command {
+            Command::Vendor(args) => {
+                assert!(matches!(args.mode, Some(ModeFlag::Committed)));
+                assert!(args.no_prune);
+            }
+            _ => panic!("expected Vendor"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_buckify_mode() {
+        let cli = Cli::try_parse_from(["muntjac", "buckify", "--mode", "prebake-only"]).unwrap();
+        match cli.command {
+            Command::Buckify(args) => assert!(matches!(args.mode, Some(ModeFlag::PrebakeOnly))),
+            _ => panic!("expected Buckify"),
+        }
     }
 }

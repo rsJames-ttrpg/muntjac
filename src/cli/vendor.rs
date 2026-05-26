@@ -18,7 +18,7 @@ use crate::sdist::{
     NativeReason, NativeSourceHit, classify,
 };
 
-pub fn run(globals: &Globals) -> Result<()> {
+pub fn run(globals: &Globals, _args: crate::cli::VendorArgs) -> Result<()> {
     let workdir = globals.workdir().context("resolving working directory")?;
     let config_path = workdir.join("muntjac.toml");
     let config_text = std::fs::read_to_string(&config_path)

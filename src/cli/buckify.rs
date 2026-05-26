@@ -14,7 +14,7 @@ use crate::cli::Globals;
 use crate::config::Config;
 use crate::lock;
 
-pub fn run(globals: &Globals) -> Result<()> {
+pub fn run(globals: &Globals, _args: crate::cli::BuckifyArgs) -> Result<()> {
     let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
     let cfg_bytes =
