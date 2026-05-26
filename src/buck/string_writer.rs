@@ -721,6 +721,7 @@ mod tests {
             cfg_dir: "third-party/python".into(),
             configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
             packages: vec![],
+            vendor_mode: false,
         }
     }
 
@@ -759,6 +760,7 @@ mod tests {
                 labels: vec![],
                 runtime_env: std::collections::BTreeMap::new(),
             }],
+            vendor_mode: false,
         }
     }
 
@@ -1024,6 +1026,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cfg_311, cfg_312],
+            vendor_mode: false,
             packages: vec![
                 EmitPackage {
                     name: "idna".into(),
@@ -1184,6 +1187,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: cells,
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "rich".into(),
                 version: "13.0".into(),
@@ -1212,6 +1216,7 @@ mod tests {
                 ConfigName::new("3.12", "linux-x86_64-gnu"),
             ],
             packages: vec![],
+            vendor_mode: false,
         };
 
         let out = StringTemplateEmitter.emit(&input);
@@ -1235,6 +1240,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cell],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "requests".into(),
                 version: "2.32.3".into(),
@@ -1291,6 +1297,7 @@ mod tests {
             third_party_dir: "third-party/python".to_string(),
             cfg_dir: "third-party/python".to_string(),
             configs: vec![cfg],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "tomli".to_string(),
                 version: "2.0.1".to_string(),
@@ -1392,6 +1399,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cfg],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "fake-pillow".into(),
                 version: "1.0.0".into(),

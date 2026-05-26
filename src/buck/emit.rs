@@ -17,6 +17,9 @@ pub struct EmitInput {
     pub cfg_dir: String,
     pub configs: Vec<ConfigName>,
     pub packages: Vec<EmitPackage>,
+    /// S9: when true, source URLs use the `vendor:<filename>` scheme and the
+    /// pypi_package macro grows an export_file branch for it (Task 8).
+    pub vendor_mode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,6 +141,9 @@ pub struct BuildEmitContext<'a> {
     /// S11: cfg-label root (cell-relative). `None` falls back to the tree's
     /// `third_party_dir` for the single-tree path, keeping output identical.
     pub cfg_dir: Option<&'a str>,
+    /// S9: when true, the emitter outputs `vendor:<filename>` URLs and the
+    /// macro grows the conditional `vendor:` arm. Defaults to false.
+    pub vendor_mode: bool,
 }
 
 /// Compose the S1/S2 pipeline into an `EmitInput` for a single tree.
@@ -283,6 +289,33 @@ pub fn build_emit_input(
                 let lockfile_sdist_sha = sdist.hash.trim_start_matches("sha256:").to_string();
 
                 let Some(entry) = manifest_entry(&pkg.name, &pkg.version) else {
+                    if ctx.vendor_mode {
+                        // Committed mode has no prebake manifest (see
+                        // buckify::run). Synthesize the vendor:<filename> URL
+                        // directly from (name, version) — Task 9 will add an
+                        // emit-time existence check to catch native-skipped
+                        // packages (the file simply won't exist).
+                        let computed = crate::cli::vendor::vendor_pep427_pure_python_filename(
+                            &pkg.name,
+                            &pkg.version,
+                        );
+                        pkg_wheels.entry(key.clone()).or_default().insert(
+                            cfg_name.clone(),
+                            EmitWheel {
+                                url: format!("vendor:{}", computed),
+                                hash: format!("sha256:{}", lockfile_sdist_sha),
+                            },
+                        );
+                        let mut cell_deps = pkg.deps.clone();
+                        if let Some(rf) = &resolved_fixup {
+                            apply_dep_ops(&mut cell_deps, rf);
+                        }
+                        pkg_deps_per_cell
+                            .entry(key.clone())
+                            .or_default()
+                            .insert(cfg_name.clone(), cell_deps);
+                        continue;
+                    }
                     anyhow::bail!(
                         "pure-python sdist {} {} not prebaked. Run `muntjac vendor` first.",
                         pkg.name,
@@ -305,10 +338,25 @@ pub fn build_emit_input(
                         ..
                     } => {
                         // Pure-python wheel: same source covers every cfg.
+                        // In committed mode (vendor_mode=true) the wheel lives
+                        // in <tpd>/vendor/ under its PEP-427 filename; in
+                        // prebake-only mode it lives in <tpd>/prebake/ under
+                        // the manifest-recorded filename.
+                        let url = if ctx.vendor_mode {
+                            format!(
+                                "vendor:{}",
+                                crate::cli::vendor::vendor_pep427_pure_python_filename(
+                                    &pkg.name,
+                                    &pkg.version,
+                                )
+                            )
+                        } else {
+                            format!("prebake:{}", wheel_filename)
+                        };
                         pkg_wheels.entry(key.clone()).or_default().insert(
                             cfg_name.clone(),
                             EmitWheel {
-                                url: format!("prebake:{}", wheel_filename),
+                                url,
                                 hash: format!("sha256:{}", wheel_sha256),
                             },
                         );
@@ -352,10 +400,15 @@ pub fn build_emit_input(
                     .iter()
                     .find(|w| w.hash.trim_start_matches("sha256:") == want)
                 {
+                    let url = if ctx.vendor_mode {
+                        format!("vendor:{}", wheel.filename)
+                    } else {
+                        wheel.url.to_string()
+                    };
                     pkg_wheels.entry(key.clone()).or_default().insert(
                         cfg_name.clone(),
                         EmitWheel {
-                            url: wheel.url.to_string(),
+                            url,
                             hash: wheel.hash.clone(),
                         },
                     );
@@ -384,10 +437,15 @@ pub fn build_emit_input(
             }
             match pick_wheel(wheels, &compat) {
                 PickResult::Picked { wheel, .. } => {
+                    let url = if ctx.vendor_mode {
+                        format!("vendor:{}", wheel.filename)
+                    } else {
+                        wheel.url.to_string()
+                    };
                     pkg_wheels.entry(key.clone()).or_default().insert(
                         cfg_name.clone(),
                         EmitWheel {
-                            url: wheel.url.to_string(),
+                            url,
                             hash: wheel.hash.clone(),
                         },
                     );
@@ -590,6 +648,7 @@ pub fn build_emit_input(
             .unwrap_or_else(|| tree.third_party_dir.to_string_lossy().into_owned()),
         configs,
         packages,
+        vendor_mode: ctx.vendor_mode,
     })
 }
 
@@ -674,6 +733,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "requests".into(),
                 version: "2.32.3".into(),
@@ -1543,6 +1603,7 @@ manylinux = "2_17"
                 fixups: None,
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .unwrap_err();
@@ -1654,6 +1715,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input with fixups");
@@ -1787,6 +1849,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input succeeds");
@@ -1921,6 +1984,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input with prefer_wheel");
@@ -2059,6 +2123,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect_err("should fail when prefer_wheel sha is absent");
@@ -2109,6 +2174,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect_err("should fail when exclude_wheels empties the wheel set");
@@ -2161,6 +2227,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input with prefer_wheel + extra_deps");
@@ -2218,6 +2285,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input with per-package fixup fields");
@@ -2266,6 +2334,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect_err("entry_points = true must bail");
@@ -2312,6 +2381,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect_err("invalid extra_deps target must bail");
@@ -2443,6 +2513,7 @@ manylinux = "2_17"
                 fixups: Some(&eff),
                 abs_third_party_dir: None,
                 cfg_dir: None,
+                vendor_mode: false,
             },
         )
         .expect("build_emit_input with overlay");
@@ -2532,5 +2603,90 @@ manylinux = "2_17"
         let input = build_emit_input(&config, &tree, &lockfile, &BuildEmitContext::default())
             .expect("build_emit_input with None fixups");
         assert_eq!(input.packages.len(), 1);
+    }
+
+    #[test]
+    fn vendor_mode_emits_vendor_url_for_downloaded_wheel() {
+        // Vendor mode (committed): registry-wheel URLs become
+        // `vendor:<filename>` so Task 8's macro branch can rewrite them to
+        // local files. Hashes stay verbatim; only the URL slot is rewritten.
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Source, Wheel};
+        use pep440_rs::Version as PepVersion;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let cfg = Config::from_str(
+            r#"
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[buck]
+vendor = true
+"#,
+        )
+        .unwrap();
+        let tree = cfg.trees.first().unwrap().clone();
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 1,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("root").unwrap(),
+                    version: PepVersion::from_str("0.0.0").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("idna").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                },
+                Package {
+                    name: PackageName::from_str("idna").unwrap(),
+                    version: PepVersion::from_str("3.10").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    sdist: None,
+                    wheels: vec![Wheel {
+                        url: Url::parse("https://files.pythonhosted.org/idna-3.10.whl").unwrap(),
+                        hash: "sha256:cafef00d".into(),
+                        size: None,
+                        filename: "idna-3.10-py3-none-any.whl".into(),
+                    }],
+                    metadata: None,
+                    dependencies: vec![],
+                },
+            ],
+        };
+
+        let ctx = BuildEmitContext {
+            vendor_mode: true,
+            ..Default::default()
+        };
+        let input = build_emit_input(&cfg, &tree, &lockfile, &ctx).unwrap();
+
+        let pkg = input
+            .packages
+            .iter()
+            .find(|p| p.name == "idna")
+            .expect("idna in packages");
+        let cfg_name = pkg.wheels.keys().next().unwrap().clone();
+        let wheel = &pkg.wheels[&cfg_name];
+        assert_eq!(wheel.url, "vendor:idna-3.10-py3-none-any.whl");
+        assert_eq!(wheel.hash, "sha256:cafef00d");
+        // EmitInput should propagate the vendor_mode flag.
+        assert!(input.vendor_mode);
     }
 }
