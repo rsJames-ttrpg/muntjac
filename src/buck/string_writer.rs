@@ -217,6 +217,15 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "                src = \"prebake/{{}}\".format(rel),").unwrap();
     writeln!(s, "                visibility = [],").unwrap();
     writeln!(s, "            )").unwrap();
+    if input.vendor_mode {
+        writeln!(s, "        elif src.startswith(\"vendor:\"):").unwrap();
+        writeln!(s, "            rel = src[len(\"vendor:\"):]").unwrap();
+        writeln!(s, "            native.export_file(").unwrap();
+        writeln!(s, "                name = target,").unwrap();
+        writeln!(s, "                src = \"vendor/{{}}\".format(rel),").unwrap();
+        writeln!(s, "                visibility = [],").unwrap();
+        writeln!(s, "            )").unwrap();
+    }
     writeln!(s, "        else:").unwrap();
     writeln!(s, "            native.http_file(").unwrap();
     writeln!(s, "                name = target,").unwrap();
@@ -1490,6 +1499,20 @@ mod tests {
             !out.buck.contains("runtime_env = {"),
             "should not emit runtime_env kwarg when empty"
         );
+    }
+
+    #[test]
+    fn snapshot_vendor_mode_muntjac_bzl() {
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
+            configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
+            packages: vec![],
+            vendor_mode: true,
+        };
+        let bzl = emit_muntjac_bzl(&input);
+        insta::assert_snapshot!(bzl);
     }
 
     #[test]
