@@ -149,7 +149,7 @@ fn vendor_tree_committed(
         let pkg_name = pkg.name.as_ref().to_string();
         let pkg_version = pkg.version.to_string();
         let expected_sha = sdist.hash.trim_start_matches("sha256:").to_string();
-        let computed_filename = vendor_pep427_pure_python_filename(&pkg_name, &pkg_version);
+        let computed_filename = crate::pep427::pure_python_filename(&pkg_name, &pkg_version);
 
         // Idempotence: if the target file already exists, assume good.
         if vendor_dir.join(&computed_filename).is_file() {
@@ -371,25 +371,6 @@ fn skip_existing(dest: &Path, expected_sha: &str) -> Result<bool> {
     Ok(got == want)
 }
 
-pub fn vendor_pep427_pure_python_filename(name: &str, version: &str) -> String {
-    format!("{}-{}-py3-none-any.whl", pep427_escape_name(name), version)
-}
-
-pub fn pep427_escape_name(name: &str) -> String {
-    let mut out = String::with_capacity(name.len());
-    let mut last_was_sep = false;
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_lowercase());
-            last_was_sep = false;
-        } else if !last_was_sep {
-            out.push('_');
-            last_was_sep = true;
-        }
-    }
-    out
-}
-
 fn backend_str(b: AllowlistedBackend) -> &'static str {
     match b {
         AllowlistedBackend::FlitCore => "flit-core",
@@ -581,26 +562,5 @@ fn find_sdist_root(extract_dir: &Path) -> Result<std::path::PathBuf> {
     } else {
         // Fall back to the extract dir itself (some sdists don't nest).
         Ok(extract_dir.to_path_buf())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pep427_escapes_dashes_dots_lowercases() {
-        assert_eq!(pep427_escape_name("Flit-Core"), "flit_core");
-        assert_eq!(pep427_escape_name("foo.bar"), "foo_bar");
-        assert_eq!(pep427_escape_name("foo---bar"), "foo_bar");
-        assert_eq!(pep427_escape_name("urllib3"), "urllib3");
-    }
-
-    #[test]
-    fn pep427_filename_format() {
-        assert_eq!(
-            vendor_pep427_pure_python_filename("Flit-Core", "3.9.0"),
-            "flit_core-3.9.0-py3-none-any.whl"
-        );
     }
 }

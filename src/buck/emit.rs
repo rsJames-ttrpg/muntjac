@@ -5,7 +5,23 @@ use std::str::FromStr;
 
 use crate::config::{Config, PythonVersion, Tree};
 use crate::lock::types::{Lockfile, Wheel};
+use crate::pep427::pure_python_filename;
 use crate::wheel::{PickResult, build_compatible_tags, pick_wheel};
+
+/// Build a wheel URL: `vendor:<filename>` when `vendor_mode` is true, else
+/// the supplied fallback (computed lazily to avoid materializing the http
+/// URL string when vendor_mode is on).
+fn vendor_or_fallback_url(
+    vendor_mode: bool,
+    vendor_filename: &str,
+    fallback: impl FnOnce() -> String,
+) -> String {
+    if vendor_mode {
+        format!("vendor:{}", vendor_filename)
+    } else {
+        fallback()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct EmitInput {
@@ -295,10 +311,7 @@ pub fn build_emit_input(
                         // directly from (name, version) — Task 9 will add an
                         // emit-time existence check to catch native-skipped
                         // packages (the file simply won't exist).
-                        let computed = crate::cli::vendor::vendor_pep427_pure_python_filename(
-                            &pkg.name,
-                            &pkg.version,
-                        );
+                        let computed = pure_python_filename(&pkg.name, &pkg.version);
                         pkg_wheels.entry(key.clone()).or_default().insert(
                             cfg_name.clone(),
                             EmitWheel {
@@ -342,17 +355,10 @@ pub fn build_emit_input(
                         // in <tpd>/vendor/ under its PEP-427 filename; in
                         // prebake-only mode it lives in <tpd>/prebake/ under
                         // the manifest-recorded filename.
-                        let url = if ctx.vendor_mode {
-                            format!(
-                                "vendor:{}",
-                                crate::cli::vendor::vendor_pep427_pure_python_filename(
-                                    &pkg.name,
-                                    &pkg.version,
-                                )
-                            )
-                        } else {
+                        let vendor_name = pure_python_filename(&pkg.name, &pkg.version);
+                        let url = vendor_or_fallback_url(ctx.vendor_mode, &vendor_name, || {
                             format!("prebake:{}", wheel_filename)
-                        };
+                        });
                         pkg_wheels.entry(key.clone()).or_default().insert(
                             cfg_name.clone(),
                             EmitWheel {
@@ -400,11 +406,9 @@ pub fn build_emit_input(
                     .iter()
                     .find(|w| w.hash.trim_start_matches("sha256:") == want)
                 {
-                    let url = if ctx.vendor_mode {
-                        format!("vendor:{}", wheel.filename)
-                    } else {
+                    let url = vendor_or_fallback_url(ctx.vendor_mode, &wheel.filename, || {
                         wheel.url.to_string()
-                    };
+                    });
                     pkg_wheels.entry(key.clone()).or_default().insert(
                         cfg_name.clone(),
                         EmitWheel {
@@ -437,11 +441,9 @@ pub fn build_emit_input(
             }
             match pick_wheel(wheels, &compat) {
                 PickResult::Picked { wheel, .. } => {
-                    let url = if ctx.vendor_mode {
-                        format!("vendor:{}", wheel.filename)
-                    } else {
+                    let url = vendor_or_fallback_url(ctx.vendor_mode, &wheel.filename, || {
                         wheel.url.to_string()
-                    };
+                    });
                     pkg_wheels.entry(key.clone()).or_default().insert(
                         cfg_name.clone(),
                         EmitWheel {
@@ -2688,5 +2690,88 @@ vendor = true
         assert_eq!(wheel.hash, "sha256:cafef00d");
         // EmitInput should propagate the vendor_mode flag.
         assert!(input.vendor_mode);
+    }
+
+    #[test]
+    fn vendor_mode_emits_vendor_url_for_sdist_only_pure_python() {
+        // Vendor mode + sdist-only registry package + no prebake manifest =
+        // the "synthesize PEP-427 filename from (name, version)" branch in
+        // build_emit_input. Mirrors the downloaded-wheel test above but with
+        // an sdist source and no wheels.
+        use crate::lock::types::{DepEdge, FirstPartyKind, Lockfile, Package, Sdist, Source};
+        use pep440_rs::Version as PepVersion;
+        use pep508_rs::PackageName;
+        use url::Url;
+
+        let cfg = Config::from_str(
+            r#"
+manifest_path   = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+
+[platforms.linux-x86_64-gnu]
+target    = "x86_64-unknown-linux-gnu"
+manylinux = "2_17"
+
+[buck]
+vendor = true
+"#,
+        )
+        .unwrap();
+        let tree = cfg.trees.first().unwrap().clone();
+        let lockfile = Lockfile {
+            version: 1,
+            revision: 1,
+            requires_python: ">=3.12".into(),
+            packages: vec![
+                Package {
+                    name: PackageName::from_str("root").unwrap(),
+                    version: PepVersion::from_str("0.0.0").unwrap(),
+                    source: Source::FirstParty {
+                        kind: FirstPartyKind::Virtual,
+                        path: ".".into(),
+                    },
+                    sdist: None,
+                    wheels: vec![],
+                    metadata: None,
+                    dependencies: vec![DepEdge {
+                        name: PackageName::from_str("iniconfig").unwrap(),
+                        extra: vec![],
+                        marker: None,
+                    }],
+                },
+                Package {
+                    name: PackageName::from_str("iniconfig").unwrap(),
+                    version: PepVersion::from_str("2.0.0").unwrap(),
+                    source: Source::Registry {
+                        url: Url::parse("https://pypi.org/simple").unwrap(),
+                    },
+                    sdist: Some(Sdist {
+                        url: Url::parse("https://files.pythonhosted.org/iniconfig-2.0.0.tar.gz")
+                            .unwrap(),
+                        hash: "sha256:deadbeef".into(),
+                        size: None,
+                    }),
+                    wheels: vec![],
+                    metadata: None,
+                    dependencies: vec![],
+                },
+            ],
+        };
+
+        let ctx = BuildEmitContext {
+            vendor_mode: true,
+            ..Default::default()
+        };
+        let input = build_emit_input(&cfg, &tree, &lockfile, &ctx).unwrap();
+        let pkg = input
+            .packages
+            .iter()
+            .find(|p| p.name == "iniconfig")
+            .expect("iniconfig in packages");
+        let cfg_name = pkg.wheels.keys().next().unwrap().clone();
+        let wheel = &pkg.wheels[&cfg_name];
+        assert_eq!(wheel.url, "vendor:iniconfig-2.0.0-py3-none-any.whl");
+        assert_eq!(wheel.hash, "sha256:deadbeef");
     }
 }

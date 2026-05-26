@@ -5,6 +5,7 @@ pub mod config;
 pub mod error;
 pub mod fixup;
 pub mod lock;
+pub mod pep427;
 pub mod platform;
 pub mod sdist;
 pub mod uv;
