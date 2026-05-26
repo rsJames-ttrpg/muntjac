@@ -265,6 +265,21 @@ mod tests {
     }
 
     #[test]
+    fn vendor_error_download_message_is_exact() {
+        let source: Box<dyn std::error::Error + Send + Sync> = "connection refused".into();
+        let e = VendorError::Download {
+            package: "idna".into(),
+            version: "3.10".into(),
+            url: "https://files.pythonhosted.org/idna-3.10-py3-none-any.whl".into(),
+            source,
+        };
+        assert_eq!(
+            e.to_string(),
+            "downloading idna 3.10 from https://files.pythonhosted.org/idna-3.10-py3-none-any.whl: connection refused"
+        );
+    }
+
+    #[test]
     fn buckify_error_missing_vendor_wheels_message_lists_each() {
         let e = BuckifyError::MissingVendorWheels {
             tree: "default".into(),
