@@ -34,6 +34,14 @@ fn copy_fixture_to(src: &Path, dst: &Path) {
                         let fixups_dst = dst.join("third-party/python/fixups");
                         copy_dir(&fixups_src, &fixups_dst);
                     }
+                    // S9: in vendor mode, third-party/python/vendor/*.whl is
+                    // committed and must be present at buckify time (the
+                    // emit-time existence check will otherwise abort).
+                    let vendor_src = path.join("python/vendor");
+                    if vendor_src.is_dir() {
+                        let vendor_dst = dst.join("third-party/python/vendor");
+                        copy_dir(&vendor_src, &vendor_dst);
+                    }
                     continue;
                 }
                 copy_dir(&path, &dst.join(&name));
@@ -549,6 +557,26 @@ fn fixture_10_multi_tree_golden() {
     );
     // expected/ mirrors the emitted `third-party/python` subtree: shared cfg
     // (config/BUCK + wiring.bzl) once + per-tree modern/ + legacy/ packages.
+    assert_files_match(
+        &tmp.path().join("third-party/python"),
+        &fix.join("expected"),
+    );
+}
+
+#[test]
+fn fixture_11_vendor_golden() {
+    // 11-vendor commits idna (downloaded) + iniconfig (downloaded) wheels
+    // under third-party/python/vendor/. buckify emits `vendor:<filename>`
+    // URLs in BUCK + the conditional `elif vendor:` arm in muntjac.bzl.
+    let fix = fixture("11-vendor");
+    let tmp = tempfile::tempdir().unwrap();
+    copy_fixture_to(&fix, tmp.path());
+    let out = run_buckify(tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_files_match(
         &tmp.path().join("third-party/python"),
         &fix.join("expected"),

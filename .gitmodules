@@ -10,3 +10,6 @@
 [submodule "tests/fixtures/buck/10-multi-tree/prelude"]
 	path = tests/fixtures/buck/10-multi-tree/prelude
 	url = https://github.com/facebook/buck2-prelude.git
+[submodule "tests/fixtures/buck/11-vendor/prelude"]
+	path = tests/fixtures/buck/11-vendor/prelude
+	url = https://github.com/facebook/buck2-prelude.git
