@@ -262,6 +262,19 @@ vendor = true
     }
 
     #[test]
+    fn resolve_vendor_mode_defaults_to_false_when_no_override_and_no_buck_section() {
+        let toml = r#"
+manifest_path = "pyproject.toml"
+third_party_dir = "third-party/python"
+python_versions = ["3.12"]
+[platforms]
+linux-x86_64-gnu = { target = "x86_64-unknown-linux-gnu", manylinux = "2_17" }
+"#;
+        let config: Config = toml.parse().unwrap();
+        assert!(!resolve_vendor_mode(&config, None));
+    }
+
+    #[test]
     fn cli_parses_vendor_mode_and_no_prune() {
         let cli = Cli::try_parse_from(["muntjac", "vendor", "--mode", "committed", "--no-prune"])
             .unwrap();

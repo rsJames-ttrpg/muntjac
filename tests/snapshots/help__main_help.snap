@@ -1,6 +1,5 @@
 ---
 source: tests/help.rs
-assertion_line: 9
 expression: stdout
 ---
 Translate uv.lock into Buck2 build rules
@@ -10,7 +9,7 @@ Usage: muntjac [OPTIONS] <COMMAND>
 Commands:
   init     Write a starter muntjac.toml and third-party/python/ skeleton
   config   Validate muntjac.toml without performing any side effects
-  vendor   Prebake pure-python sdists into wheels. Wheel caching → S9
+  vendor   Vendor wheels for the project. In prebake-only mode (default), prebakes pure-python sdists into `<third_party_dir>/prebake/`. In committed mode (`[buck] vendor = true` or `--mode=committed`), additionally downloads all registry wheels into `<third_party_dir>/vendor/`
   buckify  Read uv.lock + fixups and emit BUCK, muntjac.bzl, config/BUCK, and wiring.bzl
   audit    Cross-check uv.lock against pypa/advisory-database — UNIMPLEMENTED (S10)
   fixups   Manage fixups (show)
