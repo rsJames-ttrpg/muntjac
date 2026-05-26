@@ -115,6 +115,56 @@ pub enum CacheError {
     },
 }
 
+#[derive(Debug, Error)]
+pub enum VendorError {
+    #[error("downloading {package} {version} from {url}: {source}")]
+    Download {
+        package: String,
+        version: String,
+        url: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("sha256 mismatch for {package} {version}: expected {expected}, got {actual}")]
+    HashMismatch {
+        package: String,
+        version: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error(
+        "--mode=committed requires network access; remove --no-network, or vendor first then re-run with --frozen"
+    )]
+    ModeNetworkConflict,
+}
+
+#[derive(Debug, Error)]
+pub enum BuckifyError {
+    #[error(fmt = fmt_missing_vendor_wheels)]
+    MissingVendorWheels {
+        tree: String,
+        /// Each entry is `(package, version, expected wheel filename)`.
+        missing: Vec<(String, String, String)>,
+    },
+}
+
+fn fmt_missing_vendor_wheels(
+    tree: &String,
+    missing: &Vec<(String, String, String)>,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(
+        f,
+        "vendor mode requires committed wheels; tree '{tree}' is missing:"
+    )?;
+    for (pkg, ver, file) in missing {
+        writeln!(f, "  - {pkg} {ver} ({file})")?;
+    }
+    write!(f, "run `muntjac vendor` to populate the vendor directory.")
+}
+
 fn fmt_cycle(cycles: &Vec<Vec<String>>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     writeln!(f, "dependency cycle(s) detected:")?;
     for cycle in cycles {
@@ -189,6 +239,59 @@ mod tests {
             e.to_string(),
             "cannot derive a shared cfg_dir: trees have no common parent directory; set [buck] cfg_dir explicitly"
         );
+    }
+
+    #[test]
+    fn vendor_error_hash_mismatch_message_is_exact() {
+        let e = VendorError::HashMismatch {
+            package: "idna".into(),
+            version: "3.10".into(),
+            expected: "deadbeef".into(),
+            actual: "cafef00d".into(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "sha256 mismatch for idna 3.10: expected deadbeef, got cafef00d"
+        );
+    }
+
+    #[test]
+    fn vendor_error_mode_network_conflict_message_is_exact() {
+        let e = VendorError::ModeNetworkConflict;
+        assert_eq!(
+            e.to_string(),
+            "--mode=committed requires network access; remove --no-network, or vendor first then re-run with --frozen"
+        );
+    }
+
+    #[test]
+    fn buckify_error_missing_vendor_wheels_message_lists_each() {
+        let e = BuckifyError::MissingVendorWheels {
+            tree: "default".into(),
+            missing: vec![
+                (
+                    "idna".into(),
+                    "3.10".into(),
+                    "idna-3.10-py3-none-any.whl".into(),
+                ),
+                (
+                    "urllib3".into(),
+                    "2.2.3".into(),
+                    "urllib3-2.2.3-py3-none-any.whl".into(),
+                ),
+            ],
+        };
+        let s = e.to_string();
+        assert!(s.contains("tree 'default'"), "missing tree label: {s}");
+        assert!(
+            s.contains("idna 3.10 (idna-3.10-py3-none-any.whl)"),
+            "missing idna line: {s}"
+        );
+        assert!(
+            s.contains("urllib3 2.2.3 (urllib3-2.2.3-py3-none-any.whl)"),
+            "missing urllib3 line: {s}"
+        );
+        assert!(s.contains("muntjac vendor"), "missing suggestion: {s}");
     }
 
     #[test]
