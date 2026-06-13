@@ -10,6 +10,7 @@ pub mod write;
 pub use emit::{
     BuckEmitter, BuildEmitContext, ConfigName, EmitInput, EmitOutput, EmitPackage, EmitWheel,
     SharedCfgInput, SharedCfgOutput, build_emit_input, build_shared_cfg_input,
+    check_vendor_wheels_present,
 };
 pub use string_writer::{StringTemplateEmitter, emit_shared_cfg};
 pub use write::{write_outputs, write_shared_cfg};

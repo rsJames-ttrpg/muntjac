@@ -1,0 +1,14 @@
+# muntjac-generated; reproduced by `cargo run -- buckify`.
+# In vendor mode, third-party/python/vendor/*.whl is COMMITTED — only
+# exclude generated buckify outputs, not the vendored wheel binaries.
+third-party/python/BUCK
+third-party/python/muntjac.bzl
+third-party/python/wiring.bzl
+third-party/python/config/
+
+# buck2 build outputs (local + CI)
+buck-out/
+.buckd/
+
+# uv's venv if developer creates one
+.venv/

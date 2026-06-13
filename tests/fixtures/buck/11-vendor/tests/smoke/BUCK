@@ -1,0 +1,10 @@
+python_binary(
+    name = "demo",
+    main = "demo.py",
+    modifiers = ["//third-party/python/config:py312"],
+    deps = [
+        "//third-party/python:idna",
+        "//third-party/python:iniconfig",
+    ],
+    visibility = ["PUBLIC"],
+)

@@ -14,13 +14,14 @@ use crate::cli::Globals;
 use crate::config::Config;
 use crate::lock;
 
-pub fn run(globals: &Globals) -> Result<()> {
+pub fn run(globals: &Globals, args: crate::cli::BuckifyArgs) -> Result<()> {
     let cwd = globals.workdir().context("resolving working directory")?;
     let cfg_path = cwd.join("muntjac.toml");
     let cfg_bytes =
         fs::read_to_string(&cfg_path).with_context(|| format!("reading {}", cfg_path.display()))?;
     let config =
         Config::from_str(&cfg_bytes).with_context(|| format!("parsing {}", cfg_path.display()))?;
+    let vendor_mode = crate::cli::resolve_vendor_mode(&config, args.mode);
 
     let emitter = StringTemplateEmitter;
 
@@ -45,8 +46,13 @@ pub fn run(globals: &Globals) -> Result<()> {
             .with_context(|| format!("parsing {}", lockfile_path.display()))?;
 
         let third_party_dir = cwd.join(&tree.third_party_dir);
+        // Committed mode does NOT write prebake/.manifest.toml — the wheels
+        // already live in <tpd>/vendor/. Skip the read so its absence is not
+        // mistaken for a stale-prebake bug.
         let manifest_path = third_party_dir.join("prebake/.manifest.toml");
-        let manifest = if manifest_path.is_file() {
+        let manifest = if vendor_mode {
+            None
+        } else if manifest_path.is_file() {
             Some(crate::sdist::Manifest::load(&manifest_path)?)
         } else {
             None
@@ -72,8 +78,12 @@ pub fn run(globals: &Globals) -> Result<()> {
                 fixups: Some(&fixups),
                 abs_third_party_dir: Some(&canonical_third_party_dir),
                 cfg_dir: Some(&cfg_dir_str),
+                vendor_mode,
             },
         )?;
+
+        crate::buck::check_vendor_wheels_present(&input, &third_party_dir.join("vendor"))?;
+
         let output = emitter.emit(&input);
 
         write_outputs(&output, &third_party_dir)?;

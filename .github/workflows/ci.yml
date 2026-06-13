@@ -126,6 +126,18 @@ jobs:
           buck2 run //tests/smoke:legacy_demo 2>&1 | tee /tmp/legacy-out.txt
           grep -E "LEGACY numpy 1\." /tmp/legacy-out.txt
 
+      - name: muntjac buckify (11-vendor fixture)
+        run: target/debug/muntjac -C tests/fixtures/buck/11-vendor buckify
+
+      - name: muntjac vendor --frozen (11-vendor idempotence)
+        run: target/debug/muntjac -C tests/fixtures/buck/11-vendor vendor --mode=committed --frozen
+
+      - name: buck2 build + run (11-vendor)
+        run: |
+          cd tests/fixtures/buck/11-vendor
+          buck2 build //tests/smoke:demo
+          buck2 run //tests/smoke:demo
+
       - name: muntjac buckify (04-pure-python-sdist fixture)
         if: matrix.runner == 'ubuntu-latest'
         run: |

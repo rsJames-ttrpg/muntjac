@@ -217,6 +217,15 @@ fn emit_muntjac_bzl(input: &EmitInput) -> String {
     writeln!(s, "                src = \"prebake/{{}}\".format(rel),").unwrap();
     writeln!(s, "                visibility = [],").unwrap();
     writeln!(s, "            )").unwrap();
+    if input.vendor_mode {
+        writeln!(s, "        elif src.startswith(\"vendor:\"):").unwrap();
+        writeln!(s, "            rel = src[len(\"vendor:\"):]").unwrap();
+        writeln!(s, "            native.export_file(").unwrap();
+        writeln!(s, "                name = target,").unwrap();
+        writeln!(s, "                src = \"vendor/{{}}\".format(rel),").unwrap();
+        writeln!(s, "                visibility = [],").unwrap();
+        writeln!(s, "            )").unwrap();
+    }
     writeln!(s, "        else:").unwrap();
     writeln!(s, "            native.http_file(").unwrap();
     writeln!(s, "                name = target,").unwrap();
@@ -721,6 +730,7 @@ mod tests {
             cfg_dir: "third-party/python".into(),
             configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
             packages: vec![],
+            vendor_mode: false,
         }
     }
 
@@ -759,6 +769,7 @@ mod tests {
                 labels: vec![],
                 runtime_env: std::collections::BTreeMap::new(),
             }],
+            vendor_mode: false,
         }
     }
 
@@ -1024,6 +1035,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cfg_311, cfg_312],
+            vendor_mode: false,
             packages: vec![
                 EmitPackage {
                     name: "idna".into(),
@@ -1184,6 +1196,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: cells,
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "rich".into(),
                 version: "13.0".into(),
@@ -1212,6 +1225,7 @@ mod tests {
                 ConfigName::new("3.12", "linux-x86_64-gnu"),
             ],
             packages: vec![],
+            vendor_mode: false,
         };
 
         let out = StringTemplateEmitter.emit(&input);
@@ -1235,6 +1249,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cell],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "requests".into(),
                 version: "2.32.3".into(),
@@ -1291,6 +1306,7 @@ mod tests {
             third_party_dir: "third-party/python".to_string(),
             cfg_dir: "third-party/python".to_string(),
             configs: vec![cfg],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "tomli".to_string(),
                 version: "2.0.1".to_string(),
@@ -1392,6 +1408,7 @@ mod tests {
             third_party_dir: "third-party/python".into(),
             cfg_dir: "third-party/python".into(),
             configs: vec![cfg],
+            vendor_mode: false,
             packages: vec![EmitPackage {
                 name: "fake-pillow".into(),
                 version: "1.0.0".into(),
@@ -1482,6 +1499,20 @@ mod tests {
             !out.buck.contains("runtime_env = {"),
             "should not emit runtime_env kwarg when empty"
         );
+    }
+
+    #[test]
+    fn snapshot_vendor_mode_muntjac_bzl() {
+        let input = EmitInput {
+            tree: "default".into(),
+            third_party_dir: "third-party/python".into(),
+            cfg_dir: "third-party/python".into(),
+            configs: vec![ConfigName::new("3.12", "linux-x86_64-gnu")],
+            packages: vec![],
+            vendor_mode: true,
+        };
+        let bzl = emit_muntjac_bzl(&input);
+        insta::assert_snapshot!(bzl);
     }
 
     #[test]
